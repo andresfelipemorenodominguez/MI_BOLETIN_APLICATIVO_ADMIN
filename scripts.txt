@@ -1,0 +1,24 @@
+## 1. Crear entorno virtual
+python -m venv venv
+
+## 2. Activar entorno virtual (PowerShell)
+.\venv\Scripts\Activate
+
+### Si PowerShell bloquea la activación:
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+## 3. Desactivar entorno virtual (opcional)
+deactivate
+
+## 4. Gestión de dependencias
+
+### Guardar dependencias del proyecto:
+pip freeze > requirements.txt
+
+### Instalar dependencias desde archivo:
+pip install -r requirements.txt
+
+Cuenta de Google para aplicativo
+miboletinpep@gmail.com
+MiBoletin2026PREP__
+ihpo waip cekq dstv

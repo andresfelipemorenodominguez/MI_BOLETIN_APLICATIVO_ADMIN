@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="es" class="page-verification">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verificación de Cuenta - MiBoletín</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="logo-container">
+                <i class="fa-solid fa-book logo-icon"></i>
+                <h1 class="logo-text">MiBoletín<span class="org"> Admin</span></h1>
+            </div>
+            <p class="subtitle">Verifica tu identidad para activar tu cuenta de administrador en el sistema.</p>
+        </header>
+
+        <main class="main-content">
+            <div class="verification-info">
+                <div class="icon-container">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
+                <h2>Verificación de Usuario</h2>
+                <div class="instruction-container">
+                    <p class="instruction-text">
+                        Hemos enviado un código de verificación de 6 dígitos a
+                    </p>
+                    <div class="email-display">
+                        <span id="user-email" class="email-highlight">tu_correo@example.com</span>
+                    </div>
+                    <p class="instruction-subtext">
+                        Ingresa el código para confirmar tu cuenta y acceder a tus notas y reportes.
+                    </p>
+                </div>
+            </div>
+
+            <form id="verificationForm" class="verification-form">
+                <div class="form-group">
+                    <label for="code">Código de Verificación</label>
+                    <div class="code-inputs" id="code-inputs">
+                        <input type="text" maxlength="1" class="code-input" id="digit-1" data-index="1" autofocus>
+                        <input type="text" maxlength="1" class="code-input" id="digit-2" data-index="2">
+                        <input type="text" maxlength="1" class="code-input" id="digit-3" data-index="3">
+                        <input type="text" maxlength="1" class="code-input" id="digit-4" data-index="4">
+                        <input type="text" maxlength="1" class="code-input" id="digit-5" data-index="5">
+                        <input type="text" maxlength="1" class="code-input" id="digit-6" data-index="6">
+                    </div>
+                    <div class="error-message" id="code-error"></div>
+                    <div class="timer-container" id="timer-container">
+                        <p>El código expira en: <span id="countdown">05:00</span></p>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="verify-btn">
+                        <i class="fas fa-check-circle"></i> Verificar Cuenta
+                    </button>
+                </div>
+
+                <div class="form-footer">
+                    <p class="no-code-text">¿No recibiste el código?</p>
+                    <div class="resend-options">
+                        <button type="button" class="resend-btn" id="resend-btn" disabled>
+                            Reenviar Código <span id="resend-timer">(60s)</span>
+                        </button>
+                        <p class="wrong-email">
+                            ¿Correo incorrecto? <button type="button" class="text-btn" id="change-email-btn">Cambiar Email</button>
+                        </p>
+                    </div>
+                </div>
+            </form>
+        </main>
+    </div>
+
+    <!-- Modal para Cambiar Email -->
+    <div id="change-email-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-envelope"></i> Actualizar Correo</h3>
+                <button class="modal-close" id="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Si tu correo es incorrecto, actualízalo para recibir el código de verificación.</p>
+                <div class="form-group">
+                    <label for="new-email">Nuevo Correo</label>
+                    <input type="email" id="new-email" placeholder="tu_correo@example.com">
+                    <div class="error-message" id="new-email-error"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="cancel-btn">Cancelar</button>
+                <button class="btn-primary" id="update-email-btn">Actualizar Correo</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Éxito - ACTUALIZADO -->
+    <div id="success-modal" class="modal hidden">
+        <div class="modal-content success-modal">
+            <div class="modal-body">
+                <div class="success-icon">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <h3 class="success-title">¡Cuenta Verificada!</h3>
+                <p class="success-text">Tu identidad ha sido confirmada.</p>
+                <p class="success-subtext">Tu cuenta en MiBoletín está activa y lista para usarse.</p>
+            </div>
+                <div class="modal-footer">
+                    <button class="btn-primary" id="continue-btn">Acceder a MiBoletín</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="message" class="message hidden">
+        <span id="message-text"></span>
+        <button id="close-message" class="close-btn">&times;</button>
+    </div>
+
+    <script src="{{ url_for('static', filename='script/e-verification.js') }}"></script>
+</body>
+</html>

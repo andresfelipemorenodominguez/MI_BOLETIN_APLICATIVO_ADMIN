@@ -1,0 +1,70 @@
+-- Tabla para administradores
+CREATE TABLE administradores (
+    id_admin SERIAL PRIMARY KEY,
+    nombre_completo VARCHAR(255) NOT NULL,
+    correo_electronico VARCHAR(255) UNIQUE NOT NULL,
+    contrasena VARCHAR(255) NOT NULL,
+    verification_code VARCHAR(10),
+    verification_code_expires TIMESTAMP,
+    email_verified BOOLEAN DEFAULT FALSE
+);
+
+ALTER TABLE administradores 
+ADD COLUMN recovery_token VARCHAR(64),
+ADD COLUMN recovery_token_expires TIMESTAMP;
+
+-- Tabla para estudiantes
+CREATE TABLE IF NOT EXISTS estudiantes (
+    id_estudiante SERIAL PRIMARY KEY,
+    codigo_estudiante VARCHAR(20) UNIQUE,
+    nombre_completo VARCHAR(100) NOT NULL,
+    tipo_documento VARCHAR(20) NOT NULL,
+    numero_documento VARCHAR(50) UNIQUE NOT NULL,
+    correo_electronico VARCHAR(100) UNIQUE NOT NULL,
+    grado VARCHAR(20) NOT NULL,
+    grupo VARCHAR(10) NOT NULL,
+    contrasena VARCHAR(255) NOT NULL,
+    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    estado VARCHAR(20) DEFAULT 'activo',
+    -- Campos de tracking para seguimiento
+    id_admin INTEGER,
+    nombre_completo_admin VARCHAR(255),
+    correo_electronico_admin VARCHAR(255)
+);
+
+-- Tabla para profesores
+CREATE TABLE IF NOT EXISTS profesores (
+    id_profesor SERIAL PRIMARY KEY,
+    codigo_profesor VARCHAR(20) UNIQUE,
+    nombre_completo VARCHAR(100) NOT NULL,
+    tipo_documento VARCHAR(20) NOT NULL,
+    numero_documento VARCHAR(50) UNIQUE NOT NULL,
+    correo_electronico VARCHAR(100) UNIQUE NOT NULL,
+    telefono VARCHAR(20),
+    asignaturas TEXT NOT NULL,
+    contrasena VARCHAR(255) NOT NULL,
+    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    estado VARCHAR(20) DEFAULT 'activo',
+    -- Campos de tracking para seguimiento
+    id_admin INTEGER,
+    nombre_completo_admin VARCHAR(255),
+    correo_electronico_admin VARCHAR(255)
+);
+
+
+-- Tabla para solicitudes de cambio de contrasena
+CREATE TABLE IF NOT EXISTS solicitudes_cambio_contrasena (
+    id_solicitud SERIAL PRIMARY KEY,
+    tipo_usuario VARCHAR(20) NOT NULL, -- 'estudiante' o 'profesor'
+    id_usuario INTEGER NOT NULL,
+    codigo_usuario VARCHAR(20) NOT NULL,
+    correo_usuario VARCHAR(100) NOT NULL,
+    motivo TEXT NOT NULL,
+    id_admin INTEGER NOT NULL,
+    fecha_solicitud TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    estado VARCHAR(20) DEFAULT 'pendiente',
+    FOREIGN KEY (id_admin) REFERENCES administradores(id_admin)
+);
+
+-- Eliminar todas las filas de todas la tablas
+TRUNCATE TABLE administradores, solicitudes_cambio_contrasena, estudiantes, profesores RESTART IDENTITY CASCADE;
