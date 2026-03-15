@@ -1,0 +1,35 @@
+<!--
+  =====================================================================
+  INSTRUCCIONES: Pega este bloque en tu loginuser.html
+  Colócalo DENTRO del formulario principal, justo antes del cierre </form>
+  o debajo del botón de submit existente.
+  =====================================================================
+-->
+
+<!-- Separador visual -->
+<div style="display:flex; align-items:center; margin: 18px 0; gap: 10px;">
+  <div style="flex:1; height:1px; background:#d0d7e3;"></div>
+  <span style="color:#8a96a8; font-size:0.82rem; white-space:nowrap;">¿Eres administrador?</span>
+  <div style="flex:1; height:1px; background:#d0d7e3;"></div>
+</div>
+
+<!-- Botón para ir al login de administrador -->
+<a href="/admin" style="
+  display: block;
+  width: 100%;
+  padding: 11px 0;
+  text-align: center;
+  background: transparent;
+  border: 2px solid #003366;
+  border-radius: 8px;
+  color: #003366;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-decoration: none;
+  transition: background 0.2s, color 0.2s;
+  cursor: pointer;
+  box-sizing: border-box;
+" onmouseover="this.style.background='#003366';this.style.color='#fff'"
+   onmouseout="this.style.background='transparent';this.style.color='#003366'">
+  🔐 Ingresar como Administrador
+</a>

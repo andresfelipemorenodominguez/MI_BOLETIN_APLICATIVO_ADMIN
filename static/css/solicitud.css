@@ -1,0 +1,437 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    background: linear-gradient(135deg, #f0f7ff 0%, #e6f0ff 100%);
+    color: #333;
+    line-height: 1.6;
+    padding: 20px;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.container {
+    width: 100%;
+    max-width: 520px;
+    background: #FFFFFF;
+    border-radius: 10px;
+    box-shadow: 0 8px 25px rgba(0, 51, 102, 0.15);
+    overflow: hidden;
+    border: 1px solid #CCCCCC;
+    margin: 20px auto;
+    padding: 40px;
+}
+
+/* ===========================
+   ====== ENCABEZADO ======
+   =========================== */
+
+.header {
+    text-align: center;
+    margin-bottom: 30px;
+    padding: 0;
+    background-color: transparent;
+    color: #333;
+}
+
+.header h1 {
+    font-size: 28px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    color: #003366;
+}
+
+.header h1 i {
+    color: #4A90E2;
+    font-size: 32px;
+}
+
+.instructions {
+    font-size: 16px;
+    opacity: 0.9;
+    margin-top: 10px;
+    color: #666;
+    line-height: 1.5;
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* ===========================
+   ====== FORMULARIO ======
+   =========================== */
+
+.form {
+    padding: 0;
+    margin: 30px 0;
+}
+
+.form-group {
+    margin-bottom: 25px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #003366;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.form-group input,
+.form-group textarea {
+    width: 100%;
+    padding: 14px 15px;
+    border: 1px solid #CCCCCC;
+    border-radius: 6px;
+    font-size: 16px;
+    transition: all 0.3s;
+    background: #f8fafc;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: #4A90E2;
+    box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+    background: #FFFFFF;
+}
+
+.form-group textarea {
+    resize: vertical;
+    min-height: 120px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Contenedor de input con icono (similar a style.css) */
+.input-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.input-icon {
+    position: absolute;
+    left: 15px;
+    color: #003366;
+    font-size: 18px;
+}
+
+.input-container input {
+    width: 100%;
+    padding: 14px 14px 14px 45px;
+}
+
+/* Estilo de error - Usando colores de style.css */
+.error-message {
+    color: #dc3232;
+    font-size: 13px;
+    margin-top: 5px;
+    min-height: 18px;
+}
+
+/* ===========================
+   ====== BOTONES ======
+   =========================== */
+
+.button-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-top: 30px;
+}
+
+.btn {
+    padding: 15px;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 200px;
+}
+
+.btn-primary {
+    background-color: #4A90E2;
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #003366;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 51, 102, 0.2);
+}
+
+.btn-secondary {
+    background-color: #f8fafc;
+    color: #003366;
+    border: 1px solid #CCCCCC;
+}
+
+.btn-secondary:hover {
+    background-color: #e9ecef;
+    border-color: #4A90E2;
+}
+
+/* ===========================
+   ====== MENSAJE DE ÉXITO ======
+   =========================== */
+
+.success-message {
+    padding: 40px 30px;
+    text-align: center;
+    background-color: #f9fdf9;
+    border-top: 4px solid #46b450;
+    border-radius: 0 0 10px 10px;
+}
+
+.success-icon {
+    font-size: 60px;
+    color: #46b450;
+    margin-bottom: 20px;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+.success-message h2 {
+    color: #003366;
+    margin-bottom: 15px;
+    font-size: 24px;
+}
+
+.success-message p {
+    margin-bottom: 15px;
+    color: #666;
+    line-height: 1.5;
+}
+
+.success-message .btn {
+    margin-top: 20px;
+    max-width: 250px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* ===========================
+   ====== MENSAJE DE ERROR ======
+   =========================== */
+
+.error-message-container {
+    padding: 40px 30px;
+    text-align: center;
+    background-color: #fef9f9;
+    border-top: 4px solid #dc3232;
+    border-radius: 0 0 10px 10px;
+}
+
+.error-icon {
+    font-size: 60px;
+    color: #dc3232;
+    margin-bottom: 20px;
+}
+
+.error-message-container h2 {
+    color: #003366;
+    margin-bottom: 15px;
+    font-size: 24px;
+}
+
+.error-message-container p {
+    margin-bottom: 15px;
+    color: #666;
+    line-height: 1.5;
+}
+
+.error-message-container .btn {
+    margin-top: 20px;
+    max-width: 250px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* ===========================
+   ====== FOOTER ======
+   =========================== */
+
+.footer {
+    padding: 20px;
+    text-align: center;
+    color: #7f8c8d;
+    font-size: 14px;
+    border-top: 1px solid #eee;
+    margin-top: 30px;
+}
+
+/* ===========================
+   ====== ANIMACIONES ======
+   =========================== */
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* Clase para ocultar elementos */
+.hidden {
+    display: none;
+}
+
+/* ================================
+   ====== RESPONSIVE DESIGN ======
+   ================================ */
+
+@media (max-width: 768px) {
+    .container {
+        margin: 10px;
+        border-radius: 8px;
+        padding: 25px;
+        max-width: 480px;
+    }
+    
+    .header h1 {
+        font-size: 24px;
+    }
+    
+    .header h1 i {
+        font-size: 28px;
+    }
+    
+    .instructions {
+        font-size: 15px;
+    }
+    
+    .button-group {
+        flex-direction: column;
+    }
+    
+    .btn {
+        min-width: 100%;
+        padding: 12px;
+    }
+    
+    .success-message,
+    .error-message-container {
+        padding: 30px 20px;
+    }
+    
+    .success-icon,
+    .error-icon {
+        font-size: 50px;
+    }
+}
+
+@media (max-width: 480px) {
+    body {
+        padding: 10px;
+    }
+    
+    .container {
+        padding: 20px;
+    }
+    
+    .header h1 {
+        font-size: 22px;
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .instructions {
+        font-size: 14px;
+    }
+    
+    .form-group input,
+    .form-group textarea {
+        padding: 12px 12px;
+        font-size: 15px;
+    }
+    
+    .btn {
+        font-size: 15px;
+        padding: 12px;
+    }
+    
+    .success-message h2,
+    .error-message-container h2 {
+        font-size: 20px;
+    }
+    
+    .success-message p,
+    .error-message-container p {
+        font-size: 14px;
+    }
+    
+    .footer {
+        font-size: 13px;
+        padding: 15px;
+    }
+}
+
+/* Agrega esto en la sección de botones o responsive */
+.success-message .button-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    justify-content: center;
+    margin-top: 25px;
+}
+
+.success-message .button-group .btn {
+    min-width: 180px;
+    flex: none;
+}
+
+@media (max-width: 768px) {
+    .success-message .button-group {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .success-message .button-group .btn {
+        width: 100%;
+        max-width: 250px;
+    }
+}
