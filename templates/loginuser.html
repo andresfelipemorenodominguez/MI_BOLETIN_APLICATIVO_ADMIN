@@ -1,0 +1,185 @@
+{% extends 'base.html' %}
+
+{% block title %}Login{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+{% endblock %}
+
+{% block content %}
+<main class="main-content">
+    <section class="image-column">
+        <div class="svg-container">
+            <img src="{{ url_for('static', filename='img/bg1.png') }}" alt="Programación y Educación"
+                class="programming-svg">
+        </div>
+    </section>
+
+    <section class="form-section">
+        <div class="login-container">
+            <div class="login-header">
+                <h1><i class="fas fa-sign-in-alt"></i> Iniciar Sesión</h1>
+            </div>
+
+            <form action="{{ url_for('loginuser') }}" method="POST" class="login-form">
+                <div class="form-group">
+                    <label for="userIdentifier">
+                        <i class="fas fa-user"></i> Identificador de Usuario:
+                    </label>
+                    <input type="text" id="userIdentifier" name="userIdentifier" placeholder="Ej: EST001, PROF001"
+                        required>
+                </div>
+
+                <div class="form-group">
+                    <label for="correo">
+                        <i class="fas fa-envelope"></i> Correo Electrónico:
+                    </label>
+                    <input type="email" id="correo" name="correo" placeholder="usuario@gmail.com" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="contraseña">
+                        <i class="fas fa-lock"></i> Contraseña:
+                    </label>
+                    <input type="password" id="contraseña" name="contraseña" placeholder="Ingresa tu contraseña"
+                        required>
+                </div>
+
+                {% if error %}
+                <div class="error-message"
+                    style="color: red; margin: 10px 0; padding: 10px; background-color: #ffe6e6; border-radius: 5px;">
+                    <i class="fas fa-exclamation-triangle"></i> {{ error }}
+                </div>
+                {% endif %}
+
+                <div class="form-options">
+                    <a href="{{ url_for('solicitud_user') }}" class="forgot-password">
+                        ¿Olvidaste tu contraseña?
+                    </a>
+                </div>
+
+                <button type="submit" class="login-btn">
+                    <i class="fas fa-sign-in-alt"></i> Ingresar
+                </button>
+            </form>
+
+                <div style="display:flex;align-items:center;gap:10px;margin:18px 0 0;">
+                    <div style="flex:1;height:1px;background:#d0d7e3;"></div>
+                    <span style="color:#8a96a8;font-size:0.82rem;white-space:nowrap;">¿Eres administrador?</span>
+                    <div style="flex:1;height:1px;background:#d0d7e3;"></div>
+                </div>
+                <a href="/admin" class="login-btn" style="background:transparent;border:2px solid #003366;color:#003366;text-decoration:none;display:block;text-align:center;margin-top:12px;" onmouseover="this.style.background='#003366';this.style.color='#fff'" onmouseout="this.style.background='transparent';this.style.color='#003366'">
+                    <i class="fas fa-shield-alt"></i> Ingresar como Administrador
+                </a>
+        </div>
+    </section>
+</main>
+
+<section id="acerca" class="info-section">
+    <div class="info-content">
+        <h1><i class="fas fa-circle-info"></i> Acerca de Nosotros</h1>
+        <p class="slogan">Tecnología que impulsa el aprendizaje</p>
+        <div class="mission">
+            <p>
+                Somos una plataforma creada para acompañar y fortalecer los procesos educativos
+                mediante herramientas digitales intuitivas, seguras y accesibles.
+            </p>
+        </div>
+        <div class="highlight">
+            <i class="fas fa-users"></i>
+            <span>Diseñada para todos los miembros de la comunidad educativa.</span>
+        </div>
+        <div class="highlight">
+            <i class="fas fa-lightbulb"></i>
+            <span>Desarrollo continuo para mejorar cada experiencia de aprendizaje.</span>
+        </div>
+        <div class="highlight">
+            <i class="fas fa-shield-alt"></i>
+            <span>Compromiso con la protección y privacidad de la información.</span>
+        </div>
+    </div>
+</section>
+
+<section id="caracteristicas" class="features-section">
+    <div class="features-container">
+        <h1><i class="fas fa-star"></i> ¿Por qué elegir nuestra plataforma?</h1>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon"><i class="fas fa-calendar-alt"></i></div>
+                <h3>Calendario Académico</h3>
+                <p>Consulta fechas importantes como exámenes y entregas.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon"><i class="fas fa-comments"></i></div>
+                <h3>Comunicación Directa</h3>
+                <p>Los profesores envían observaciones directamente.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon"><i class="fas fa-chart-line"></i></div>
+                <h3>Reportes Detallados</h3>
+                <p>Genera reportes personalizados del rendimiento académico.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon"><i class="fas fa-clock"></i></div>
+                <h3>Tiempo Real</h3>
+                <p>Actualización instantánea de calificaciones.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section id="equipo" class="team-section">
+    <div class="team-container">
+        <h1><i class="fas fa-users"></i> Nuestro Equipo</h1>
+        <div class="team-grid">
+            <div class="team-card">
+                <img src="{{ url_for('static', filename='img/foto.png') }}" alt="">
+                <h3>Jesús Aragón</h3>
+                <p class="team-role">Bases de datos</p>
+                <a href="#" class="team-btn">Más información</a>
+            </div>
+            <div class="team-card">
+                <img src="{{ url_for('static', filename='img/foto.png') }}" alt="">
+                <h3>Estevan Portilla</h3>
+                <p class="team-role">Desarrollador Back-End</p>
+                <a href="#" class="team-btn">Más información</a>
+            </div>
+            <div class="team-card">
+                <img src="{{ url_for('static', filename='img/foto.png') }}" alt="">
+                <h3>José Sánchez</h3>
+                <p class="team-role">Diseño visual / Front-End</p>
+                <a href="#" class="team-btn">Más información</a>
+            </div>
+            <div class="team-card">
+                <img src="{{ url_for('static', filename='img/foto.png') }}" alt="">
+                <h3>Andrés Moreno</h3>
+                <p class="team-role">Desarrollador Back-End</p>
+                <a href="#" class="team-btn">Más información</a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section id="contacto" class="contact-section">
+    <div class="contact-container">
+        <h1><i class="fas fa-envelope"></i> Contáctanos</h1>
+        <div class="contact-grid">
+            <div class="contact-card">
+                <i class="fas fa-phone"></i>
+                <h3>Teléfono</h3>
+                <p>+57 323 317 5941</p>
+            </div>
+            <div class="contact-card">
+                <i class="fas fa-envelope"></i>
+                <h3>Correo</h3>
+                <p>miboletincontac@gmail.com</p>
+            </div>
+            <div class="contact-card">
+                <i class="fas fa-map-marker-alt"></i>
+                <h3>Dirección</h3>
+                <p>Calle 28 # 28 - 48, Colombia</p>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

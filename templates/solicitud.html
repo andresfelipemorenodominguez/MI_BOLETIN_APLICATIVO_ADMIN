@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solicitud de Cambio de Contraseña</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/solicitud.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+    <div class="container">
+        <header class="header">
+            <h1><i class="fas fa-key"></i> Cambio de Contraseña</h1>
+        </header>
+
+        <main>
+            <form id="passwordRequestForm" class="form">
+                <div class="form-group">
+                    <label for="userIdentifier"><i class="fas fa-user"></i> Identificador de Usuario</label>
+                    <input type="text" id="userIdentifier" name="userIdentifier" required
+                        placeholder="Ej: EST001, PROF001">
+                    <small class="form-text">Ingresa tu código de estudiante o profesor</small>
+                    <div class="error-message" id="userIdentifierError"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="userEmail"><i class="fas fa-envelope"></i> Correo Electrónico Registrado</label>
+                    <input type="email" id="userEmail" name="userEmail" required placeholder="tucorreo@ejemplo.com">
+                    <div class="error-message" id="userEmailError"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="requestReason"><i class="fas fa-comment"></i> Motivo de la Solicitud</label>
+                    <textarea id="requestReason" name="requestReason" rows="5" required
+                        placeholder="Explica brevemente por qué necesitas cambiar o restablecer tu contraseña..."></textarea>
+                    <div class="error-message" id="requestReasonError"></div>
+                </div>
+
+                <!-- Campos ocultos del administrador (ahora con valores dinámicos) -->
+                <input type="hidden" id="adminId" name="adminId" value="{{ admin_id }}">
+                <input type="hidden" id="adminName" name="adminName" value="{{ admin_name }}">
+                <input type="hidden" id="adminEmail" name="adminEmail" value="{{ admin_email }}">
+
+                <div class="button-group">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-paper-plane"></i> Enviar Solicitud
+                    </button>
+                    <button type="button" id="backToLogin" class="btn btn-secondary">
+                        <i class="fas fa-sign-in-alt"></i> Volver
+                    </button>
+                </div>
+            </form>
+
+            <!-- Mensaje de éxito (inicialmente oculto) -->
+            <div id="successMessage" class="success-message hidden">
+                <div class="success-icon">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <h2>Solicitud enviada con éxito</h2>
+                <p id="successMessageText">
+                    <!-- El texto se completará dinámicamente con JavaScript -->
+                </p>
+                <p>El administrador revisará tu solicitud y se pondrá en contacto contigo en la dirección de correo
+                    proporcionada para continuar con el proceso.</p>
+
+                <!-- Botones en el mensaje de éxito -->
+                <div class="button-group" style="justify-content: center; margin-top: 20px;">
+                    <button type="button" id="newRequest" class="btn btn-secondary">
+                        <i class="fas fa-plus"></i> Nueva Solicitud
+                    </button>
+                    <!-- NUEVO BOTÓN VOLVER -->
+                    <button type="button" id="backFromSuccess" class="btn btn-primary">
+                        <i class="fas fa-sign-in-alt"></i> Volver al Inicio
+                    </button>
+                </div>
+            </div>
+
+            <!-- Mensaje de error (inicialmente oculto) -->
+            <div id="errorMessage" class="error-message-container hidden">
+                <div class="error-icon">
+                    <i class="fas fa-exclamation-circle"></i>
+                </div>
+                <h2>Error al enviar la solicitud</h2>
+                <p id="errorMessageText">Lo sentimos, ha ocurrido un problema al enviar tu solicitud.</p>
+                <button type="button" id="tryAgain" class="btn btn-primary">
+                    <i class="fas fa-redo"></i> Intentar de nuevo
+                </button>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>MI BOLETÍN &copy; 2023</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='script/solicitud.js') }}"></script>
+</body>
+
+</html>

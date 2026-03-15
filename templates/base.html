@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MiBoletín - {% block title %}{% endblock %}</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/estilo.css') }}">
+
+    {% block styles %}{% endblock %}
+</head>
+
+<body>
+
+    <header class="header">
+        <nav class="navbar">
+            <a href="{{ url_for('index') }}" class="logo-link">
+                <div class="logo">
+                    <img src="{{ url_for('static', filename='img/Logo.png') }}" alt="Logo" class="logo-img">
+                </div>
+            </a>
+
+            <ul class="nav-links">
+                <li><a href="{{ url_for('index') }}"><i class="fas fa-home"></i> Inicio</a></li>
+                <li><a href="#acerca"><i class="fas fa-info-circle"></i> Institución</a></li>
+                <li><a href="#caracteristicas"><i class="fas fa-star"></i> Servicios</a></li>
+                <li><a href="#equipo"><i class="fas fa-users"></i> Equipo</a></li>
+                <li><a href="#contacto"><i class="fas fa-headset"></i> Soporte</a></li>
+
+                {% if session.get('user_info') %}
+                <li class="user-greeting">
+                    <span><i class="fas fa-user-circle"></i> {{ session['user_info']['nombre'].split(' ')[0] }}</span>
+                </li>
+                <li><a href="{{ url_for('logout') }}" class="logout-link"><i class="fas fa-sign-out-alt"></i> Salir</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        {% block content %}
+        {% endblock %}
+    </main>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-section footer-logo-section">
+                <a href="{{ url_for('loginuser') }}" class="footer-logo-link">
+                    <div class="footer-logo">
+                        <img src="{{ url_for('static', filename='img/Logo.png') }}" alt="Logo" class="footer-logo-img">
+                    </div>
+                </a>
+                <p class="footer-mission">Promoviendo la innovación digital y la excelencia académica.</p>
+                <div class="footer-social">
+                    <a href="#" class="social-icon"><i class="fab fa-facebook-f"></i></a>
+                    <a href="#" class="social-icon"><i class="fab fa-twitter"></i></a>
+                    <a href="#" class="social-icon"><i class="fab fa-instagram"></i></a>
+                    <a href="#" class="social-icon"><i class="fab fa-linkedin-in"></i></a>
+                </div>
+            </div>
+
+            <div class="footer-section">
+                <h3><i class="fas fa-link"></i> Enlaces rápidos</h3>
+                <ul>
+                    <li><a href="{{ url_for('index') }}"><i class="fas fa-angle-right"></i> Inicio</a></li>
+                    <li><a href="#acerca"><i class="fas fa-angle-right"></i> Acerca de</a></li>
+                    <li><a href="#equipo"><i class="fas fa-angle-right"></i> Equipo</a></li>
+                    <li><a href="#contacto"><i class="fas fa-angle-right"></i> Contacto</a></li>
+                </ul>
+            </div>
+
+            <div class="footer-section">
+                <h3><i class="fas fa-envelope"></i> Contacto</h3>
+                <p><i class="fas fa-phone"></i> +57 323 317 5941</p>
+                <p><i class="fas fa-envelope"></i> miboletincontac@gmail.com</p>
+                <p><i class="fas fa-map-marker-alt"></i> Calle 28 # 28 - 48, Colombia</p>
+            </div>
+        </div>
+
+        <div class="footer-bottom">
+            <p>&copy; 2026 MI BOLETÍN. Todos los derechos reservados.</p>
+        </div>
+    </footer>
+
+    {% block scripts %}{% endblock %}
+</body>
+
+</html>
