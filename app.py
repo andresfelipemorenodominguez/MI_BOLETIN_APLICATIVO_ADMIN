@@ -783,7 +783,7 @@ def request_password_post():
         cur.close()
         conn.close()
 
-        recovery_link = f"http://localhost:5001/f-password?token={recovery_code}"
+        recovery_link = f"http://localhost:5006/forgot-password?token={recovery_code}"
         email_sent = send_recovery_email(email, recovery_link, user[1])
 
         if email_sent:
@@ -1200,4 +1200,4 @@ def eliminar_profesor():
         return jsonify({"status": "error", "message": "Error al eliminar."})
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5005)
+    app.run(host="0.0.0.0", port=5006)
