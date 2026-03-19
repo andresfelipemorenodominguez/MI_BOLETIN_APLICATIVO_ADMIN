@@ -2994,6 +2994,87 @@ class App {
 }
 
 // ============================================
+// FUNCIONES GENERACIÓN DE PDF
+// ============================================
+
+async function descargarPDFGenerico(btnId, url, filename) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generando...';
+    btn.disabled = true;
+    btn.classList.add('btn-loading');
+    
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Network response was not ok');
+        
+        const blob = await response.blob();
+        if (blob.type === 'application/json') {
+            const data = JSON.parse(await blob.text());
+            throw new Error(data.message || 'Error en el servidor');
+        }
+        
+        const blobUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(blobUrl);
+        a.remove();
+        
+        // Show success notification if App is available
+        if (window.app && window.app.editManager) {
+            window.app.editManager.showMessage('Reporte generado exitosamente', 'success');
+        } else {
+            alert('Reporte generado exitosamente');
+        }
+        
+    } catch (error) {
+        console.error('Error descargando PDF:', error);
+        if (window.app && window.app.editManager) {
+            window.app.editManager.showMessage('Error al generar el reporte', 'error');
+        } else {
+            alert('Error al generar el reporte: ' + error.message);
+        }
+    } finally {
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+            btn.classList.remove('btn-loading');
+        }, 1000);
+    }
+}
+
+function descargarPDFEstudiantes() {
+    const grado = document.getElementById('pdf-grado')?.value || '';
+    const grupo = document.getElementById('pdf-grupo')?.value || '';
+    
+    let url = '/reporte/estudiantes/pdf';
+    const params = new URLSearchParams();
+    if (grado) params.append('grado', grado);
+    if (grupo) params.append('grupo', grupo);
+    
+    if (params.toString()) {
+        url += '?' + params.toString();
+    }
+    
+    const filename = `reporte_estudiantes${grado ? '_G'+grado : ''}${grupo ? '_'+grupo : ''}.pdf`;
+    descargarPDFGenerico('btn-pdf-estudiantes', url, filename);
+}
+
+function descargarPDFProfesores() {
+    descargarPDFGenerico('btn-pdf-profesores', '/reporte/profesores/pdf', 'directorio_profesores.pdf');
+}
+
+function descargarPDFResumen() {
+    descargarPDFGenerico('btn-pdf-resumen', '/reporte/resumen/pdf', 'resumen_sistema.pdf');
+}
+
+// ============================================
 // EJECUCIÓN
 // ============================================
 

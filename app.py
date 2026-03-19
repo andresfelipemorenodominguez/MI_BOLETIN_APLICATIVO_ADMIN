@@ -1,4 +1,6 @@
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file
+from fpdf import FPDF
+import io
 import psycopg2
 import psycopg2.extras
 from psycopg2 import sql
@@ -1199,5 +1201,253 @@ def eliminar_profesor():
         print(f"Error eliminando profesor: {e}")
         return jsonify({"status": "error", "message": "Error al eliminar."})
 
+class MiBoletinPDF(FPDF):
+    def header(self):
+        self.set_font('helvetica', 'B', 16)
+        self.set_text_color(0, 51, 102) # #003366
+        self.cell(0, 10, 'MiBoletín Admin', 0, 1, 'C')
+        self.set_font('helvetica', 'I', 10)
+        self.set_text_color(100, 100, 100)
+        self.cell(0, 10, f'Generado el: {datetime.now().strftime("%d/%m/%Y %H:%M:%S")}', 0, 1, 'C')
+        self.ln(5)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('helvetica', 'I', 8)
+        self.set_text_color(128, 128, 128)
+        self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
+
+@app.route("/reporte/estudiantes/pdf", methods=["GET"])
+def reporte_estudiantes_pdf():
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "Debes iniciar sesión primero."})
+    
+    grado = request.args.get('grado', '')
+    grupo = request.args.get('grupo', '')
+
+    query = "SELECT codigo_estudiante, nombre_completo, correo_electronico, grado, grupo, estado FROM estudiantes"
+    conditions = []
+    params = []
+    
+    if grado:
+        conditions.append("grado = %s")
+        params.append(grado)
+    if grupo:
+        conditions.append("grupo = %s")
+        params.append(grupo)
+        
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+        
+    query += " ORDER BY grado, grupo, nombre_completo"
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute(query, tuple(params))
+        estudiantes = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        pdf = MiBoletinPDF()
+        pdf.add_page()
+        
+        pdf.set_font('helvetica', 'B', 14)
+        pdf.set_text_color(0, 0, 0)
+        titulo = "Reporte de Estudiantes"
+        if grado: titulo += f" - Grado: {grado}"
+        if grupo: titulo += f" Grupo: {grupo}"
+        pdf.cell(0, 10, titulo, 0, 1, 'C')
+        pdf.ln(5)
+        
+        # Tabla Header
+        pdf.set_font('helvetica', 'B', 10)
+        pdf.set_fill_color(0, 51, 102)
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(30, 10, 'Código', 1, 0, 'C', fill=True)
+        pdf.cell(70, 10, 'Nombre Completo', 1, 0, 'C', fill=True)
+        pdf.cell(50, 10, 'Email', 1, 0, 'C', fill=True)
+        pdf.cell(20, 10, 'Grado/Grupo', 1, 0, 'C', fill=True)
+        pdf.cell(20, 10, 'Estado', 1, 1, 'C', fill=True)
+        
+        # Tabla Body
+        pdf.set_font('helvetica', '', 9)
+        pdf.set_text_color(0, 0, 0)
+        fill = False
+        pdf.set_fill_color(240, 248, 255)
+        
+        for e in estudiantes:
+            pdf.cell(30, 8, str(e['codigo_estudiante']), 1, 0, 'L', fill=fill)
+            # Truncate text if it's too long
+            nombre = e['nombre_completo'][:35] + '...' if len(e['nombre_completo']) > 38 else e['nombre_completo']
+            pdf.cell(70, 8, nombre, 1, 0, 'L', fill=fill)
+            email = e['correo_electronico'][:25] + '...' if len(e['correo_electronico']) > 28 else e['correo_electronico']
+            pdf.cell(50, 8, email, 1, 0, 'L', fill=fill)
+            pdf.cell(20, 8, f"{e['grado']}-{e['grupo']}", 1, 0, 'C', fill=fill)
+            pdf.cell(20, 8, str(e['estado']).capitalize(), 1, 1, 'C', fill=fill)
+            fill = not fill
+            
+        pdf.ln(10)
+        pdf.set_font('helvetica', 'B', 10)
+        pdf.cell(0, 10, f"Total Estudiantes: {len(estudiantes)}", 0, 1, 'R')
+
+        # Output to memory
+        pdf_bytes = pdf.output(dest='S')
+        buffer = io.BytesIO(pdf_bytes)
+        buffer.seek(0)
+        
+        return send_file(
+            buffer,
+            as_attachment=True,
+            download_name='reporte_estudiantes.pdf',
+            mimetype='application/pdf'
+        )
+        
+    except Exception as e:
+        print(f"Error generando PDF de estudiantes: {e}")
+        return jsonify({"status": "error", "message": "Error generando el reporte PDF."})
+
+@app.route("/reporte/profesores/pdf", methods=["GET"])
+def reporte_profesores_pdf():
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "Debes iniciar sesión primero."})
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("SELECT codigo_profesor, nombre_completo, correo_electronico, telefono, estado FROM profesores ORDER BY nombre_completo")
+        profesores = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        pdf = MiBoletinPDF()
+        pdf.add_page()
+        
+        pdf.set_font('helvetica', 'B', 14)
+        pdf.set_text_color(0, 0, 0)
+        pdf.cell(0, 10, "Directorio de Profesores", 0, 1, 'C')
+        pdf.ln(5)
+        
+        # Tabla Header
+        pdf.set_font('helvetica', 'B', 10)
+        pdf.set_fill_color(0, 51, 102)
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(30, 10, 'Código', 1, 0, 'C', fill=True)
+        pdf.cell(70, 10, 'Nombre Completo', 1, 0, 'C', fill=True)
+        pdf.cell(50, 10, 'Email', 1, 0, 'C', fill=True)
+        pdf.cell(25, 10, 'Teléfono', 1, 0, 'C', fill=True)
+        pdf.cell(15, 10, 'Estado', 1, 1, 'C', fill=True)
+        
+        # Tabla Body
+        pdf.set_font('helvetica', '', 9)
+        pdf.set_text_color(0, 0, 0)
+        fill = False
+        pdf.set_fill_color(240, 248, 255)
+        
+        for p in profesores:
+            pdf.cell(30, 8, str(p['codigo_profesor']), 1, 0, 'L', fill=fill)
+            nombre = p['nombre_completo'][:35] + '...' if len(p['nombre_completo']) > 38 else p['nombre_completo']
+            pdf.cell(70, 8, nombre, 1, 0, 'L', fill=fill)
+            email = p['correo_electronico'][:25] + '...' if len(p['correo_electronico']) > 28 else p['correo_electronico']
+            pdf.cell(50, 8, email, 1, 0, 'L', fill=fill)
+            telefono = str(p['telefono']) if p['telefono'] else 'N/A'
+            pdf.cell(25, 8, telefono, 1, 0, 'C', fill=fill)
+            pdf.cell(15, 8, str(p['estado']).capitalize(), 1, 1, 'C', fill=fill)
+            fill = not fill
+            
+        pdf.ln(10)
+        pdf.set_font('helvetica', 'B', 10)
+        pdf.cell(0, 10, f"Total Profesores: {len(profesores)}", 0, 1, 'R')
+
+        pdf_bytes = pdf.output(dest='S')
+        buffer = io.BytesIO(pdf_bytes)
+        buffer.seek(0)
+        
+        return send_file(
+            buffer,
+            as_attachment=True,
+            download_name='directorio_profesores.pdf',
+            mimetype='application/pdf'
+        )
+        
+    except Exception as e:
+        print(f"Error generando PDF de profesores: {e}")
+        return jsonify({"status": "error", "message": "Error generando el reporte PDF."})
+
+@app.route("/reporte/resumen/pdf", methods=["GET"])
+def reporte_resumen_pdf():
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "Debes iniciar sesión primero."})
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Estadistica Estudiantes
+        cur.execute("SELECT COUNT(*) FROM estudiantes WHERE estado = 'activo'")
+        estudiantes_activos = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM estudiantes WHERE estado != 'activo'")
+        estudiantes_inactivos = cur.fetchone()[0]
+        
+        # Estadistica Profesores
+        cur.execute("SELECT COUNT(*) FROM profesores WHERE estado = 'activo'")
+        profesores_activos = cur.fetchone()[0]
+        
+        # Solicitudes
+        cur.execute("SELECT COUNT(*) FROM solicitudes_cambio_contrasena")
+        total_solicitudes = cur.fetchone()[0]
+        
+        cur.close()
+        conn.close()
+
+        pdf = MiBoletinPDF()
+        pdf.add_page()
+        
+        pdf.set_font('helvetica', 'B', 16)
+        pdf.set_text_color(0, 0, 0)
+        pdf.cell(0, 10, "Resumen General del Sistema", 0, 1, 'C')
+        pdf.ln(10)
+        
+        # Bloques de resumen
+        pdf.set_font('helvetica', 'B', 12)
+        pdf.set_fill_color(240, 248, 255)
+        pdf.cell(0, 10, ' Estadísticas de Estudiantes', 1, 1, 'L', fill=True)
+        pdf.set_font('helvetica', '', 11)
+        pdf.cell(0, 10, f' Estudiantes Activos: {estudiantes_activos}', 'LR', 1, 'L')
+        pdf.cell(0, 10, f' Estudiantes Inactivos: {estudiantes_inactivos}', 'LRB', 1, 'L')
+        pdf.ln(5)
+        
+        pdf.set_font('helvetica', 'B', 12)
+        pdf.cell(0, 10, ' Estadísticas de Profesores', 1, 1, 'L', fill=True)
+        pdf.set_font('helvetica', '', 11)
+        pdf.cell(0, 10, f' Profesores Activos: {profesores_activos}', 'LRB', 1, 'L')
+        pdf.ln(5)
+        
+        pdf.set_font('helvetica', 'B', 12)
+        pdf.cell(0, 10, ' Soporte y Sistema', 1, 1, 'L', fill=True)
+        pdf.set_font('helvetica', '', 11)
+        pdf.cell(0, 10, f' Total de solicitudes de cambio de contraseña: {total_solicitudes}', 'LRB', 1, 'L')
+        pdf.ln(10)
+        
+        # Admin info
+        pdf.set_font('helvetica', 'I', 10)
+        pdf.cell(0, 10, f"Reporte generado por: {session.get('user_name', 'Administrador')}", 0, 1, 'L')
+
+        pdf_bytes = pdf.output(dest='S')
+        buffer = io.BytesIO(pdf_bytes)
+        buffer.seek(0)
+        
+        return send_file(
+            buffer,
+            as_attachment=True,
+            download_name='resumen_sistema.pdf',
+            mimetype='application/pdf'
+        )
+        
+    except Exception as e:
+        print(f"Error generando PDF de estadisticas: {e}")
+        return jsonify({"status": "error", "message": "Error generando el reporte PDF."})
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5006)
+
