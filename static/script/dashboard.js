@@ -2216,11 +2216,27 @@ class EditManager {
 
             // Determinar si es estudiante o profesor
             if (row.closest('#tabla-estudiantes')) {
-                await this.loadEstudianteData(codigo);
+                // Abrir modal inmediatamente para dar feedback al usuario
                 this.modals.estudiante.open();
+                
+                // Mostrar un estado de carga opcional (deshabilitar formulario)
+                const form = document.getElementById('edit-estudiante-form');
+                if (form) form.classList.add('loading-state');
+                
+                await this.loadEstudianteData(codigo);
+                
+                if (form) form.classList.remove('loading-state');
             } else if (row.closest('#tabla-profesores')) {
-                await this.loadProfesorData(codigo);
+                // Abrir modal inmediatamente para dar feedback al usuario
                 this.modals.profesor.open();
+                
+                // Mostrar un estado de carga opcional
+                const form = document.getElementById('edit-profesor-form');
+                if (form) form.classList.add('loading-state');
+                
+                await this.loadProfesorData(codigo);
+                
+                if (form) form.classList.remove('loading-state');
             }
         });
 

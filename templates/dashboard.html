@@ -884,38 +884,38 @@
             </div>
 
             <div class="modal-content">
-                <form id="edit-estudiante-form" class="edit-modal-form">
+                <form id="edit-estudiante-form" class="student-form">
                     <!-- Sección de Información Personal -->
-                    <div class="modal-form-section">
-                        <h3 class="modal-form-section-title">
+                    <div class="form-section">
+                        <h3 class="form-section-title">
                             <i class="fas fa-user-circle"></i> Información Personal
                         </h3>
                         
-                        <div class="modal-form-group">
-                            <label for="edit-nombre-completo" class="modal-form-label">
+                        <div class="form-group">
+                            <label for="edit-nombre-completo" class="form-label">
                                 Nombre completo <span class="required">*</span>
                             </label>
-                            <div class="modal-input-with-icon">
+                            <div class="input-with-icon">
                                 <i class="fas fa-user input-icon"></i>
                                 <input 
                                     type="text" 
                                     id="edit-nombre-completo" 
-                                    class="modal-form-input" 
+                                    class="form-input" 
                                     placeholder="Ej: María González López"
                                     required
                                 >
                             </div>
-                            <div class="modal-error-message" id="edit-nombre-error"></div>
+                            <div class="error-message" id="edit-nombre-error"></div>
                         </div>
 
-                        <div class="modal-form-row">
-                            <div class="modal-form-group">
-                                <label for="edit-tipo-documento" class="modal-form-label">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="edit-tipo-documento" class="form-label">
                                     Tipo de documento <span class="required">*</span>
                                 </label>
-                                <div class="modal-select-wrapper">
+                                <div class="select-wrapper">
                                     <i class="fas fa-id-card select-icon"></i>
-                                    <select id="edit-tipo-documento" class="modal-form-select" required>
+                                    <select id="edit-tipo-documento" class="form-select" required>
                                         <option value="" disabled selected>Selecciona un tipo</option>
                                         <option value="cedula">Cédula</option>
                                         <option value="tarjeta-identidad">Tarjeta de identidad</option>
@@ -925,56 +925,56 @@
                                 </div>
                             </div>
                             
-                            <div class="modal-form-group">
-                                <label for="edit-numero-documento" class="modal-form-label">
+                            <div class="form-group">
+                                <label for="edit-numero-documento" class="form-label">
                                     Número de documento <span class="required">*</span>
                                 </label>
-                                <div class="modal-input-with-icon">
+                                <div class="input-with-icon">
                                     <i class="fas fa-hashtag input-icon"></i>
                                     <input 
                                         type="text" 
                                         id="edit-numero-documento" 
-                                        class="modal-form-input" 
+                                        class="form-input" 
                                         placeholder="Ej: 123456789"
                                         required
                                     >
                                 </div>
-                                <div class="modal-error-message" id="edit-documento-error"></div>
+                                <div class="error-message" id="edit-documento-error"></div>
                             </div>
                         </div>
 
-                        <div class="modal-form-group">
-                            <label for="edit-correo-electronico" class="modal-form-label">
+                        <div class="form-group">
+                            <label for="edit-correo-electronico" class="form-label">
                                 Correo electrónico <span class="required">*</span>
                             </label>
-                            <div class="modal-input-with-icon">
+                            <div class="input-with-icon">
                                 <i class="fas fa-envelope input-icon"></i>
                                 <input 
                                     type="email" 
                                     id="edit-correo-electronico" 
-                                    class="modal-form-input" 
+                                    class="form-input" 
                                     placeholder="Ej: estudiante@ejemplo.com"
                                     required
                                 >
                             </div>
-                            <div class="modal-error-message" id="edit-correo-error"></div>
+                            <div class="error-message" id="edit-correo-error"></div>
                         </div>
                     </div>
 
                     <!-- Sección de Información Académica -->
-                    <div class="modal-form-section">
-                        <h3 class="modal-form-section-title">
+                    <div class="form-section">
+                        <h3 class="form-section-title">
                             <i class="fas fa-graduation-cap"></i> Información Académica
                         </h3>
                         
-                        <div class="modal-form-row">
-                            <div class="modal-form-group">
-                                <label for="edit-grado" class="modal-form-label">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="edit-grado" class="form-label">
                                     Grado <span class="required">*</span>
                                 </label>
-                                <div class="modal-select-wrapper">
+                                <div class="select-wrapper">
                                     <i class="fas fa-sort-numeric-up select-icon"></i>
-                                    <select id="edit-grado" class="modal-form-select" required>
+                                    <select id="edit-grado" class="form-select" required>
                                         <option value="" disabled selected>Selecciona un grado</option>
                                         <option value="1">1° Primaria</option>
                                         <option value="2">2° Primaria</option>
@@ -991,13 +991,13 @@
                                 </div>
                             </div>
                             
-                            <div class="modal-form-group">
-                                <label for="edit-grupo" class="modal-form-label">
+                            <div class="form-group">
+                                <label for="edit-grupo" class="form-label">
                                     Grupo/Sección <span class="required">*</span>
                                 </label>
-                                <div class="modal-select-wrapper">
+                                <div class="select-wrapper">
                                     <i class="fas fa-users select-icon"></i>
-                                    <select id="edit-grupo" class="modal-form-select" required>
+                                    <select id="edit-grupo" class="form-select" required>
                                         <option value="" disabled selected>Selecciona un grupo</option>
                                         <option value="A">A</option>
                                         <option value="B">B</option>
@@ -1010,34 +1010,34 @@
 
                     <!-- Sección de Cambio de Contraseña -->
                     <div class="modal-password-section">
-                        <div class="modal-password-toggle" id="toggle-estudiante-password-section">
-                            <div class="modal-password-toggle-title">
+                        <div class="password-toggle" id="toggle-estudiante-password-section">
+                            <div class="password-toggle-title">
                                 <i class="fas fa-key"></i>
                                 <span>Cambiar Contraseña</span>
                             </div>
-                            <button type="button" class="modal-password-toggle-btn">
+                            <button type="button" class="password-toggle-btn">
                                 <i class="fas fa-chevron-down"></i>
                                 <span>Mostrar</span>
                             </button>
                         </div>
                         
-                        <div class="modal-password-content" id="estudiante-password-content">
-                            <div class="modal-password-note">
+                        <div class="password-content" id="estudiante-password-content">
+                            <div class="password-note">
                                 <i class="fas fa-info-circle"></i>
                                 <span>Deja estos campos vacíos si no deseas cambiar la contraseña</span>
                             </div>
                             
-                            <div class="modal-form-group">
-                                <label for="edit-estudiante-nueva-contrasena" class="modal-form-label">
+                            <div class="form-group">
+                                <label for="edit-estudiante-nueva-contrasena" class="form-label">
                                     Nueva contraseña
                                 </label>
                                 <div class="password-container">
-                                    <div class="modal-input-with-icon">
+                                    <div class="input-with-icon">
                                         <i class="fas fa-lock input-icon"></i>
                                         <input 
                                             type="password" 
                                             id="edit-estudiante-nueva-contrasena" 
-                                            class="modal-form-input password-input" 
+                                            class="form-input password-input" 
                                             placeholder="Ingresa la nueva contraseña"
                                         >
                                     </div>
@@ -1045,20 +1045,20 @@
                                         <i class="fas fa-eye"></i>
                                     </button>
                                 </div>
-                                <div class="modal-error-message" id="edit-estudiante-contrasena-error"></div>
+                                <div class="error-message" id="edit-estudiante-contrasena-error"></div>
                             </div>
 
-                            <div class="modal-form-group">
-                                <label for="edit-estudiante-confirmar-contrasena" class="modal-form-label">
+                            <div class="form-group">
+                                <label for="edit-estudiante-confirmar-contrasena" class="form-label">
                                     Confirmar nueva contraseña
                                 </label>
                                 <div class="password-container">
-                                    <div class="modal-input-with-icon">
+                                    <div class="input-with-icon">
                                         <i class="fas fa-lock input-icon"></i>
                                         <input 
                                             type="password" 
                                             id="edit-estudiante-confirmar-contrasena" 
-                                            class="modal-form-input password-input" 
+                                            class="form-input password-input" 
                                             placeholder="Confirma la nueva contraseña"
                                         >
                                     </div>
@@ -1066,11 +1066,11 @@
                                         <i class="fas fa-eye"></i>
                                     </button>
                                 </div>
-                                <div class="modal-error-message" id="edit-estudiante-confirmar-error"></div>
+                                <div class="error-message" id="edit-estudiante-confirmar-error"></div>
                             </div>
 
-                            <div class="modal-password-actions">
-                                <button type="button" class="btn-secondary modal-generate-password-btn" id="generate-estudiante-password">
+                            <div class="password-actions">
+                                <button type="button" class="btn-secondary btn-secondary generate-password-btn" id="generate-estudiante-password">
                                     <i class="fas fa-random"></i> Generar Contraseña
                                 </button>
                             </div>
@@ -1088,7 +1088,7 @@
                     <!-- ID oculto para referencia -->
                     <input type="hidden" id="edit-estudiante-id">
 
-                    <div class="modal-form-actions">
+                    <div class="form-actions">
                         <button type="button" class="btn-secondary cancel-btn" id="cancel-edit-estudiante">
                             Cancelar
                         </button>
@@ -1114,38 +1114,38 @@
             </div>
 
             <div class="modal-content">
-                <form id="edit-profesor-form" class="edit-modal-form">
+                <form id="edit-profesor-form" class="student-form">
                     <!-- Sección de Información Personal -->
-                    <div class="modal-form-section">
-                        <h3 class="modal-form-section-title">
+                    <div class="form-section">
+                        <h3 class="form-section-title">
                             <i class="fas fa-user-circle"></i> Información Personal
                         </h3>
                         
-                        <div class="modal-form-group">
-                            <label for="edit-profesor-nombre-completo" class="modal-form-label">
+                        <div class="form-group">
+                            <label for="edit-profesor-nombre-completo" class="form-label">
                                 Nombre completo <span class="required">*</span>
                             </label>
-                            <div class="modal-input-with-icon">
+                            <div class="input-with-icon">
                                 <i class="fas fa-user input-icon"></i>
                                 <input 
                                     type="text" 
                                     id="edit-profesor-nombre-completo" 
-                                    class="modal-form-input" 
+                                    class="form-input" 
                                     placeholder="Ej: Carlos Rodríguez Martínez"
                                     required
                                 >
                             </div>
-                            <div class="modal-error-message" id="edit-profesor-nombre-error"></div>
+                            <div class="error-message" id="edit-profesor-nombre-error"></div>
                         </div>
 
-                        <div class="modal-form-row">
-                            <div class="modal-form-group">
-                                <label for="edit-profesor-tipo-documento" class="modal-form-label">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="edit-profesor-tipo-documento" class="form-label">
                                     Tipo de documento <span class="required">*</span>
                                 </label>
-                                <div class="modal-select-wrapper">
+                                <div class="select-wrapper">
                                     <i class="fas fa-id-card select-icon"></i>
-                                    <select id="edit-profesor-tipo-documento" class="modal-form-select" required>
+                                    <select id="edit-profesor-tipo-documento" class="form-select" required>
                                         <option value="" disabled selected>Selecciona un tipo</option>
                                         <option value="cc">Cédula de Ciudadanía (CC)</option>
                                         <option value="ti">Tarjeta de Identidad (TI)</option>
@@ -1157,72 +1157,72 @@
                                 </div>
                             </div>
                             
-                            <div class="modal-form-group">
-                                <label for="edit-profesor-numero-documento" class="modal-form-label">
+                            <div class="form-group">
+                                <label for="edit-profesor-numero-documento" class="form-label">
                                     Número de documento <span class="required">*</span>
                                 </label>
-                                <div class="modal-input-with-icon">
+                                <div class="input-with-icon">
                                     <i class="fas fa-hashtag input-icon"></i>
                                     <input 
                                         type="text" 
                                         id="edit-profesor-numero-documento" 
-                                        class="modal-form-input" 
+                                        class="form-input" 
                                         placeholder="Ej: 123456789"
                                         required
                                     >
                                 </div>
-                                <div class="modal-error-message" id="edit-profesor-documento-error"></div>
+                                <div class="error-message" id="edit-profesor-documento-error"></div>
                             </div>
                         </div>
 
-                        <div class="modal-form-group">
-                            <label for="edit-profesor-correo-electronico" class="modal-form-label">
+                        <div class="form-group">
+                            <label for="edit-profesor-correo-electronico" class="form-label">
                                 Correo electrónico institucional <span class="required">*</span>
                             </label>
-                            <div class="modal-input-with-icon">
+                            <div class="input-with-icon">
                                 <i class="fas fa-envelope input-icon"></i>
                                 <input 
                                     type="email" 
                                     id="edit-profesor-correo-electronico" 
-                                    class="modal-form-input" 
+                                    class="form-input" 
                                     placeholder="Ej: profesor@institucion.edu.co"
                                     required
                                 >
                             </div>
-                            <div class="modal-error-message" id="edit-profesor-correo-error"></div>
+                            <div class="error-message" id="edit-profesor-correo-error"></div>
                         </div>
 
-                        <div class="modal-form-group">
-                            <label for="edit-profesor-telefono" class="modal-form-label">
+                        <div class="form-group">
+                            <label for="edit-profesor-telefono" class="form-label">
                                 Número de teléfono <span class="required">*</span>
                             </label>
-                            <div class="modal-input-with-icon">
+                            <div class="input-with-icon">
                                 <i class="fas fa-phone input-icon"></i>
                                 <input 
                                     type="tel" 
                                     id="edit-profesor-telefono" 
-                                    class="modal-form-input" 
+                                    class="form-input" 
                                     placeholder="Ej: 3101234567"
                                     required
                                 >
                             </div>
-                            <div class="modal-error-message" id="edit-profesor-telefono-error"></div>
+                            <div class="error-message" id="edit-profesor-telefono-error"></div>
                         </div>
                     </div>
 
                     <!-- Sección de Información Académica -->
-                    <div class="modal-form-section">
-                        <h3 class="modal-form-section-title">
+                    <div class="form-section">
+                        <h3 class="form-section-title">
                             <i class="fas fa-graduation-cap"></i> Información Académica
                         </h3>
                         
-                        <div class="modal-form-group">
-                            <label for="edit-profesor-asignaturas" class="modal-form-label">
+                        <div class="form-group">
+                            <label for="edit-profesor-asignaturas" class="form-label">
                                 Asignatura(s) que enseña <span class="required">*</span>
                             </label>
-                            <div class="modal-select-wrapper multi-select-wrapper">
+                            <div class="select-wrapper multi-select-wrapper">
                                 <i class="fas fa-book select-icon"></i>
-                                <select id="edit-profesor-asignaturas" class="modal-form-select" multiple required>
+                                <select id="edit-profesor-asignaturas" class="form-select" multiple required>
                                     <option value="matematicas">Matemáticas</option>
                                     <option value="español">Español</option>
                                     <option value="ciencias-naturales">Ciencias Naturales</option>
@@ -1241,45 +1241,45 @@
                                     <option value="economia">Economía</option>
                                     <option value="informatica">Informática</option>
                                 </select>
-                                <div class="modal-multi-select-info">
+                                <div class="multi-select-info">
                                     <span id="edit-asignaturas-seleccionadas">0 asignaturas seleccionadas</span>
                                     <small>(Mantén presionada la tecla Ctrl para seleccionar múltiples opciones)</small>
                                 </div>
                             </div>
-                            <div class="modal-error-message" id="edit-profesor-asignaturas-error"></div>
+                            <div class="error-message" id="edit-profesor-asignaturas-error"></div>
                         </div>
                     </div>
 
                     <!-- Sección de Cambio de Contraseña -->
                     <div class="modal-password-section">
-                        <div class="modal-password-toggle" id="toggle-profesor-password-section">
-                            <div class="modal-password-toggle-title">
+                        <div class="password-toggle" id="toggle-profesor-password-section">
+                            <div class="password-toggle-title">
                                 <i class="fas fa-key"></i>
                                 <span>Cambiar Contraseña</span>
                             </div>
-                            <button type="button" class="modal-password-toggle-btn">
+                            <button type="button" class="password-toggle-btn">
                                 <i class="fas fa-chevron-down"></i>
                                 <span>Mostrar</span>
                             </button>
                         </div>
                         
-                        <div class="modal-password-content" id="profesor-password-content">
-                            <div class="modal-password-note">
+                        <div class="password-content" id="profesor-password-content">
+                            <div class="password-note">
                                 <i class="fas fa-info-circle"></i>
                                 <span>Deja estos campos vacíos si no deseas cambiar la contraseña</span>
                             </div>
                             
-                            <div class="modal-form-group">
-                                <label for="edit-profesor-nueva-contrasena" class="modal-form-label">
+                            <div class="form-group">
+                                <label for="edit-profesor-nueva-contrasena" class="form-label">
                                     Nueva contraseña
                                 </label>
                                 <div class="password-container">
-                                    <div class="modal-input-with-icon">
+                                    <div class="input-with-icon">
                                         <i class="fas fa-lock input-icon"></i>
                                         <input 
                                             type="password" 
                                             id="edit-profesor-nueva-contrasena" 
-                                            class="modal-form-input password-input" 
+                                            class="form-input password-input" 
                                             placeholder="Ingresa la nueva contraseña"
                                         >
                                     </div>
@@ -1287,20 +1287,20 @@
                                         <i class="fas fa-eye"></i>
                                     </button>
                                 </div>
-                                <div class="modal-error-message" id="edit-profesor-contrasena-error"></div>
+                                <div class="error-message" id="edit-profesor-contrasena-error"></div>
                             </div>
 
-                            <div class="modal-form-group">
-                                <label for="edit-profesor-confirmar-contrasena" class="modal-form-label">
+                            <div class="form-group">
+                                <label for="edit-profesor-confirmar-contrasena" class="form-label">
                                     Confirmar nueva contraseña
                                 </label>
                                 <div class="password-container">
-                                    <div class="modal-input-with-icon">
+                                    <div class="input-with-icon">
                                         <i class="fas fa-lock input-icon"></i>
                                         <input 
                                             type="password" 
                                             id="edit-profesor-confirmar-contrasena" 
-                                            class="modal-form-input password-input" 
+                                            class="form-input password-input" 
                                             placeholder="Confirma la nueva contraseña"
                                         >
                                     </div>
@@ -1308,11 +1308,11 @@
                                         <i class="fas fa-eye"></i>
                                     </button>
                                 </div>
-                                <div class="modal-error-message" id="edit-profesor-confirmar-error"></div>
+                                <div class="error-message" id="edit-profesor-confirmar-error"></div>
                             </div>
 
-                            <div class="modal-password-actions">
-                                <button type="button" class="btn-secondary modal-generate-password-btn" id="generate-profesor-modal-password">
+                            <div class="password-actions">
+                                <button type="button" class="btn-secondary btn-secondary generate-password-btn" id="generate-profesor-modal-password">
                                     <i class="fas fa-random"></i> Generar Contraseña
                                 </button>
                             </div>
@@ -1330,7 +1330,7 @@
                     <!-- ID oculto para referencia -->
                     <input type="hidden" id="edit-profesor-id">
 
-                    <div class="modal-form-actions">
+                    <div class="form-actions">
                         <button type="button" class="btn-secondary cancel-btn" id="cancel-edit-profesor">
                             Cancelar
                         </button>
