@@ -562,7 +562,32 @@
                                         placeholder="Buscar estudiantes..."
                                     >
                                 </div>
-                                <span class="total-counter" id="estudiantes-counter">Total: 5 estudiantes</span>
+                                <div class="pdf-filters">
+                                    <select id="pdf-grado" class="form-select filter-select">
+                                        <option value="">Todos los grados</option>
+                                        <option value="1">1° Primaria</option>
+                                        <option value="2">2° Primaria</option>
+                                        <option value="3">3° Primaria</option>
+                                        <option value="4">4° Primaria</option>
+                                        <option value="5">5° Primaria</option>
+                                        <option value="6">6° Primaria</option>
+                                        <option value="7">7° Secundaria</option>
+                                        <option value="8">8° Secundaria</option>
+                                        <option value="9">9° Secundaria</option>
+                                        <option value="10">10° Secundaria</option>
+                                        <option value="11">11° Secundaria</option>
+                                    </select>
+                                    <select id="pdf-grupo" class="form-select filter-select">
+                                        <option value="">Todos los grupos</option>
+                                        <option value="A">A</option>
+                                        <option value="B">B</option>
+                                        <option value="C">C</option>
+                                    </select>
+                                    <button class="btn-pdf-download" id="btn-pdf-estudiantes" onclick="descargarPDFEstudiantes()">
+                                        <i class="fas fa-file-pdf"></i> Descargar PDF
+                                    </button>
+                                </div>
+                                <span class="total-counter" id="estudiantes-counter">Total: 0 estudiantes</span>
                             </div>
                         </div>
                         
@@ -620,7 +645,10 @@
                                         placeholder="Buscar profesores..."
                                     >
                                 </div>
-                                <span class="total-counter" id="profesores-counter">Total: 3 profesores</span>
+                                <button class="btn-pdf-download" id="btn-pdf-profesores" onclick="descargarPDFProfesores()">
+                                    <i class="fas fa-file-pdf"></i> Descargar PDF
+                                </button>
+                                <span class="total-counter" id="profesores-counter">Total: 0 profesores</span>
                             </div>
                         </div>
                         
@@ -662,6 +690,21 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="reports-section report-download-section">
+                        <div class="section-header">
+                            <h2 class="section-title">
+                                <i class="fas fa-chart-pie"></i> Resumen General del Sistema
+                            </h2>
+                        </div>
+                        <div class="report-download-content">
+                            <p>Genera un reporte consolidado con las estadísticas actuales de estudiantes, profesores y solicitudes del sistema.</p>
+                            <button class="btn-pdf-download btn-pdf-large" id="btn-pdf-resumen" onclick="descargarPDFResumen()">
+                                <i class="fas fa-file-pdf"></i> Descargar Resumen General (PDF)
+                            </button>
+                        </div>
+                    </div>
+
                 </div>
             </section>
         </main>
