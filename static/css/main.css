@@ -4634,3 +4634,9 @@ li {
         font-size: 14px;
     }
 }
+/* Estado de carga para modales */
+.loading-state { opacity: 0.6; pointer-events: none; transition: opacity 0.2s ease; }
+
+
+/* Estado de carga para modales */
+.loading-state { opacity: 0.6; pointer-events: none; transition: opacity 0.2s ease; }
