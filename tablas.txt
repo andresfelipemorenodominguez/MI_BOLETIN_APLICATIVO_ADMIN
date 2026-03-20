@@ -1,17 +1,20 @@
+
+-- SCRIPT COMPLETO DE BASE DE DATOS - MiBoletín
+-- 15 tablas
+
+
 -- Tabla para administradores
-CREATE TABLE administradores (
+CREATE TABLE IF NOT EXISTS administradores (
     id_admin SERIAL PRIMARY KEY,
     nombre_completo VARCHAR(255) NOT NULL,
     correo_electronico VARCHAR(255) UNIQUE NOT NULL,
     contrasena VARCHAR(255) NOT NULL,
     verification_code VARCHAR(10),
     verification_code_expires TIMESTAMP,
-    email_verified BOOLEAN DEFAULT FALSE
+    email_verified BOOLEAN DEFAULT FALSE,
+    recovery_token VARCHAR(64),
+    recovery_token_expires TIMESTAMP
 );
-
-ALTER TABLE administradores 
-ADD COLUMN recovery_token VARCHAR(64),
-ADD COLUMN recovery_token_expires TIMESTAMP;
 
 -- Tabla para estudiantes
 CREATE TABLE IF NOT EXISTS estudiantes (
@@ -26,7 +29,6 @@ CREATE TABLE IF NOT EXISTS estudiantes (
     contrasena VARCHAR(255) NOT NULL,
     fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     estado VARCHAR(20) DEFAULT 'activo',
-    -- Campos de tracking para seguimiento
     id_admin INTEGER,
     nombre_completo_admin VARCHAR(255),
     correo_electronico_admin VARCHAR(255)
@@ -45,17 +47,15 @@ CREATE TABLE IF NOT EXISTS profesores (
     contrasena VARCHAR(255) NOT NULL,
     fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     estado VARCHAR(20) DEFAULT 'activo',
-    -- Campos de tracking para seguimiento
     id_admin INTEGER,
     nombre_completo_admin VARCHAR(255),
     correo_electronico_admin VARCHAR(255)
 );
 
-
--- Tabla para solicitudes de cambio de contrasena
+-- Tabla para solicitudes de cambio de contraseña
 CREATE TABLE IF NOT EXISTS solicitudes_cambio_contrasena (
     id_solicitud SERIAL PRIMARY KEY,
-    tipo_usuario VARCHAR(20) NOT NULL, -- 'estudiante' o 'profesor'
+    tipo_usuario VARCHAR(20) NOT NULL,
     id_usuario INTEGER NOT NULL,
     codigo_usuario VARCHAR(20) NOT NULL,
     correo_usuario VARCHAR(100) NOT NULL,
@@ -66,5 +66,129 @@ CREATE TABLE IF NOT EXISTS solicitudes_cambio_contrasena (
     FOREIGN KEY (id_admin) REFERENCES administradores(id_admin)
 );
 
--- Eliminar todas las filas de todas la tablas
-TRUNCATE TABLE administradores, solicitudes_cambio_contrasena, estudiantes, profesores RESTART IDENTITY CASCADE;
+-- Tabla para períodos académicos
+CREATE TABLE IF NOT EXISTS periodo_academico (
+    id_periodo SERIAL PRIMARY KEY,
+    nombre TEXT NOT NULL,
+    fecha_inicio DATE NOT NULL,
+    fecha_fin DATE NOT NULL
+);
+
+-- Tabla para grupos
+CREATE TABLE IF NOT EXISTS grupos (
+    id_grupo SERIAL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    id_periodo INTEGER,
+    CONSTRAINT fk_grupo_periodo FOREIGN KEY (id_periodo)
+        REFERENCES periodo_academico(id_periodo)
+        ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+-- Tabla para materias
+CREATE TABLE IF NOT EXISTS materia (
+    id_materia SERIAL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    codigo VARCHAR(100) UNIQUE
+);
+
+-- Tabla para relación grupo-materia-docente
+CREATE TABLE IF NOT EXISTS grupo_materias (
+    id_grupo_materia SERIAL PRIMARY KEY,
+    id_grupo INTEGER NOT NULL,
+    id_materia INTEGER NOT NULL,
+    id_docente INTEGER NOT NULL,
+    CONSTRAINT fk_gm_grupo FOREIGN KEY (id_grupo)
+        REFERENCES grupos(id_grupo) ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT fk_gm_materia FOREIGN KEY (id_materia)
+        REFERENCES materia(id_materia) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+-- Tabla para relación grupo-estudiante
+CREATE TABLE IF NOT EXISTS grupo_estudiantes (
+    id_grupo INTEGER NOT NULL,
+    id_estudiante INTEGER NOT NULL,
+    PRIMARY KEY (id_grupo, id_estudiante),
+    CONSTRAINT fk_ge_grupo FOREIGN KEY (id_grupo)
+        REFERENCES grupos(id_grupo) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+-- Tabla para tipos de nota
+CREATE TABLE IF NOT EXISTS tipos_nota (
+    id_tipo SERIAL PRIMARY KEY,
+    nombre_tipo VARCHAR(50) NOT NULL
+);
+
+-- Tabla para notas
+CREATE TABLE IF NOT EXISTS notas (
+    id_nota SERIAL PRIMARY KEY,
+    id_estudiante INTEGER NOT NULL,
+    valor NUMERIC(5,2) NOT NULL,
+    descripcion VARCHAR(200),
+    fecha_registro DATE DEFAULT CURRENT_DATE,
+    id_tipo INTEGER,
+    id_grupo_materia INTEGER,
+    CONSTRAINT notas_valor_check CHECK (valor >= 0 AND valor <= 5),
+    CONSTRAINT fk_nota_tipo FOREIGN KEY (id_tipo)
+        REFERENCES tipos_nota(id_tipo) ON UPDATE CASCADE ON DELETE SET NULL,
+    CONSTRAINT fk_notas_grupo_materia FOREIGN KEY (id_grupo_materia)
+        REFERENCES grupo_materias(id_grupo_materia) ON DELETE CASCADE
+);
+
+-- Tabla para horarios
+CREATE TABLE IF NOT EXISTS horarios (
+    id_horario SERIAL PRIMARY KEY,
+    dia_semana VARCHAR(20) NOT NULL,
+    hora_inicio TIME NOT NULL,
+    hora_fin TIME NOT NULL,
+    id_grupo_materia INTEGER,
+    CONSTRAINT fk_horarios_grupo_materias FOREIGN KEY (id_grupo_materia)
+        REFERENCES grupo_materias(id_grupo_materia) ON DELETE CASCADE
+);
+
+-- Tabla general de usuarios
+CREATE TABLE IF NOT EXISTS usuarios (
+    id_usuario SERIAL PRIMARY KEY,
+    nombre_completo VARCHAR(100) NOT NULL,
+    correo_electronico VARCHAR(100) UNIQUE NOT NULL,
+    contrasena VARCHAR(255) NOT NULL,
+    tipo_usuario VARCHAR(20) NOT NULL,
+    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    estado VARCHAR(20) DEFAULT 'activo'
+);
+
+-- Tabla para observador (comportamientos de estudiantes)
+CREATE TABLE IF NOT EXISTS observador (
+    id_observacion SERIAL PRIMARY KEY,
+    id_estudiante INTEGER NOT NULL,
+    id_profesor INTEGER NOT NULL,
+    tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('positivo', 'negativo', 'neutro')),
+    descripcion TEXT NOT NULL,
+    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_obs_estudiante FOREIGN KEY (id_estudiante)
+        REFERENCES estudiantes(id_estudiante) ON DELETE CASCADE,
+    CONSTRAINT fk_obs_profesor FOREIGN KEY (id_profesor)
+        REFERENCES profesores(id_profesor) ON DELETE CASCADE
+);
+
+-- Tabla para agenda del profesor
+CREATE TABLE IF NOT EXISTS agenda (
+    id_agenda SERIAL PRIMARY KEY,
+    id_profesor INTEGER NOT NULL,
+    titulo VARCHAR(100) NOT NULL,
+    descripcion TEXT,
+    fecha_evento DATE NOT NULL,
+    hora_inicio TIME,
+    hora_fin TIME,
+    estado VARCHAR(20) DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'completado', 'cancelado')),
+    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_agenda_profesor FOREIGN KEY (id_profesor)
+        REFERENCES profesores(id_profesor) ON DELETE CASCADE
+);
+
+-- =============================================
+-- RESET COMPLETO (descomentar solo si necesitas borrar todo)
+-- =============================================
+-- TRUNCATE TABLE agenda, observador, notas, horarios, grupo_estudiantes,
+--     grupo_materias, grupos, materia, periodo_academico, tipos_nota,
+--     solicitudes_cambio_contrasena, estudiantes, profesores,
+--     administradores, usuarios RESTART IDENTITY CASCADE;

@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="es" class="page-dashboard">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MiBoletín Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+<button class="hamburger" id="hamburger-btn" aria-label="Menú">
+    <i class="fas fa-bars"></i>
+</button>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+<div class="app-container">
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <button id="logo-btn" class="logo-btn">
+                <i class="fas fa-newspaper logo-icon"></i>
+                <span class="logo-text">MiBoletín<span class="org"> Admin</span></span>
+            </button>
+        </div>
+
+        <nav class="sidebar-nav">
+            <ul class="nav-list">
+                <li class="nav-item">
+                    <a href="#" class="nav-link active" data-section="inicio-section">
+                        <i class="fas fa-home nav-icon"></i>
+                        <span class="nav-text">Inicio</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" data-section="agregar-estudiante-section">
+                        <i class="fa-solid fa-user nav-icon"></i>
+                        <span class="nav-text">Estudiantes</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" data-section="agregar-profesor-section">
+                        <i class="fa-solid fa-chalkboard-user nav-icon"></i>
+                        <span class="nav-text">Profesores</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" data-section="periodos-section">
+                        <i class="fas fa-calendar-alt nav-icon"></i>
+                        <span class="nav-text">Períodos</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" data-section="grupos-section">
+                        <i class="fas fa-users nav-icon"></i>
+                        <span class="nav-text">Grupos</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" data-section="materias-section">
+                        <i class="fas fa-book nav-icon"></i>
+                        <span class="nav-text">Materias</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" data-section="asignaciones-section">
+                        <i class="fas fa-link nav-icon"></i>
+                        <span class="nav-text">Asignaciones</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" data-section="reportes-section">
+                        <i class="fa-solid fa-chart-bar nav-icon"></i>
+                        <span class="nav-text">Reportes</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <div class="sidebar-footer">
+            <div class="user-profile">
+                <div class="user-avatar">
+                    <img src="https://ui-avatars.com/api/?name={{ user_name|urlencode }}&background=003366&color=fff" alt="Avatar">
+                </div>
+                <div class="user-info">
+                    <h3 class="user-name">{{ user_name }}</h3>
+                    <p class="user-email">{{ user_email }}</p>
+                </div>
+                <button id="profile-btn" class="profile-btn" title="Ver perfil">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+    </aside>
+
+    <main class="main-content">
+
+        <!-- ── INICIO ── -->
+        <section id="inicio-section" class="content-section active">
+            <div class="content-wrapper">
+                <div class="welcome-section">
+                    <h1>Bienvenido, {{ user_name }}</h1>
+                    <p class="welcome-text">Panel de control de MiBoletín. Gestiona estudiantes, profesores, grupos y más.</p>
+                    <p class="welcome-date">Hoy es <span id="current-date"></span></p>
+                </div>
+                <div class="overview-section">
+                    <h2 class="section-title">Resumen General</h2>
+                    <div class="overview-cards">
+                        <div class="overview-card">
+                            <div class="card-icon"><i class="fas fa-users"></i></div>
+                            <div class="card-content">
+                                <h3 class="card-title">Estudiantes</h3>
+                                <p class="card-value" id="stat-estudiantes">–</p>
+                                <p class="card-subtitle">Activos</p>
+                            </div>
+                        </div>
+                        <div class="overview-card">
+                            <div class="card-icon"><i class="fas fa-chalkboard-teacher"></i></div>
+                            <div class="card-content">
+                                <h3 class="card-title">Profesores</h3>
+                                <p class="card-value" id="stat-profesores">–</p>
+                                <p class="card-subtitle">Activos</p>
+                            </div>
+                        </div>
+                        <div class="overview-card">
+                            <div class="card-icon"><i class="fas fa-users"></i></div>
+                            <div class="card-content">
+                                <h3 class="card-title">Grupos</h3>
+                                <p class="card-value" id="stat-grupos">–</p>
+                                <p class="card-subtitle">Registrados</p>
+                            </div>
+                        </div>
+                        <div class="overview-card">
+                            <div class="card-icon"><i class="fas fa-book"></i></div>
+                            <div class="card-content">
+                                <h3 class="card-title">Materias</h3>
+                                <p class="card-value" id="stat-materias">–</p>
+                                <p class="card-subtitle">Registradas</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="quick-actions-section">
+                    <h2 class="section-title">Accesos Rápidos</h2>
+                    <div class="quick-actions-grid">
+                        <button class="quick-action-btn" data-section="agregar-estudiante-section">
+                            <i class="fas fa-user-plus"></i><span>Agregar Estudiante</span>
+                        </button>
+                        <button class="quick-action-btn" data-section="agregar-profesor-section">
+                            <i class="fas fa-chalkboard-teacher"></i><span>Agregar Profesor</span>
+                        </button>
+                        <button class="quick-action-btn" data-section="periodos-section">
+                            <i class="fas fa-calendar-alt"></i><span>Períodos</span>
+                        </button>
+                        <button class="quick-action-btn" data-section="grupos-section">
+                            <i class="fas fa-users"></i><span>Grupos</span>
+                        </button>
+                        <button class="quick-action-btn" data-section="materias-section">
+                            <i class="fas fa-book"></i><span>Materias</span>
+                        </button>
+                        <button class="quick-action-btn" data-section="asignaciones-section">
+                            <i class="fas fa-link"></i><span>Asignaciones</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── ESTUDIANTES ── -->
+        <section id="agregar-estudiante-section" class="content-section">
+            <div class="content-wrapper">
+                <div class="form-header">
+                    <h1>Estudiantes</h1>
+                    <p class="form-subtitle">Registra y gestiona los estudiantes del sistema.</p>
+                </div>
+                <form id="estudiante-form" class="student-form">
+                    <div class="form-section">
+                        <h3 class="form-section-title"><i class="fas fa-user-circle"></i> Información Personal</h3>
+                        <div class="form-row">
+                            <div class="form-group full-width">
+                                <label for="nombre-completo" class="form-label">Nombre Completo <span class="required">*</span></label>
+                                <div class="input-with-icon">
+                                    <i class="fas fa-user input-icon"></i>
+                                    <input type="text" id="nombre-completo" name="nombre_completo" class="form-input" placeholder="Ej: Juan Pérez" required>
+                                </div>
+                                <div class="error-message" id="nombre-completo-error"></div>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Tipo de Documento <span class="required">*</span></label>
+                                <div class="select-wrapper">
+                                    <i class="fas fa-id-card select-icon"></i>
+                                    <select id="tipo-documento" class="form-select" required>
+                                        <option value="">Selecciona tipo</option>
+                                        <option value="cc">Cédula de Ciudadanía</option>
+                                        <option value="ti">Tarjeta de Identidad</option>
+                                        <option value="ce">Cédula Extranjería</option>
+                                        <option value="pasaporte">Pasaporte</option>
+                                    </select>
+                                </div>
+                                <div class="error-message" id="tipo-documento-error"></div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Número de Documento <span class="required">*</span></label>
+                                <div class="input-with-icon">
+                                    <i class="fas fa-hashtag input-icon"></i>
+                                    <input type="text" id="numero-documento" class="form-input" placeholder="Ej: 1234567890" required>
+                                </div>
+                                <div class="error-message" id="numero-documento-error"></div>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Correo Electrónico <span class="required">*</span></label>
+                                <div class="input-with-icon">
+                                    <i class="fas fa-envelope input-icon"></i>
+                                    <input type="email" id="correo-electronico" class="form-input" placeholder="correo@ejemplo.com" required>
+                                </div>
+                                <div class="error-message" id="correo-electronico-error"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-section">
+                        <h3 class="form-section-title"><i class="fas fa-graduation-cap"></i> Información Académica</h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Grado <span class="required">*</span></label>
+                                <div class="select-wrapper">
+                                    <i class="fas fa-layer-group select-icon"></i>
+                                    <select id="grado" class="form-select" required>
+                                        <option value="">Selecciona grado</option>
+                                        <option value="6° Primaria">6° Primaria</option>
+                                        <option value="7° Primaria">7° Primaria</option>
+                                        <option value="8° Secundaria">8° Secundaria</option>
+                                        <option value="9° Secundaria">9° Secundaria</option>
+                                        <option value="10° Secundaria">10° Secundaria</option>
+                                        <option value="11° Secundaria">11° Secundaria</option>
+                                    </select>
+                                </div>
+                                <div class="error-message" id="grado-error"></div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Grupo <span class="required">*</span></label>
+                                <div class="select-wrapper">
+                                    <i class="fas fa-users select-icon"></i>
+                                    <select id="grupo" class="form-select" required>
+                                        <option value="">Selecciona grupo</option>
+                                        <option value="A">A</option>
+                                        <option value="B">B</option>
+                                        <option value="C">C</option>
+                                        <option value="D">D</option>
+                                    </select>
+                                </div>
+                                <div class="error-message" id="grupo-error"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-section">
+                        <h3 class="form-section-title"><i class="fas fa-lock"></i> Seguridad y Acceso</h3>
+                        <div class="form-group">
+                            <label class="form-label">Contraseña <span class="required">*</span></label>
+                            <div class="password-container">
+                                <div class="input-with-icon">
+                                    <i class="fas fa-lock input-icon"></i>
+                                    <input type="password" id="contrasena" class="form-input password-input" placeholder="Mínimo 8 caracteres" required>
+                                </div>
+                                <button type="button" class="toggle-password-btn" data-target="contrasena"><i class="fas fa-eye"></i></button>
+                                <button type="button" class="btn-secondary btn-secondary generate-password-btn" id="generate-student-password"><i class="fas fa-random"></i> Generar</button>
+                            </div>
+                            <div class="password-strength" style="margin-top:8px;">
+                                <span class="strength-text">Seguridad:</span>
+                                <div class="strength-bar"><div class="strength-fill" id="student-password-strength-fill"></div></div>
+                                <span class="strength-label" id="student-password-strength-label">Débil</span>
+                            </div>
+                            <div class="error-message" id="contrasena-error"></div>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary cancel-btn" id="cancel-estudiante">Cancelar</button>
+                        <button type="submit" class="btn-primary"><i class="fas fa-save"></i> Registrar Estudiante</button>
+                    </div>
+                </form>
+
+                <div class="table-section" style="margin-top:32px;">
+                    <div class="table-header">
+                        <h2>Estudiantes Registrados</h2>
+                        <div class="table-controls">
+                            <div class="search-box">
+                                <i class="fas fa-search search-icon"></i>
+                                <input type="text" id="search-estudiantes" placeholder="Buscar estudiante..." class="search-input">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="data-table" id="tabla-estudiantes">
+                            <thead>
+                                <tr>
+                                    <th>Código</th><th>Nombre</th><th>Correo</th>
+                                    <th>Grado</th><th>Grupo</th><th>Estado</th><th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-estudiantes">
+                                <tr><td colspan="7" style="text-align:center;padding:20px;color:var(--gray-500);">Cargando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── PROFESORES ── -->
+        <section id="agregar-profesor-section" class="content-section">
+            <div class="content-wrapper">
+                <div class="form-header">
+                    <h1>Profesores</h1>
+                    <p class="form-subtitle">Registra y gestiona los profesores del sistema.</p>
+                </div>
+                <form id="profesor-form" class="student-form">
+                    <div class="form-section">
+                        <h3 class="form-section-title"><i class="fas fa-user-circle"></i> Información Personal</h3>
+                        <div class="form-row">
+                            <div class="form-group full-width">
+                                <label class="form-label">Nombre Completo <span class="required">*</span></label>
+                                <div class="input-with-icon">
+                                    <i class="fas fa-user input-icon"></i>
+                                    <input type="text" id="prof-nombre" class="form-input" placeholder="Ej: María García" required>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Tipo de Documento <span class="required">*</span></label>
+                                <div class="select-wrapper">
+                                    <i class="fas fa-id-card select-icon"></i>
+                                    <select id="prof-tipo-doc" class="form-select" required>
+                                        <option value="">Selecciona tipo</option>
+                                        <option value="cc">Cédula de Ciudadanía</option>
+                                        <option value="ce">Cédula Extranjería</option>
+                                        <option value="pasaporte">Pasaporte</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Número de Documento <span class="required">*</span></label>
+                                <div class="input-with-icon">
+                                    <i class="fas fa-hashtag input-icon"></i>
+                                    <input type="text" id="prof-num-doc" class="form-input" placeholder="Ej: 1234567890" required>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Correo Electrónico <span class="required">*</span></label>
+                                <div class="input-with-icon">
+                                    <i class="fas fa-envelope input-icon"></i>
+                                    <input type="email" id="prof-correo" class="form-input" placeholder="correo@ejemplo.com" required>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Teléfono <span class="required">*</span></label>
+                                <div class="input-with-icon">
+                                    <i class="fas fa-phone input-icon"></i>
+                                    <input type="text" id="prof-telefono" class="form-input" placeholder="Ej: 3101234567" required>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-section">
+                        <h3 class="form-section-title"><i class="fas fa-graduation-cap"></i> Asignaturas</h3>
+                        <div class="form-group">
+                            <label class="form-label">Asignatura(s) <span class="required">*</span></label>
+                            <div class="select-wrapper multi-select-wrapper">
+                                <i class="fas fa-book select-icon"></i>
+                                <select id="prof-asignaturas" class="form-select" multiple required>
+                                    <option value="matematicas">Matemáticas</option>
+                                    <option value="español">Español</option>
+                                    <option value="ciencias-naturales">Ciencias Naturales</option>
+                                    <option value="ciencias-sociales">Ciencias Sociales</option>
+                                    <option value="ingles">Inglés</option>
+                                    <option value="educacion-fisica">Educación Física</option>
+                                    <option value="arte">Arte</option>
+                                    <option value="musica">Música</option>
+                                    <option value="tecnologia">Tecnología</option>
+                                    <option value="etica">Ética y Valores</option>
+                                    <option value="fisica">Física</option>
+                                    <option value="quimica">Química</option>
+                                    <option value="biologia">Biología</option>
+                                    <option value="filosofia">Filosofía</option>
+                                </select>
+                                <div class="multi-select-info">
+                                    <span id="asignaturas-count">0 seleccionadas</span>
+                                    <small>(Mantén Ctrl para seleccionar varias)</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-section">
+                        <h3 class="form-section-title"><i class="fas fa-lock"></i> Contraseña</h3>
+                        <div class="form-group">
+                            <div class="password-container">
+                                <div class="input-with-icon">
+                                    <i class="fas fa-lock input-icon"></i>
+                                    <input type="password" id="prof-contrasena" class="form-input password-input" placeholder="Mínimo 8 caracteres" required>
+                                </div>
+                                <button type="button" class="toggle-password-btn" data-target="prof-contrasena"><i class="fas fa-eye"></i></button>
+                                <button type="button" class="btn-secondary btn-secondary generate-password-btn" id="generate-profesor-password"><i class="fas fa-random"></i> Generar</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" id="cancel-profesor">Cancelar</button>
+                        <button type="submit" class="btn-primary"><i class="fas fa-save"></i> Registrar Profesor</button>
+                    </div>
+                </form>
+
+                <div class="table-section" style="margin-top:32px;">
+                    <div class="table-header">
+                        <h2>Profesores Registrados</h2>
+                        <div class="search-box">
+                            <i class="fas fa-search search-icon"></i>
+                            <input type="text" id="search-profesores" placeholder="Buscar profesor..." class="search-input">
+                        </div>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Código</th><th>Nombre</th><th>Correo</th>
+                                    <th>Teléfono</th><th>Asignaturas</th><th>Estado</th><th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-profesores">
+                                <tr><td colspan="7" style="text-align:center;padding:20px;color:var(--gray-500);">Cargando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── PERÍODOS ── -->
+        <section id="periodos-section" class="content-section">
+            <div class="content-wrapper">
+                <div class="form-header">
+                    <h1>Períodos Académicos</h1>
+                    <p class="form-subtitle">Crea y gestiona los períodos académicos del año.</p>
+                </div>
+                <div class="mgmt-card">
+                    <h3><i class="fas fa-plus-circle"></i> Crear Período</h3>
+                    <div class="mgmt-grid">
+                        <div class="form-group">
+                            <label class="form-label">Nombre <span class="required">*</span></label>
+                            <input type="text" id="periodo-nombre" class="form-input" placeholder="Ej: 2026-1">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Fecha Inicio <span class="required">*</span></label>
+                            <input type="date" id="periodo-inicio" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Fecha Fin <span class="required">*</span></label>
+                            <input type="date" id="periodo-fin" class="form-input">
+                        </div>
+                    </div>
+                    <button class="btn-primary" onclick="crearPeriodo()"><i class="fas fa-plus"></i> Crear Período</button>
+                    <div id="periodo-msg"></div>
+                </div>
+                <div class="mgmt-card">
+                    <h3><i class="fas fa-list"></i> Períodos Registrados</h3>
+                    <div style="overflow-x:auto;">
+                        <table class="mgmt-table" id="tabla-periodos">
+                            <thead><tr><th>ID</th><th>Nombre</th><th>Inicio</th><th>Fin</th></tr></thead>
+                            <tbody id="tbody-periodos"><tr><td colspan="4" style="text-align:center;padding:16px;">Cargando...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── GRUPOS ── -->
+        <section id="grupos-section" class="content-section">
+            <div class="content-wrapper">
+                <div class="form-header">
+                    <h1>Grupos</h1>
+                    <p class="form-subtitle">Crea grupos y asígnalos a un período académico.</p>
+                </div>
+                <div class="mgmt-card">
+                    <h3><i class="fas fa-plus-circle"></i> Crear Grupo</h3>
+                    <div class="mgmt-grid">
+                        <div class="form-group">
+                            <label class="form-label">Nombre del Grupo <span class="required">*</span></label>
+                            <input type="text" id="grupo-nombre" class="form-input" placeholder="Ej: 10A, 11B">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Período Académico <span class="required">*</span></label>
+                            <select id="grupo-periodo" class="form-select">
+                                <option value="">Selecciona un período</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn-primary" onclick="crearGrupo()"><i class="fas fa-plus"></i> Crear Grupo</button>
+                    <div id="grupo-msg"></div>
+                </div>
+                <div class="mgmt-card">
+                    <h3><i class="fas fa-list"></i> Grupos Registrados</h3>
+                    <div style="overflow-x:auto;">
+                        <table class="mgmt-table">
+                            <thead><tr><th>ID</th><th>Nombre</th><th>Período</th></tr></thead>
+                            <tbody id="tbody-grupos"><tr><td colspan="3" style="text-align:center;padding:16px;">Cargando...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── MATERIAS ── -->
+        <section id="materias-section" class="content-section">
+            <div class="content-wrapper">
+                <div class="form-header">
+                    <h1>Materias</h1>
+                    <p class="form-subtitle">Crea y gestiona las materias del sistema.</p>
+                </div>
+                <div class="mgmt-card">
+                    <h3><i class="fas fa-plus-circle"></i> Crear Materia</h3>
+                    <div class="mgmt-grid">
+                        <div class="form-group">
+                            <label class="form-label">Nombre <span class="required">*</span></label>
+                            <input type="text" id="materia-nombre" class="form-input" placeholder="Ej: Matemáticas">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Código (opcional)</label>
+                            <input type="text" id="materia-codigo" class="form-input" placeholder="Ej: MAT001">
+                        </div>
+                    </div>
+                    <button class="btn-primary" onclick="crearMateria()"><i class="fas fa-plus"></i> Crear Materia</button>
+                    <div id="materia-msg"></div>
+                </div>
+                <div class="mgmt-card">
+                    <h3><i class="fas fa-list"></i> Materias Registradas</h3>
+                    <div style="overflow-x:auto;">
+                        <table class="mgmt-table">
+                            <thead><tr><th>ID</th><th>Nombre</th><th>Código</th></tr></thead>
+                            <tbody id="tbody-materias"><tr><td colspan="3" style="text-align:center;padding:16px;">Cargando...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── ASIGNACIONES ── -->
+        <section id="asignaciones-section" class="content-section">
+            <div class="content-wrapper">
+                <div class="form-header">
+                    <h1>Asignaciones</h1>
+                    <p class="form-subtitle">Asigna profesores a grupos/materias y estudiantes a grupos.</p>
+                </div>
+
+                <div class="mgmt-card">
+                    <h3><i class="fas fa-chalkboard-teacher"></i> Asignar Profesor → Grupo + Materia</h3>
+                    <div class="mgmt-grid">
+                        <div class="form-group">
+                            <label class="form-label">Profesor <span class="required">*</span></label>
+                            <select id="asig-profesor" class="form-select">
+                                <option value="">Selecciona un profesor</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Grupo <span class="required">*</span></label>
+                            <select id="asig-grupo" class="form-select">
+                                <option value="">Selecciona un grupo</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Materia <span class="required">*</span></label>
+                            <select id="asig-materia" class="form-select">
+                                <option value="">Selecciona una materia</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn-primary" onclick="asignarProfesor()"><i class="fas fa-link"></i> Asignar</button>
+                    <div id="asig-profesor-msg"></div>
+                </div>
+
+                <div class="mgmt-card">
+                    <h3><i class="fas fa-user-graduate"></i> Asignar Estudiante → Grupo</h3>
+                    <div class="mgmt-grid">
+                        <div class="form-group">
+                            <label class="form-label">Estudiante <span class="required">*</span></label>
+                            <select id="asig-estudiante" class="form-select">
+                                <option value="">Selecciona un estudiante</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Grupo <span class="required">*</span></label>
+                            <select id="asig-grupo-est" class="form-select">
+                                <option value="">Selecciona un grupo</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn-primary" onclick="asignarEstudiante()"><i class="fas fa-link"></i> Asignar</button>
+                    <div id="asig-estudiante-msg"></div>
+                </div>
+
+                <div class="mgmt-card">
+                    <h3><i class="fas fa-list"></i> Asignaciones Profesor-Grupo-Materia</h3>
+                    <div style="overflow-x:auto;">
+                        <table class="mgmt-table">
+                            <thead><tr><th>Profesor</th><th>Grupo</th><th>Materia</th><th>Acción</th></tr></thead>
+                            <tbody id="tbody-asignaciones"><tr><td colspan="4" style="text-align:center;padding:16px;">Cargando...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mgmt-card">
+                    <h3><i class="fas fa-list"></i> Estudiantes por Grupo</h3>
+                    <div class="form-group" style="margin-bottom:16px;">
+                        <select id="filtro-grupo-est" class="form-select" onchange="cargarEstudiantesGrupo(this.value)">
+                            <option value="">Selecciona un grupo para ver estudiantes</option>
+                        </select>
+                    </div>
+                    <div style="overflow-x:auto;">
+                        <table class="mgmt-table">
+                            <thead><tr><th>Código</th><th>Nombre</th><th>Acción</th></tr></thead>
+                            <tbody id="tbody-est-grupo"><tr><td colspan="3" style="text-align:center;padding:16px;">Selecciona un grupo</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── REPORTES ── -->
+        <section id="reportes-section" class="content-section">
+            <div class="content-wrapper">
+                <div class="form-header">
+                    <h1>Reportes</h1>
+                    <p class="form-subtitle">Consulta estadísticas y reportes del sistema.</p>
+                </div>
+                <div class="mgmt-card">
+                    <h3><i class="fas fa-chart-bar"></i> Estadísticas Generales</h3>
+                    <div class="mgmt-grid" id="reportes-stats">
+                        <div style="text-align:center;padding:20px;color:var(--gray-500);">Cargando estadísticas...</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+</div>
+
+<!-- Modal Perfil -->
+<div class="modal-overlay" id="profile-modal-overlay">
+    <div class="modal" id="profile-modal">
+        <div class="modal-header">
+            <h2 class="modal-title">Mi Perfil</h2>
+            <button class="modal-close" id="close-profile-modal"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <div style="text-align:center;margin-bottom:20px;">
+                <img src="https://ui-avatars.com/api/?name={{ user_name|urlencode }}&background=003366&color=fff&size=80" style="border-radius:50%;" alt="Avatar">
+                <h3 style="margin-top:12px;">{{ user_name }}</h3>
+                <p style="color:var(--gray-600);">{{ user_email }}</p>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Nombre Completo</label>
+                <input type="text" id="profile-name" class="form-input" value="{{ user_name }}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Correo Electrónico</label>
+                <input type="email" id="profile-email" class="form-input" value="{{ user_email }}">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" id="cancel-profile">Cancelar</button>
+            <button class="btn-primary" onclick="guardarPerfil()"><i class="fas fa-save"></i> Guardar</button>
+        </div>
+        <div style="padding:0 24px 16px;">
+            <button class="btn-danger" style="width:100%;" onclick="window.location.href='/logout'">
+                <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
+            </button>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='script/dashboard.js') }}"></script>
+</body>
+</html>

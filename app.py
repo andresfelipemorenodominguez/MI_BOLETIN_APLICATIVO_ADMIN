@@ -197,7 +197,7 @@ def index():
 @app.route('/loginuser', methods=['GET', 'POST'])
 def loginuser():
     if request.method == 'GET':
-        return render_template('loginuser.html')
+        return render_template('general/loginuser.html')
 
     elif request.method == 'POST':
         user_identifier = request.form.get('userIdentifier')
@@ -205,7 +205,7 @@ def loginuser():
         password = request.form.get('contraseña')
 
         if not all([user_identifier, user_email, password]):
-            return render_template('loginuser.html',
+            return render_template('general/loginuser.html',
                                    error='Todos los campos son requeridos')
 
         conn = get_db_connection()
@@ -230,7 +230,7 @@ def loginuser():
                     }
                     return redirect(url_for('estudiante_dashboard'))
                 else:
-                    return render_template('loginuser.html', error='Contraseña incorrecta')
+                    return render_template('general/loginuser.html', error='Contraseña incorrecta')
 
             # Buscar como profesor
             cur.execute(
@@ -250,14 +250,14 @@ def loginuser():
                     }
                     return redirect(url_for('profesor_dashboard'))
                 else:
-                    return render_template('loginuser.html', error='Contraseña incorrecta')
+                    return render_template('general/loginuser.html', error='Contraseña incorrecta')
 
-            return render_template('loginuser.html',
+            return render_template('general/loginuser.html',
                                    error='Usuario no encontrado. Verifica tu identificador y correo electrónico.')
 
         except Exception as e:
             print(f"Error en login: {str(e)}")
-            return render_template('loginuser.html', error='Error en el servidor. Intenta más tarde.')
+            return render_template('general/loginuser.html', error='Error en el servidor. Intenta más tarde.')
         finally:
             cur.close()
             conn.close()
@@ -268,7 +268,7 @@ def estudiante_dashboard():
     user_info = session.get('user_info')
     if not user_info or user_info.get('tipo') != 'estudiante':
         return redirect(url_for('loginuser'))
-    return render_template('estudiante.html',
+    return render_template('estudiantes/estudiante.html',
                            nombre=user_info['nombre'],
                            codigo=user_info['codigo'])
 
@@ -278,7 +278,7 @@ def profesor_dashboard():
     user_info = session.get('user_info')
     if not user_info or user_info.get('tipo') != 'profesor':
         return redirect(url_for('loginuser'))
-    return render_template('profesor.html',
+    return render_template('profesor/profesor.html',
                            nombre=user_info['nombre'],
                            codigo=user_info['codigo'])
 
@@ -297,7 +297,7 @@ def solicitud_user():
     else:
         admin_id, admin_name, admin_email = 'ADM001', 'Administrador del Sistema', 'admin@sistema.com'
 
-    return render_template('solicitud.html',
+    return render_template('general/solicitud.html',
                            admin_id=admin_id,
                            admin_name=admin_name,
                            admin_email=admin_email)
@@ -457,27 +457,27 @@ def limpiar_sesion():
 @app.route("/admin")
 def admin_login():
     """Página de login para administradores"""
-    return render_template("loginadmin.html")
+    return render_template('administrador/loginadmin.html')
 
 
 @app.route("/register")
 def register():
-    return render_template("registeradmin.html")
+    return render_template('administrador/registeradmin.html')
 
 
 @app.route("/forgot-password")
 def forgot_password():
-    return render_template("f-password.html")
+    return render_template('administrador/f-password.html')
 
 
 @app.route("/email-verification")
 def email_verification():
-    return render_template("e-verification.html")
+    return render_template('administrador/e-verification.html')
 
 
 @app.route("/request-password")
 def request_password():
-    return render_template("r-password.html")
+    return render_template('administrador/r-password.html')
 
 
 @app.route("/dashboard")
@@ -498,16 +498,16 @@ def dashboard():
         conn.close()
 
         if user:
-            return render_template("dashboard.html",
+            return render_template('administrador/dashboard.html',
                                    user_name=user['nombre_completo'],
                                    user_email=user['correo_electronico'])
         else:
-            return render_template("dashboard.html",
+            return render_template('administrador/dashboard.html',
                                    user_name=session.get('user_name', 'Usuario'),
                                    user_email=session.get('user_email', 'usuario@ejemplo.com'))
     except Exception as e:
         print(f"Error al obtener datos del usuario: {e}")
-        return render_template("dashboard.html",
+        return render_template('administrador/dashboard.html',
                                user_name=session.get('user_name', 'Usuario'),
                                user_email=session.get('user_email', 'usuario@ejemplo.com'))
 
@@ -806,14 +806,14 @@ def request_password_post():
 def admin_estudiantes():
     if 'user_id' not in session:
         return redirect(url_for('admin_login'))
-    return render_template("estudiantes.html")
+    return render_template('administrador/estudiantes.html')
 
 
 @app.route("/admin/profesores")
 def admin_profesores():
     if 'user_id' not in session:
         return redirect(url_for('admin_login'))
-    return render_template("profesores.html")
+    return render_template('administrador/profesores.html')
 
 
 @app.route("/obtener-estudiante/<codigo>", methods=["GET"])
@@ -1447,6 +1447,594 @@ def reporte_resumen_pdf():
     except Exception as e:
         print(f"Error generando PDF de estadisticas: {e}")
         return jsonify({"status": "error", "message": "Error generando el reporte PDF."})
+
+
+# RUTAS DEL PROFESOR
+
+
+@app.route('/profesor/estudiantes')
+def profesor_estudiantes():
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT DISTINCT e.id_estudiante, e.nombre_completo, e.codigo_estudiante,
+                   e.grado, e.grupo, g.nombre as nombre_grupo
+            FROM estudiantes e
+            JOIN grupo_estudiantes ge ON e.id_estudiante = ge.id_estudiante
+            JOIN grupos g ON ge.id_grupo = g.id_grupo
+            JOIN grupo_materias gm ON g.id_grupo = gm.id_grupo
+            WHERE gm.id_docente = %s AND e.estado = 'activo'
+            ORDER BY e.nombre_completo
+        """, (user_info['id'],))
+        estudiantes = [dict(e) for e in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "data": estudiantes})
+    except Exception as e:
+        print(f"Error obteniendo estudiantes del profesor: {e}")
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/profesor/tipos-nota')
+def profesor_tipos_nota():
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("SELECT id_tipo, nombre_tipo FROM tipos_nota ORDER BY nombre_tipo")
+        tipos = [dict(t) for t in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "data": tipos})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/profesor/materias')
+def profesor_materias():
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT gm.id_grupo_materia, m.nombre as materia, g.nombre as grupo
+            FROM grupo_materias gm
+            JOIN materia m ON gm.id_materia = m.id_materia
+            JOIN grupos g ON gm.id_grupo = g.id_grupo
+            WHERE gm.id_docente = %s
+            ORDER BY m.nombre
+        """, (user_info['id'],))
+        materias = [dict(m) for m in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "data": materias})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/profesor/subir-nota', methods=['POST'])
+def subir_nota():
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    data = request.get_json()
+    id_estudiante = data.get('id_estudiante')
+    valor = data.get('valor')
+    descripcion = data.get('descripcion')
+    id_tipo = data.get('id_tipo')
+    id_grupo_materia = data.get('id_grupo_materia')
+    if not all([id_estudiante, valor, id_tipo, id_grupo_materia]):
+        return jsonify({"status": "error", "message": "Todos los campos son requeridos."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO notas (id_estudiante, valor, descripcion, id_tipo, id_grupo_materia)
+            VALUES (%s, %s, %s, %s, %s) RETURNING id_nota
+        """, (id_estudiante, valor, descripcion, id_tipo, id_grupo_materia))
+        id_nota = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "message": "Nota registrada exitosamente!", "id_nota": id_nota})
+    except Exception as e:
+        print(f"Error subiendo nota: {e}")
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/profesor/notas/<int:id_estudiante>')
+def ver_notas_estudiante(id_estudiante):
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT n.id_nota, n.valor, n.descripcion, n.fecha_registro,
+                   tn.nombre_tipo, m.nombre as materia
+            FROM notas n
+            JOIN tipos_nota tn ON n.id_tipo = tn.id_tipo
+            JOIN grupo_materias gm ON n.id_grupo_materia = gm.id_grupo_materia
+            JOIN materia m ON gm.id_materia = m.id_materia
+            WHERE n.id_estudiante = %s AND gm.id_docente = %s
+            ORDER BY n.fecha_registro DESC
+        """, (id_estudiante, user_info['id']))
+        notas = [dict(n) for n in cur.fetchall()]
+        for n in notas:
+            n['fecha_registro'] = str(n['fecha_registro'])
+            n['valor'] = float(n['valor'])
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "data": notas})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/profesor/observador', methods=['POST'])
+def agregar_observacion():
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    data = request.get_json()
+    id_estudiante = data.get('id_estudiante')
+    tipo = data.get('tipo')
+    descripcion = data.get('descripcion')
+    if not all([id_estudiante, tipo, descripcion]):
+        return jsonify({"status": "error", "message": "Todos los campos son requeridos."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO observador (id_estudiante, id_profesor, tipo, descripcion)
+            VALUES (%s, %s, %s, %s) RETURNING id_observacion
+        """, (id_estudiante, user_info['id'], tipo, descripcion))
+        id_obs = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "message": "Observación registrada!", "id_observacion": id_obs})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/profesor/observador/<int:id_estudiante>') 
+def ver_observaciones(id_estudiante):
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT id_observacion, tipo, descripcion, fecha_registro
+            FROM observador
+            WHERE id_estudiante = %s AND id_profesor = %s
+            ORDER BY fecha_registro DESC
+        """, (id_estudiante, user_info['id']))
+        obs = [dict(o) for o in cur.fetchall()]
+        for o in obs:
+            o['fecha_registro'] = str(o['fecha_registro'])
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "data": obs})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/profesor/agenda', methods=['GET'])
+def ver_agenda():
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT id_agenda, titulo, descripcion, fecha_evento,
+                   hora_inicio, hora_fin, estado
+            FROM agenda
+            WHERE id_profesor = %s
+            ORDER BY fecha_evento ASC
+        """, (user_info['id'],))
+        eventos = [dict(e) for e in cur.fetchall()]
+        for e in eventos:
+            e['fecha_evento'] = str(e['fecha_evento'])
+            e['hora_inicio'] = str(e['hora_inicio']) if e['hora_inicio'] else None
+            e['hora_fin'] = str(e['hora_fin']) if e['hora_fin'] else None
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "data": eventos})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/profesor/agenda', methods=['POST'])
+def agregar_agenda():
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    data = request.get_json()
+    titulo = data.get('titulo')
+    descripcion = data.get('descripcion')
+    fecha_evento = data.get('fecha_evento')
+    hora_inicio = data.get('hora_inicio')
+    hora_fin = data.get('hora_fin')
+    if not all([titulo, fecha_evento]):
+        return jsonify({"status": "error", "message": "Título y fecha son requeridos."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO agenda (id_profesor, titulo, descripcion, fecha_evento, hora_inicio, hora_fin)
+            VALUES (%s, %s, %s, %s, %s, %s) RETURNING id_agenda
+        """, (user_info['id'], titulo, descripcion, fecha_evento, hora_inicio, hora_fin))
+        id_agenda = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "message": "Evento agregado!", "id_agenda": id_agenda})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/profesor/agenda/<int:id_agenda>', methods=['PUT'])
+def actualizar_estado_agenda(id_agenda):
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    data = request.get_json()
+    estado = data.get('estado')
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE agenda SET estado = %s
+            WHERE id_agenda = %s AND id_profesor = %s
+        """, (estado, id_agenda, user_info['id']))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "message": "Estado actualizado!"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/profesor/reporte/<int:id_estudiante>')
+def reporte_estudiante(id_estudiante):
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("SELECT nombre_completo, codigo_estudiante, grado, grupo FROM estudiantes WHERE id_estudiante = %s", (id_estudiante,))
+        estudiante = dict(cur.fetchone())
+        cur.execute("""
+            SELECT n.valor, n.descripcion, n.fecha_registro,
+                   tn.nombre_tipo, m.nombre as materia
+            FROM notas n
+            JOIN tipos_nota tn ON n.id_tipo = tn.id_tipo
+            JOIN grupo_materias gm ON n.id_grupo_materia = gm.id_grupo_materia
+            JOIN materia m ON gm.id_materia = m.id_materia
+            WHERE n.id_estudiante = %s AND gm.id_docente = %s
+            ORDER BY m.nombre, n.fecha_registro DESC
+        """, (id_estudiante, user_info['id']))
+        notas = [dict(n) for n in cur.fetchall()]
+        for n in notas:
+            n['fecha_registro'] = str(n['fecha_registro'])
+            n['valor'] = float(n['valor'])
+        cur.execute("""
+            SELECT tipo, descripcion, fecha_registro
+            FROM observador
+            WHERE id_estudiante = %s AND id_profesor = %s
+            ORDER BY fecha_registro DESC
+        """, (id_estudiante, user_info['id']))
+        observaciones = [dict(o) for o in cur.fetchall()]
+        for o in observaciones:
+            o['fecha_registro'] = str(o['fecha_registro'])
+        promedio = round(sum(n['valor'] for n in notas) / len(notas), 2) if notas else 0
+        cur.close()
+        conn.close()
+        return jsonify({
+            "status": "success",
+            "data": {
+                "estudiante": estudiante,
+                "notas": notas,
+                "observaciones": observaciones,
+                "promedio": promedio
+            }
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+
+
+#  RUTAS ADMIN — Períodos, Grupos, Materias, Asignaciones
+# Pega este bloque en app.py antes del if __name__
+
+
+@app.route('/admin/periodos', methods=['GET'])
+def get_periodos():
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("SELECT id_periodo, nombre, TO_CHAR(fecha_inicio,'DD/MM/YYYY') as fecha_inicio, TO_CHAR(fecha_fin,'DD/MM/YYYY') as fecha_fin FROM periodo_academico ORDER BY fecha_inicio DESC")
+        data = [dict(r) for r in cur.fetchall()]
+        cur.close(); conn.close()
+        return jsonify({"status": "success", "data": data})
+    except Exception as e:
+        print(f"Error periodos: {e}")
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/admin/periodos', methods=['POST'])
+def crear_periodo():
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    data = request.get_json()
+    nombre = data.get('nombre')
+    fecha_inicio = data.get('fecha_inicio')
+    fecha_fin = data.get('fecha_fin')
+    if not all([nombre, fecha_inicio, fecha_fin]):
+        return jsonify({"status": "error", "message": "Todos los campos son requeridos."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("INSERT INTO periodo_academico (nombre, fecha_inicio, fecha_fin) VALUES (%s,%s,%s) RETURNING id_periodo", (nombre, fecha_inicio, fecha_fin))
+        id_periodo = cur.fetchone()[0]
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({"status": "success", "message": "Período creado exitosamente!", "id_periodo": id_periodo})
+    except Exception as e:
+        print(f"Error creando período: {e}")
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/admin/grupos', methods=['GET'])
+def get_grupos():
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT g.id_grupo, g.nombre, p.nombre as periodo
+            FROM grupos g
+            LEFT JOIN periodo_academico p ON g.id_periodo = p.id_periodo
+            ORDER BY g.id_grupo DESC
+        """)
+        data = [dict(r) for r in cur.fetchall()]
+        cur.close(); conn.close()
+        return jsonify({"status": "success", "data": data})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/admin/grupos', methods=['POST'])
+def crear_grupo():
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    data = request.get_json()
+    nombre = data.get('nombre')
+    id_periodo = data.get('id_periodo')
+    if not all([nombre, id_periodo]):
+        return jsonify({"status": "error", "message": "Todos los campos son requeridos."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("INSERT INTO grupos (nombre, id_periodo) VALUES (%s,%s) RETURNING id_grupo", (nombre, id_periodo))
+        id_grupo = cur.fetchone()[0]
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({"status": "success", "message": "Grupo creado exitosamente!", "id_grupo": id_grupo})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/admin/grupos-count', methods=['GET'])
+def grupos_count():
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM grupos")
+        count = cur.fetchone()[0]
+        cur.close(); conn.close()
+        return jsonify({"status": "success", "data": count})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/admin/materias', methods=['GET'])
+def get_materias():
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("SELECT id_materia, nombre, codigo FROM materia ORDER BY nombre")
+        data = [dict(r) for r in cur.fetchall()]
+        cur.close(); conn.close()
+        return jsonify({"status": "success", "data": data})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/admin/materias', methods=['POST'])
+def crear_materia():
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    data = request.get_json()
+    nombre = data.get('nombre')
+    codigo = data.get('codigo') or None
+    if not nombre:
+        return jsonify({"status": "error", "message": "El nombre es requerido."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("INSERT INTO materia (nombre, codigo) VALUES (%s,%s) RETURNING id_materia", (nombre, codigo))
+        id_materia = cur.fetchone()[0]
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({"status": "success", "message": "Materia creada exitosamente!", "id_materia": id_materia})
+    except psycopg2.Error as e:
+        if "unique" in str(e).lower():
+            return jsonify({"status": "error", "message": "El código ya existe."})
+        return jsonify({"status": "error", "message": str(e)})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/admin/materias-count', methods=['GET'])
+def materias_count():
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM materia")
+        count = cur.fetchone()[0]
+        cur.close(); conn.close()
+        return jsonify({"status": "success", "data": count})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/admin/asignaciones', methods=['GET'])
+def get_asignaciones():
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT gm.id_grupo_materia, p.nombre_completo as profesor,
+                   g.nombre as grupo, m.nombre as materia
+            FROM grupo_materias gm
+            JOIN profesores p ON gm.id_docente = p.id_profesor
+            JOIN grupos g ON gm.id_grupo = g.id_grupo
+            JOIN materia m ON gm.id_materia = m.id_materia
+            ORDER BY g.nombre, m.nombre
+        """)
+        data = [dict(r) for r in cur.fetchall()]
+        cur.close(); conn.close()
+        return jsonify({"status": "success", "data": data})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/admin/asignaciones', methods=['POST'])
+def crear_asignacion():
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    data = request.get_json()
+    id_docente = data.get('id_docente')
+    id_grupo = data.get('id_grupo')
+    id_materia = data.get('id_materia')
+    if not all([id_docente, id_grupo, id_materia]):
+        return jsonify({"status": "error", "message": "Todos los campos son requeridos."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO grupo_materias (id_grupo, id_materia, id_docente) VALUES (%s,%s,%s) RETURNING id_grupo_materia",
+            (id_grupo, id_materia, id_docente)
+        )
+        id_gm = cur.fetchone()[0]
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({"status": "success", "message": "Asignación creada exitosamente!", "id_grupo_materia": id_gm})
+    except psycopg2.Error as e:
+        if "unique" in str(e).lower():
+            return jsonify({"status": "error", "message": "Esta asignación ya existe."})
+        return jsonify({"status": "error", "message": str(e)})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/admin/asignaciones/<int:id_grupo_materia>', methods=['DELETE'])
+def eliminar_asignacion(id_grupo_materia):
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM grupo_materias WHERE id_grupo_materia = %s", (id_grupo_materia,))
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({"status": "success", "message": "Asignación eliminada."})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/admin/asignar-estudiante', methods=['POST'])
+def asignar_estudiante_grupo():
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    data = request.get_json()
+    id_estudiante = data.get('id_estudiante')
+    id_grupo = data.get('id_grupo')
+    if not all([id_estudiante, id_grupo]):
+        return jsonify({"status": "error", "message": "Todos los campos son requeridos."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO grupo_estudiantes (id_grupo, id_estudiante) VALUES (%s,%s) ON CONFLICT DO NOTHING",
+            (id_grupo, id_estudiante)
+        )
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({"status": "success", "message": "Estudiante asignado al grupo exitosamente!"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/admin/quitar-estudiante', methods=['POST'])
+def quitar_estudiante_grupo():
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    data = request.get_json()
+    id_estudiante = data.get('id_estudiante')
+    id_grupo = data.get('id_grupo')
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM grupo_estudiantes WHERE id_grupo=%s AND id_estudiante=%s", (id_grupo, id_estudiante))
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({"status": "success", "message": "Estudiante quitado del grupo."})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/admin/grupo/<int:id_grupo>/estudiantes', methods=['GET'])
+def get_estudiantes_grupo(id_grupo):
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT e.id_estudiante, e.codigo_estudiante, e.nombre_completo
+            FROM estudiantes e
+            JOIN grupo_estudiantes ge ON e.id_estudiante = ge.id_estudiante
+            WHERE ge.id_grupo = %s
+            ORDER BY e.nombre_completo
+        """, (id_grupo,))
+        data = [dict(r) for r in cur.fetchall()]
+        cur.close(); conn.close()
+        return jsonify({"status": "success", "data": data})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5006)

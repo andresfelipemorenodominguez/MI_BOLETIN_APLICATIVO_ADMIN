@@ -4,8 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Profesor - MiBoletín</title>
-    <link rel="stylesheet" href="../static/css/profesor.css" />
-
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/profesor.css') }}" />
   </head>
 
   <body>
@@ -14,59 +13,53 @@
         <div class="logo">📘 MiBoletín</div>
         <nav class="menu" aria-label="Navegación principal">
           <button class="menu-item active" data-section="inicio">
-            <span>🏠</span>
-            <span>Inicio</span>
+            <span>🏠</span><span>Inicio</span>
           </button>
-          <button class="menu-item" data-section="estudiante">
-            <span>👤</span>
-            <span>Subir Notas</span>
+          <button class="menu-item" data-section="notas">
+            <span>📝</span><span>Subir Notas</span>
           </button>
-          <button class="menu-item" data-section="profesor">
-            <span>👨‍🏫</span>
-            <span>Reportes Aprendiz</span>
+          <button class="menu-item" data-section="observador">
+            <span>👁</span><span>Observador</span>
           </button>
-          <button class="menu-item" data-section="reportes">
-            <span>📊</span>
-            <span>Reporte General</span>
+          <button class="menu-item" data-section="reporte">
+            <span>📊</span><span>Reporte General</span>
+          </button>
+          <button class="menu-item" data-section="agenda">
+            <span>📅</span><span>Agenda</span>
           </button>
         </nav>
 
         <button class="profile" id="profileButton" type="button" aria-label="Abrir perfil">
-          <div class="avatar" id="mainAvatar">JE</div>
+          <div class="avatar" id="mainAvatar">{{ nombre[:2].upper() if nombre else 'PR' }}</div>
           <div class="profile-info">
-            <div class="profile-name" id="mainName">juan estevan</div>
-            <div class="profile-email" id="mainEmail">juanestevanportilla...</div>
+            <div class="profile-name" id="mainName">{{ nombre }}</div>
+            <div class="profile-email" id="mainEmail">{{ codigo }}</div>
           </div>
         </button>
       </aside>
 
       <main class="main">
         <header class="main-header">
-          <h1 class="main-title">Bienvenido a MiBoletín</h1>
+          <h1 class="main-title">Bienvenido, {{ nombre }}</h1>
           <p class="main-description">Selecciona una sección del menú para comenzar.</p>
         </header>
-
-        <section class="content" id="content">
-          <div class="card">
-            <h2>Inicio</h2>
-            <p>Gracias por utilizar MiBoletín. Utiliza el menú para navegar.</p>
-          </div>
-        </section>
+        <section class="content" id="content"></section>
       </main>
     </div>
 
+    <!-- MODAL PERFIL -->
     <div class="profile-modal" id="profileModal" role="dialog" aria-modal="true" aria-hidden="true">
       <div class="modal-content">
         <button class="close-btn" id="closeModal" aria-label="Cerrar">✕</button>
         <h2>Perfil del Usuario</h2>
-        <div class="modal-avatar" id="modalAvatar">JE</div>
-        <h3 class="modal-name" id="modalName">juan estevan</h3>
-        <p class="email modal-email" id="modalEmail">juanestevanportillamejia@gmail.com</p>
+        <div class="modal-avatar" id="modalAvatar">{{ nombre[:2].upper() if nombre else 'PR' }}</div>
+        <h3 class="modal-name" id="modalName">{{ nombre }}</h3>
+        <p class="email modal-email" id="modalEmail">{{ codigo }}</p>
         <div class="role">Profesor</div>
         <button class="btn" id="openEdit">Editar Perfil</button>
         <button class="btn" id="openPassword">Cambiar Contraseña</button>
-        <button class="btn logout">Cerrar Sesión</button>
-        <p class="last-access">Último acceso: Hoy, 10:42 AM</p>
+        <button class="btn logout" onclick="window.location.href='/logout'">Cerrar Sesión</button>
+        <p class="last-access">Código: {{ codigo }}</p>
       </div>
     </div>
 
@@ -75,16 +68,11 @@
       <div class="edit-content">
         <button class="close-btn" id="closeEdit" aria-label="Cerrar">✕</button>
         <h2>Editar Perfil</h2>
-        <div class="edit-avatar" id="previewAvatar">JE</div>
-        <label class="upload-btn">
-          📷 Cambiar foto
-          <input type="file" id="photoInput" accept="image/*" />
-        </label>
-        <p class="format">JPG, PNG o GIF. Máximo 2MB.</p>
+        <div class="edit-avatar" id="previewAvatar">{{ nombre[:2].upper() if nombre else 'PR' }}</div>
         <label>Nombre completo</label>
-        <input type="text" id="editName" value="juan estevan" />
+        <input type="text" id="editName" value="{{ nombre }}" />
         <label>Correo electrónico</label>
-        <input type="email" id="editEmail" value="juanestevanportillamejia@gmail.com" />
+        <input type="email" id="editEmail" placeholder="correo@ejemplo.com" />
         <div class="buttons">
           <button class="cancel" id="cancelEdit">Cancelar</button>
           <button class="save" id="saveProfile">Guardar cambios</button>
@@ -110,6 +98,6 @@
       </div>
     </div>
 
-    <script src="../static/script/profesor.js"></script>
+    <script src="{{ url_for('static', filename='script/profesor.js') }}"></script>
   </body>
 </html>
