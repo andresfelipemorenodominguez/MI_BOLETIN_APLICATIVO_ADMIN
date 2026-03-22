@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MiBoletín Admin</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard-extra.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
 </head>
 <body>
 
@@ -73,6 +75,12 @@
                         <span class="nav-text">Reportes</span>
                     </a>
                 </li>
+               <li class="nav-item">
+                <a href="#" class="nav-link" data-section="administradores-section">
+                    <i class="fas fa-user-shield nav-icon"></i>
+                    <span class="nav-text">Administradores</span>
+    </a>
+</li>
             </ul>
         </nav>
 
@@ -146,7 +154,7 @@
                             <i class="fas fa-user-plus"></i><span>Agregar Estudiante</span>
                         </button>
                         <button class="quick-action-btn" data-section="agregar-profesor-section">
-                            <i class="fas fa-chalkboard-teacher"></i><span>Agregar Profesor</span>
+                            <i class="fas fa-chalkboard-teacher"></i><span>Agregar Profesores</span>
                         </button>
                         <button class="quick-action-btn" data-section="periodos-section">
                             <i class="fas fa-calendar-alt"></i><span>Períodos</span>
@@ -159,6 +167,9 @@
                         </button>
                         <button class="quick-action-btn" data-section="asignaciones-section">
                             <i class="fas fa-link"></i><span>Asignaciones</span>
+                        </button>
+                        <button class="quick-action-btn" data-section="administradores-section">
+                            <i class="fas fa-user-shield"></i><span>Agregar Administrador</span>
                         </button>
                     </div>
                 </div>
@@ -632,12 +643,112 @@
             <div class="content-wrapper">
                 <div class="form-header">
                     <h1>Reportes</h1>
-                    <p class="form-subtitle">Consulta estadísticas y reportes del sistema.</p>
+                    <p class="form-subtitle">Consulta estadísticas y descarga reportes del sistema en PDF.</p>
                 </div>
+
+                <!-- Estadísticas -->
                 <div class="mgmt-card">
                     <h3><i class="fas fa-chart-bar"></i> Estadísticas Generales</h3>
                     <div class="mgmt-grid" id="reportes-stats">
                         <div style="text-align:center;padding:20px;color:var(--gray-500);">Cargando estadísticas...</div>
+                    </div>
+                </div>
+
+                <!-- Reporte Estudiantes -->
+                <div class="mgmt-card">
+                    <h3><i class="fas fa-user-graduate"></i> Reporte de Estudiantes</h3>
+                    <p style="color:var(--gray-600);margin-bottom:16px;">Descarga la lista de estudiantes en PDF. Puedes filtrar por grado y grupo.</p>
+                    <div class="mgmt-grid" style="margin-bottom:16px;">
+                        <div class="form-group">
+                            <label class="form-label">Grado (opcional)</label>
+                            <select id="filtro-grado-reporte" class="form-select">
+                                <option value="">Todos los grados</option>
+                                <option value="6">6°</option>
+                                <option value="7">7°</option>
+                                <option value="8">8°</option>
+                                <option value="9">9°</option>
+                                <option value="10">10°</option>
+                                <option value="11">11°</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Grupo (opcional)</label>
+                            <select id="filtro-grupo-reporte" class="form-select">
+                                <option value="">Todos los grupos</option>
+                                <option value="A">A</option>
+                                <option value="B">B</option>
+                                <option value="C">C</option>
+                                <option value="D">D</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn-primary" onclick="descargarReporteEstudiantes()">
+                        <i class="fas fa-file-pdf"></i> Descargar PDF Estudiantes
+                    </button>
+                </div>
+
+                <!-- Reporte Profesores -->
+                <div class="mgmt-card">
+                    <h3><i class="fas fa-chalkboard-teacher"></i> Reporte de Profesores</h3>
+                    <p style="color:var(--gray-600);margin-bottom:16px;">Descarga el directorio completo de profesores activos en PDF.</p>
+                    <button class="btn-primary" onclick="window.location.href='/reporte/profesores/pdf'">
+                        <i class="fas fa-file-pdf"></i> Descargar PDF Profesores
+                    </button>
+                </div>
+
+                <!-- Reporte Administradores -->
+                <div class="mgmt-card">
+                    <h3><i class="fas fa-user-shield"></i> Reporte de Administradores</h3>
+                    <p style="color:var(--gray-600);margin-bottom:16px;">Descarga el listado de administradores registrados en el sistema.</p>
+                    <button class="btn-primary" onclick="window.location.href='/reporte/administradores/pdf'">
+                        <i class="fas fa-file-pdf"></i> Descargar PDF Administradores
+                    </button>
+                </div>
+
+                <!-- Reporte Resumen -->
+                <div class="mgmt-card">
+                    <h3><i class="fas fa-clipboard-list"></i> Resumen General del Sistema</h3>
+                    <p style="color:var(--gray-600);margin-bottom:16px;">Descarga un resumen con estadísticas globales del sistema.</p>
+                    <button class="btn-primary" onclick="window.location.href='/reporte/resumen/pdf'">
+                        <i class="fas fa-file-pdf"></i> Descargar PDF Resumen
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── ADMINISTRADORES ── -->
+        <section id="administradores-section" class="content-section">
+            <div class="content-wrapper">
+                <div class="form-header">
+                    <h1>Administradores</h1>
+                    <p class="form-subtitle">Gestiona los administradores del sistema.</p>
+                </div>
+                <div class="mgmt-card">
+                    <h3><i class="fas fa-user-plus"></i> Crear Nuevo Administrador</h3>
+                    <p style="color:var(--gray-600);margin-bottom:16px;">
+                        El registro de administradores requiere verificación por correo electrónico.
+                    </p>
+                    <a href="/register" target="_blank" class="btn-primary" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px;">
+                        <i class="fas fa-external-link-alt"></i> Ir al formulario de registro
+                    </a>
+                </div>
+                <div class="mgmt-card">
+                    <h3><i class="fas fa-list"></i> Administradores Registrados</h3>
+                    <div style="overflow-x:auto;">
+                        <table class="mgmt-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Nombre</th>
+                                    <th>Correo</th>
+                                    <th>Verificado</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-administradores">
+                                <tr><td colspan="5" style="text-align:center;padding:16px;">Cargando...</td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -650,14 +761,15 @@
 <div class="modal-overlay" id="profile-modal-overlay">
     <div class="modal" id="profile-modal">
         <div class="modal-header">
-            <h2 class="modal-title">Mi Perfil</h2>
+            <h2 class="modal-title"><i class="fas fa-user-circle"></i> Mi Perfil</h2>
             <button class="modal-close" id="close-profile-modal"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body">
-            <div style="text-align:center;margin-bottom:20px;">
-                <img src="https://ui-avatars.com/api/?name={{ user_name|urlencode }}&background=003366&color=fff&size=80" style="border-radius:50%;" alt="Avatar">
-                <h3 style="margin-top:12px;">{{ user_name }}</h3>
-                <p style="color:var(--gray-600);">{{ user_email }}</p>
+            <div style="text-align:center;margin-bottom:24px;">
+                <img src="https://ui-avatars.com/api/?name={{ user_name|urlencode }}&background=003366&color=fff&size=80"
+                    style="border-radius:50%;width:80px;height:80px;" alt="Avatar">
+                <h3 style="margin:12px 0 4px;color:var(--primary);">{{ user_name }}</h3>
+                <p style="color:var(--gray-500);margin:0;font-size:14px;">{{ user_email }}</p>
             </div>
             <div class="form-group">
                 <label class="form-label">Nombre Completo</label>
@@ -667,12 +779,23 @@
                 <label class="form-label">Correo Electrónico</label>
                 <input type="email" id="profile-email" class="form-input" value="{{ user_email }}">
             </div>
+            <div class="dark-mode-row">
+                <label for="dark-mode-toggle">
+                    <i class="fas fa-moon"></i> Modo Oscuro
+                </label>
+                <label class="dark-toggle-switch">
+                    <input type="checkbox" id="dark-mode-toggle">
+                    <span class="dark-toggle-track"></span>
+                </label>
+            </div>
         </div>
         <div class="modal-footer">
             <button class="btn-secondary" id="cancel-profile">Cancelar</button>
-            <button class="btn-primary" onclick="guardarPerfil()"><i class="fas fa-save"></i> Guardar</button>
+            <button class="btn-primary" onclick="guardarPerfil()">
+                <i class="fas fa-save"></i> Guardar
+            </button>
         </div>
-        <div style="padding:0 24px 16px;">
+        <div style="padding:0 0 8px;">
             <button class="btn-danger" style="width:100%;" onclick="window.location.href='/logout'">
                 <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
             </button>
@@ -680,6 +803,66 @@
     </div>
 </div>
 
+
+
+
+<div id="current-user-data" data-user-id="{{ session['user_id'] }}" style="display:none;"></div>
+
 <script src="{{ url_for('static', filename='script/dashboard.js') }}"></script>
+<script>
+// Descarga reporte estudiantes con filtros
+window.descargarReporteEstudiantes = function() {
+    const grado = document.getElementById('filtro-grado-reporte')?.value || '';
+    const grupo = document.getElementById('filtro-grupo-reporte')?.value || '';
+    let url = '/reporte/estudiantes/pdf';
+    const params = [];
+    if (grado) params.push('grado=' + encodeURIComponent(grado));
+    if (grupo) params.push('grupo=' + encodeURIComponent(grupo));
+    if (params.length) url += '?' + params.join('&');
+    window.location.href = url;
+};
+</script>
+
+<script>
+// ── MODO OSCURO ──
+(function() {
+    const html    = document.querySelector('html');
+    const KEY     = 'miboletin_dark_mode';
+    const sysDark = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+    function applyTheme(dark) {
+        html.classList.toggle('dark-mode', dark);
+        const chk = document.getElementById('dark-mode-toggle');
+        if (chk) chk.checked = dark;
+    }
+
+    function resolveTheme() {
+        const saved = localStorage.getItem(KEY);
+        return saved !== null ? saved === 'true' : sysDark();
+    }
+
+    // Aplicar al cargar
+    applyTheme(resolveTheme());
+
+    // Escuchar cambios del sistema (solo si no hay preferencia manual)
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+        if (localStorage.getItem(KEY) === null) applyTheme(e.matches);
+    });
+
+    // El checkbox se inicializa cuando se abre el modal (por si acaso)
+    document.getElementById('profile-btn')?.addEventListener('click', () => {
+        const chk = document.getElementById('dark-mode-toggle');
+        if (chk) chk.checked = html.classList.contains('dark-mode');
+    });
+
+    // Toggle manual con el switch
+    document.addEventListener('change', e => {
+        if (e.target.id !== 'dark-mode-toggle') return;
+        const isDark = e.target.checked;
+        localStorage.setItem(KEY, isDark);
+        applyTheme(isDark);
+    });
+})();
+</script>
 </body>
 </html>

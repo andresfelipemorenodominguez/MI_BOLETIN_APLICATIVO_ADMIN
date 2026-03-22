@@ -1,114 +1,137 @@
 <!DOCTYPE html>
 <html lang="es">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ESstudiante - MiBoletín</title>
-    <link rel="stylesheet" href="../static/css/profesor.css" />
-  </head>
-
-  <body>
-    <div class="layout">
-      <aside class="sidebar">
-        <div class="logo">📘 MiBoletín</div>
-        <nav class="menu" aria-label="Navegación principal">
-          <button class="menu-item active" data-section="inicio">
-            <span>🏠</span>
-            <span>Inicio</span>
-          </button>
-          <button class="menu-item" data-section="estudiante">
-            <span>👤</span>
-            <span>Subir Notas</span>
-          </button>
-          <button class="menu-item" data-section="profesor">
-            <span>👨‍🏫</span>
-            <span>Reportes Aprendiz</span>
-          </button>
-          <button class="menu-item" data-section="reportes">
-            <span>📊</span>
-            <span>Reporte General</span>
-          </button>
-        </nav>
-
-        <button class="profile" id="profileButton" type="button" aria-label="Abrir perfil">
-          <div class="avatar" id="mainAvatar">JE</div>
-          <div class="profile-info">
-            <div class="profile-name" id="mainName">juan estevan</div>
-            <div class="profile-email" id="mainEmail">juanestevanportilla...</div>
-          </div>
-        </button>
-      </aside>
-
-      <main class="main">
-        <header class="main-header">
-          <h1 class="main-title">Bienvenido a MiBoletín</h1>
-          <p class="main-description">Selecciona una sección del menú para comenzar.</p>
-        </header>
-
-        <section class="content" id="content">
-          <div class="card">
-            <h2>Inicio</h2>
-            <p>Gracias por utilizar MiBoletín. Utiliza el menú para navegar.</p>
-          </div>
-        </section>
-      </main>
-    </div>
-
-    <div class="profile-modal" id="profileModal" role="dialog" aria-modal="true" aria-hidden="true">
-      <div class="modal-content">
-        <button class="close-btn" id="closeModal" aria-label="Cerrar">✕</button>
-        <h2>Perfil del Usuario</h2>
-        <div class="modal-avatar" id="modalAvatar">JE</div>
-        <h3 class="modal-name" id="modalName">juan estevan</h3>
-        <p class="email modal-email" id="modalEmail">juanestevanportillamejia@gmail.com</p>
-        <div class="role">Profesor</div>
-        <button class="btn" id="openEdit">Editar Perfil</button>
-        <button class="btn" id="openPassword">Cambiar Contraseña</button>
-        <button class="btn logout">Cerrar Sesión</button>
-        <p class="last-access">Último acceso: Hoy, 10:42 AM</p>
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Estudiante - MiBoletín</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/estudiante.css') }}"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo"><i class="fas fa-book-open"></i> MiBoletín</div>
+    <nav class="menu">
+      <button class="menu-item active" data-section="inicio"><i class="fas fa-home"></i><span>Inicio</span></button>
+      <button class="menu-item" data-section="notas"><i class="fas fa-graduation-cap"></i><span>Mis Notas</span></button>
+      <button class="menu-item" data-section="desempeno"><i class="fas fa-chart-bar"></i><span>Desempeño</span></button>
+      <button class="menu-item" data-section="asistencia"><i class="fas fa-calendar-check"></i><span>Asistencia</span></button>
+      <button class="menu-item" data-section="material"><i class="fas fa-folder-open"></i><span>Material</span></button>
+      <button class="menu-item" data-section="observador"><i class="fas fa-eye"></i><span>Observador</span></button>
+    </nav>
+    <button class="profile-btn" id="profileButton">
+      <div class="avatar">{{ nombre[:2].upper() if nombre else 'ES' }}</div>
+      <div class="profile-info">
+        <div class="profile-name">{{ nombre }}</div>
+        <div class="profile-code">{{ codigo }}</div>
       </div>
+      <i class="fas fa-chevron-right" style="color:#a0aec0;font-size:12px;"></i>
+    </button>
+  </aside>
+
+  <main class="main">
+    <div class="main-header">
+      <h1 class="main-title">Bienvenido, {{ nombre }}</h1>
+      <p class="main-desc">Consulta tus notas, asistencia y material de clase.</p>
+    </div>
+    <section id="content"></section>
+  </main>
+</div>
+
+<!-- Modal Perfil -->
+<div class="modal-overlay" id="profileModal">
+  <div class="modal-box">
+    <button class="modal-close" id="closeModal"><i class="fas fa-times"></i></button>
+    <div class="modal-avatar-big">{{ nombre[:2].upper() if nombre else 'ES' }}</div>
+    <h3 class="modal-nombre">{{ nombre }}</h3>
+    <p class="modal-codigo">{{ codigo }}</p>
+    <span class="role-badge">Estudiante</span>
+
+    <div class="dark-mode-row">
+      <label><i class="fas fa-moon"></i> Modo Oscuro</label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="dark-toggle">
+        <span class="toggle-track"></span>
+      </label>
     </div>
 
-    <!-- MODAL EDITAR PERFIL -->
-    <div class="edit-modal" id="editModal" aria-hidden="true">
-      <div class="edit-content">
-        <button class="close-btn" id="closeEdit" aria-label="Cerrar">✕</button>
-        <h2>Editar Perfil</h2>
-        <div class="edit-avatar" id="previewAvatar">JE</div>
-        <label class="upload-btn">
-          📷 Cambiar foto
-          <input type="file" id="photoInput" accept="image/*" />
-        </label>
-        <p class="format">JPG, PNG o GIF. Máximo 2MB.</p>
-        <label>Nombre completo</label>
-        <input type="text" id="editName" value="juan estevan" />
-        <label>Correo electrónico</label>
-        <input type="email" id="editEmail" value="juanestevanportillamejia@gmail.com" />
-        <div class="buttons">
-          <button class="cancel" id="cancelEdit">Cancelar</button>
-          <button class="save" id="saveProfile">Guardar cambios</button>
-        </div>
-      </div>
-    </div>
+    <button class="modal-btn" id="openEdit"><i class="fas fa-user-edit"></i> Editar Perfil</button>
+    <button class="modal-btn" id="openPassword"><i class="fas fa-key"></i> Cambiar Contraseña</button>
+    <button class="modal-btn logout-btn" onclick="window.location.href='/logout'"><i class="fas fa-sign-out-alt"></i> Cerrar Sesión</button>
+  </div>
+</div>
 
-    <!-- MODAL CAMBIAR CONTRASEÑA -->
-    <div class="password-modal" id="passwordModal" aria-hidden="true">
-      <div class="password-content">
-        <button class="close-btn" id="closePassword" aria-label="Cerrar">✕</button>
-        <h2>Cambiar Contraseña</h2>
-        <label>Contraseña actual</label>
-        <input type="password" id="currentPassword" placeholder="Ingresa tu contraseña actual" />
-        <label>Nueva contraseña</label>
-        <input type="password" id="newPassword" placeholder="Ingresa la nueva contraseña" />
-        <label>Confirmar nueva contraseña</label>
-        <input type="password" id="confirmPassword" placeholder="Confirma la nueva contraseña" />
-        <div class="buttons">
-          <button class="cancel" id="cancelPassword">Cancelar</button>
-          <button class="save" id="savePassword">Cambiar contraseña</button>
-        </div>
-      </div>
+<!-- Modal Editar Perfil -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal-box" style="max-width:400px;">
+    <button class="modal-close" id="closeEdit"><i class="fas fa-times"></i></button>
+    <h3 style="margin:0 0 20px;color:#1f3a5d;">Editar Perfil</h3>
+    <div class="form-group">
+      <label>Nombre Completo</label>
+      <input type="text" id="editName" value="{{ nombre }}">
     </div>
+    <div class="form-group">
+      <label>Correo Electrónico</label>
+      <input type="email" id="editEmail" placeholder="tu@email.com">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="cancelEdit">Cancelar</button>
+      <button class="btn-save" onclick="guardarPerfil()">Guardar</button>
+    </div>
+  </div>
+</div>
 
-    <script src="../static/script/profesor.js"></script>
-  </body>
+<!-- Modal Cambiar Contraseña -->
+<div class="modal-overlay" id="passwordModal">
+  <div class="modal-box" style="max-width:400px;">
+    <button class="modal-close" id="closePassword"><i class="fas fa-times"></i></button>
+    <h3 style="margin:0 0 20px;color:#1f3a5d;">Cambiar Contraseña</h3>
+    <div class="form-group">
+      <label>Contraseña Actual</label>
+      <input type="password" id="currentPassword" placeholder="••••••••">
+    </div>
+    <div class="form-group">
+      <label>Nueva Contraseña</label>
+      <input type="password" id="newPassword" placeholder="••••••••">
+    </div>
+    <div class="form-group">
+      <label>Confirmar Nueva Contraseña</label>
+      <input type="password" id="confirmPassword" placeholder="••••••••">
+    </div>
+    <div id="pw-msg" style="min-height:20px;font-size:13px;margin-bottom:8px;"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="cancelPassword">Cancelar</button>
+      <button class="btn-save" id="savePassword">Cambiar</button>
+    </div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='script/estudiante.js') }}"></script>
+<script>
+// ── MODO OSCURO ──
+(function() {
+  const html = document.querySelector('html');
+  const KEY  = 'miboletin_dark_mode';
+  const sys  = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
+  function applyTheme(dark) {
+    html.classList.toggle('dark-mode', dark);
+    const chk = document.getElementById('dark-toggle');
+    if (chk) chk.checked = dark;
+  }
+  applyTheme(localStorage.getItem(KEY) !== null ? localStorage.getItem(KEY) === 'true' : sys());
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+    if (localStorage.getItem(KEY) === null) applyTheme(e.matches);
+  });
+  document.getElementById('profileButton')?.addEventListener('click', () => {
+    const chk = document.getElementById('dark-toggle');
+    if (chk) chk.checked = html.classList.contains('dark-mode');
+  });
+  document.addEventListener('change', e => {
+    if (e.target.id !== 'dark-toggle') return;
+    localStorage.setItem(KEY, e.target.checked);
+    applyTheme(e.target.checked);
+  });
+})();
+</script>
+</body>
 </html>
