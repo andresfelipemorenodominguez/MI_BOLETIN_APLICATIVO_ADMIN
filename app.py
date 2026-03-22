@@ -798,9 +798,9 @@ def request_password_post():
         return jsonify({"status": "error", "message": "Error en el servidor. Intenta más tarde."})
 
 
-# =========================================================
-# 📌 RUTAS DEL PANEL ADMIN (gestión de estudiantes/profesores)
-# =========================================================
+
+#  RUTAS DEL PANEL ADMIN (gestión de estudiantes/profesores)
+
 
 @app.route("/admin/estudiantes")
 def admin_estudiantes():
@@ -1026,9 +1026,73 @@ def actualizar_profesor():
 
 
 
-# =========================================================
+
 # 📌 RUTAS FALTANTES
-# =========================================================
+
+
+@app.route("/obtener-profesores-ids", methods=["GET"])
+def obtener_profesores_ids():
+    """Devuelve id_profesor (entero) para los selects de asignaciones"""
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("SELECT id_profesor, nombre_completo, codigo_profesor FROM profesores ORDER BY nombre_completo")
+        data = [dict(p) for p in cur.fetchall()]
+        cur.close(); conn.close()
+        return jsonify({"status": "success", "data": data})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route("/obtener-estudiantes-ids", methods=["GET"])
+def obtener_estudiantes_ids():
+    """Devuelve id_estudiante (entero) para los selects de asignaciones"""
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("SELECT id_estudiante, nombre_completo, codigo_estudiante FROM estudiantes ORDER BY nombre_completo")
+        data = [dict(e) for e in cur.fetchall()]
+        cur.close(); conn.close()
+        return jsonify({"status": "success", "data": data})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route("/obtener-grupos-ids", methods=["GET"])
+def obtener_grupos_ids():
+    """Devuelve id_grupo (entero) para los selects de asignaciones"""
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("SELECT id_grupo, nombre FROM grupos ORDER BY nombre")
+        data = [dict(g) for g in cur.fetchall()]
+        cur.close(); conn.close()
+        return jsonify({"status": "success", "data": data})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route("/obtener-materias-ids", methods=["GET"])
+def obtener_materias_ids():
+    """Devuelve id_materia (entero) para los selects de asignaciones"""
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("SELECT id_materia, nombre FROM materia ORDER BY nombre")
+        data = [dict(m) for m in cur.fetchall()]
+        cur.close(); conn.close()
+        return jsonify({"status": "success", "data": data})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
 
 @app.route("/dashboard-stats", methods=["GET"])
 def dashboard_stats():
@@ -1449,6 +1513,64 @@ def reporte_resumen_pdf():
         return jsonify({"status": "error", "message": "Error generando el reporte PDF."})
 
 
+@app.route("/reporte/administradores/pdf", methods=["GET"])
+def reporte_administradores_pdf():
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "Debes iniciar sesión primero."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("SELECT id_admin, nombre_completo, correo_electronico, email_verified FROM administradores ORDER BY id_admin")
+        admins = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        pdf = MiBoletinPDF()
+        pdf.add_page()
+
+        pdf.set_font('helvetica', 'B', 14)
+        pdf.set_text_color(0, 0, 0)
+        pdf.cell(0, 10, "Directorio de Administradores", 0, 1, 'C')
+        pdf.ln(5)
+
+        pdf.set_font('helvetica', 'B', 10)
+        pdf.set_fill_color(0, 51, 102)
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(15, 10, 'ID', 1, 0, 'C', fill=True)
+        pdf.cell(75, 10, 'Nombre Completo', 1, 0, 'C', fill=True)
+        pdf.cell(75, 10, 'Correo Electrónico', 1, 0, 'C', fill=True)
+        pdf.cell(25, 10, 'Verificado', 1, 1, 'C', fill=True)
+
+        pdf.set_font('helvetica', '', 9)
+        pdf.set_text_color(0, 0, 0)
+        fill = False
+        pdf.set_fill_color(240, 248, 255)
+
+        for a in admins:
+            pdf.cell(15, 8, str(a['id_admin']), 1, 0, 'C', fill=fill)
+            nombre = a['nombre_completo'][:38] + '...' if len(a['nombre_completo']) > 40 else a['nombre_completo']
+            pdf.cell(75, 8, nombre, 1, 0, 'L', fill=fill)
+            email = a['correo_electronico'][:35] + '...' if len(a['correo_electronico']) > 38 else a['correo_electronico']
+            pdf.cell(75, 8, email, 1, 0, 'L', fill=fill)
+            pdf.cell(25, 8, 'Sí' if a['email_verified'] else 'No', 1, 1, 'C', fill=fill)
+            fill = not fill
+
+        pdf.ln(10)
+        pdf.set_font('helvetica', 'B', 10)
+        pdf.cell(0, 10, f"Total Administradores: {len(admins)}", 0, 1, 'R')
+        pdf.set_font('helvetica', 'I', 9)
+        pdf.cell(0, 8, f"Reporte generado por: {session.get('user_name', 'Administrador')}", 0, 1, 'L')
+
+        pdf_bytes = pdf.output(dest='S')
+        buffer = io.BytesIO(pdf_bytes)
+        buffer.seek(0)
+        return send_file(buffer, as_attachment=True, download_name='directorio_administradores.pdf', mimetype='application/pdf')
+
+    except Exception as e:
+        print(f"Error generando PDF de administradores: {e}")
+        return jsonify({"status": "error", "message": "Error generando el reporte PDF."})
+
+
 # RUTAS DEL PROFESOR
 
 
@@ -1516,6 +1638,35 @@ def profesor_materias():
         cur.close()
         conn.close()
         return jsonify({"status": "success", "data": materias})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/profesor/tipos-nota', methods=['POST'])
+def crear_tipo_nota():
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    data = request.get_json()
+    nombre_tipo = data.get('nombre_tipo', '').strip()
+    if not nombre_tipo:
+        return jsonify({"status": "error", "message": "El nombre es requerido."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO tipos_nota (nombre_tipo) VALUES (%s) ON CONFLICT (nombre_tipo) DO NOTHING RETURNING id_tipo",
+            (nombre_tipo,)
+        )
+        row = cur.fetchone()
+        if not row:
+            # Ya existía — devolver el id existente
+            cur.execute("SELECT id_tipo FROM tipos_nota WHERE nombre_tipo = %s", (nombre_tipo,))
+            row = cur.fetchone()
+            conn.commit(); cur.close(); conn.close()
+            return jsonify({"status": "success", "message": "Tipo ya existía, seleccionado.", "id_tipo": row[0]})
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({"status": "success", "message": f"Tipo '{nombre_tipo}' creado.", "id_tipo": row[0]})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
@@ -1759,9 +1910,548 @@ def reporte_estudiante(id_estudiante):
 
 
 
+@app.route('/profesor/reporte/pdf')
+def profesor_reporte_pdf():
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+        # Datos del profesor
+        cur.execute("SELECT nombre_completo, codigo_profesor FROM profesores WHERE id_profesor = %s", (user_info['id'],))
+        profesor = dict(cur.fetchone())
+
+        # Estudiantes asignados
+        cur.execute("""
+            SELECT DISTINCT e.id_estudiante, e.nombre_completo, e.codigo_estudiante, e.grado, e.grupo
+            FROM estudiantes e
+            JOIN grupo_estudiantes ge ON e.id_estudiante = ge.id_estudiante
+            JOIN grupos g ON ge.id_grupo = g.id_grupo
+            JOIN grupo_materias gm ON g.id_grupo = gm.id_grupo
+            WHERE gm.id_docente = %s AND e.estado = 'activo'
+            ORDER BY e.grado, e.grupo, e.nombre_completo
+        """, (user_info['id'],))
+        estudiantes = [dict(e) for e in cur.fetchall()]
+
+        pdf = MiBoletinPDF()
+
+        for est in estudiantes:
+            pdf.add_page()
+            pdf.set_font('helvetica', 'B', 14)
+            pdf.set_text_color(0, 0, 0)
+            pdf.cell(0, 10, f"Reporte del Estudiante: {est['nombre_completo']}", 0, 1, 'C')
+            pdf.set_font('helvetica', '', 10)
+            pdf.set_text_color(80, 80, 80)
+            pdf.cell(0, 7, f"Código: {est['codigo_estudiante']}  |  Grado: {est['grado']}  |  Grupo: {est['grupo']}", 0, 1, 'C')
+            pdf.cell(0, 7, f"Docente: {profesor['nombre_completo']} ({profesor['codigo_profesor']})", 0, 1, 'C')
+            pdf.ln(5)
+
+            # Notas
+            cur.execute("""
+                SELECT n.valor, n.descripcion, TO_CHAR(n.fecha_registro,'DD/MM/YYYY') as fecha,
+                       tn.nombre_tipo, m.nombre as materia
+                FROM notas n
+                JOIN tipos_nota tn ON n.id_tipo = tn.id_tipo
+                JOIN grupo_materias gm ON n.id_grupo_materia = gm.id_grupo_materia
+                JOIN materia m ON gm.id_materia = m.id_materia
+                WHERE n.id_estudiante = %s AND gm.id_docente = %s
+                ORDER BY m.nombre, n.fecha_registro DESC
+            """, (est['id_estudiante'], user_info['id']))
+            notas = [dict(n) for n in cur.fetchall()]
+
+            pdf.set_font('helvetica', 'B', 11)
+            pdf.set_fill_color(0, 51, 102)
+            pdf.set_text_color(255, 255, 255)
+            pdf.cell(0, 9, ' Notas Académicas', 1, 1, 'L', fill=True)
+            if notas:
+                pdf.set_font('helvetica', 'B', 9)
+                pdf.set_fill_color(220, 230, 242)
+                pdf.set_text_color(0, 0, 0)
+                pdf.cell(55, 8, 'Materia', 1, 0, 'C', fill=True)
+                pdf.cell(35, 8, 'Tipo', 1, 0, 'C', fill=True)
+                pdf.cell(20, 8, 'Valor', 1, 0, 'C', fill=True)
+                pdf.cell(55, 8, 'Descripción', 1, 0, 'C', fill=True)
+                pdf.cell(25, 8, 'Fecha', 1, 1, 'C', fill=True)
+                pdf.set_font('helvetica', '', 9)
+                fill = False
+                pdf.set_fill_color(240, 248, 255)
+                valores = []
+                for n in notas:
+                    v = float(n['valor'])
+                    valores.append(v)
+                    color = (56, 161, 105) if v >= 3 else (229, 62, 62)
+                    pdf.cell(55, 7, n['materia'][:28], 1, 0, 'L', fill=fill)
+                    pdf.cell(35, 7, n['nombre_tipo'][:18], 1, 0, 'C', fill=fill)
+                    pdf.set_text_color(*color)
+                    pdf.cell(20, 7, str(v), 1, 0, 'C', fill=fill)
+                    pdf.set_text_color(0, 0, 0)
+                    pdf.cell(55, 7, (n['descripcion'] or '-')[:28], 1, 0, 'L', fill=fill)
+                    pdf.cell(25, 7, n['fecha'], 1, 1, 'C', fill=fill)
+                    fill = not fill
+                promedio = round(sum(valores) / len(valores), 2)
+                color = (56, 161, 105) if promedio >= 3 else (229, 62, 62)
+                pdf.set_font('helvetica', 'B', 10)
+                pdf.set_text_color(*color)
+                pdf.cell(0, 9, f"  Promedio General: {promedio}", 0, 1, 'R')
+                pdf.set_text_color(0, 0, 0)
+            else:
+                pdf.set_font('helvetica', 'I', 9)
+                pdf.cell(0, 8, '  No hay notas registradas.', 0, 1)
+
+            pdf.ln(4)
+
+            # Observaciones
+            cur.execute("""
+                SELECT tipo, descripcion, TO_CHAR(fecha_registro,'DD/MM/YYYY') as fecha
+                FROM observador WHERE id_estudiante = %s AND id_profesor = %s
+                ORDER BY fecha_registro DESC
+            """, (est['id_estudiante'], user_info['id']))
+            obs = [dict(o) for o in cur.fetchall()]
+
+            pdf.set_font('helvetica', 'B', 11)
+            pdf.set_fill_color(0, 51, 102)
+            pdf.set_text_color(255, 255, 255)
+            pdf.cell(0, 9, ' Observaciones del Observador', 1, 1, 'L', fill=True)
+            if obs:
+                pdf.set_font('helvetica', '', 9)
+                pdf.set_text_color(0, 0, 0)
+                fill = False
+                fills = {'positivo': (198, 246, 213), 'negativo': (254, 215, 215), 'neutro': (226, 232, 240)}
+                for o in obs:
+                    r, g, b = fills.get(o['tipo'], (226, 232, 240))
+                    pdf.set_fill_color(r, g, b)
+                    pdf.cell(25, 7, o['tipo'].capitalize(), 1, 0, 'C', fill=True)
+                    pdf.cell(140, 7, (o['descripcion'] or '')[:70], 1, 0, 'L', fill=fill)
+                    pdf.cell(25, 7, o['fecha'], 1, 1, 'C', fill=fill)
+                    fill = not fill
+            else:
+                pdf.set_font('helvetica', 'I', 9)
+                pdf.cell(0, 8, '  No hay observaciones registradas.', 0, 1)
+
+        cur.close()
+        conn.close()
+
+        nombre_prof = profesor['nombre_completo'].replace(' ', '_')
+        pdf_bytes = pdf.output(dest='S')
+        buffer = io.BytesIO(pdf_bytes)
+        buffer.seek(0)
+        return send_file(buffer, as_attachment=True,
+                         download_name=f'reporte_completo_{nombre_prof}.pdf',
+                         mimetype='application/pdf')
+    except Exception as e:
+        print(f"Error generando PDF profesor: {e}")
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/profesor/estudiantes-por-materia/<int:id_grupo_materia>')
+def estudiantes_por_materia(id_grupo_materia):
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT DISTINCT e.id_estudiante, e.nombre_completo, e.codigo_estudiante, e.grado, e.grupo
+            FROM estudiantes e
+            JOIN grupo_estudiantes ge ON e.id_estudiante = ge.id_estudiante
+            JOIN grupos g ON ge.id_grupo = g.id_grupo
+            JOIN grupo_materias gm ON g.id_grupo = gm.id_grupo
+            WHERE gm.id_grupo_materia = %s AND gm.id_docente = %s AND e.estado = 'activo'
+            ORDER BY e.nombre_completo
+        """, (id_grupo_materia, user_info['id']))
+        estudiantes = [dict(e) for e in cur.fetchall()]
+        cur.close(); conn.close()
+        return jsonify({"status": "success", "data": estudiantes})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/profesor/subir-notas-masivo', methods=['POST'])
+def subir_notas_masivo():
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    data = request.get_json()
+    notas = data.get('notas', [])
+    if not notas:
+        return jsonify({"status": "error", "message": "No hay notas para guardar."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        guardadas = 0
+        for n in notas:
+            if not n.get('valor') or not n.get('id_estudiante'):
+                continue
+            cur.execute("""
+                INSERT INTO notas (id_estudiante, valor, descripcion, id_tipo, id_grupo_materia)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (n['id_estudiante'], n['valor'], n.get('descripcion',''), n['id_tipo'], n['id_grupo_materia']))
+            guardadas += 1
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({"status": "success", "message": f"{guardadas} nota(s) guardadas exitosamente."})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+# ── ASISTENCIA ──
+@app.route('/profesor/asistencia', methods=['GET'])
+def ver_asistencia():
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    id_grupo_materia = request.args.get('id_grupo_materia')
+    fecha = request.args.get('fecha')
+    if not id_grupo_materia or not fecha:
+        return jsonify({"status": "error", "message": "Faltan parámetros."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT a.id_estudiante, a.estado
+            FROM asistencia a
+            WHERE a.id_grupo_materia = %s AND a.fecha = %s AND a.id_profesor = %s
+        """, (id_grupo_materia, fecha, user_info['id']))
+        registros = {r['id_estudiante']: r['estado'] for r in cur.fetchall()}
+        cur.close(); conn.close()
+        return jsonify({"status": "success", "data": registros})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/profesor/asistencia', methods=['POST'])
+def guardar_asistencia():
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    data = request.get_json()
+    id_grupo_materia = data.get('id_grupo_materia')
+    fecha = data.get('fecha')
+    registros = data.get('registros', [])
+    if not id_grupo_materia or not fecha or not registros:
+        return jsonify({"status": "error", "message": "Faltan datos."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        for r in registros:
+            cur.execute("""
+                INSERT INTO asistencia (id_estudiante, id_grupo_materia, id_profesor, fecha, estado)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (id_estudiante, id_grupo_materia, fecha)
+                DO UPDATE SET estado = EXCLUDED.estado
+            """, (r['id_estudiante'], id_grupo_materia, user_info['id'], fecha, r['estado']))
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({"status": "success", "message": f"Asistencia del {fecha} guardada."})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+# ── MATERIAL DE CLASE ──
+@app.route('/profesor/material', methods=['GET'])
+def ver_material():
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    id_grupo_materia = request.args.get('id_grupo_materia')
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        query = """
+            SELECT id_material, titulo, descripcion, tipo, url_o_nombre,
+                   TO_CHAR(fecha_subida, 'DD/MM/YYYY') as fecha_subida,
+                   id_grupo_materia
+            FROM material_clase
+            WHERE id_profesor = %s
+        """
+        params = [user_info['id']]
+        if id_grupo_materia:
+            query += " AND id_grupo_materia = %s"
+            params.append(id_grupo_materia)
+        query += " ORDER BY fecha_subida DESC"
+        cur.execute(query, params)
+        materiales = [dict(m) for m in cur.fetchall()]
+        cur.close(); conn.close()
+        return jsonify({"status": "success", "data": materiales})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/profesor/material', methods=['POST'])
+def subir_material():
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    data = request.get_json()
+    titulo = data.get('titulo')
+    descripcion = data.get('descripcion', '')
+    tipo = data.get('tipo', 'enlace')
+    url_o_nombre = data.get('url_o_nombre')
+    id_grupo_materia = data.get('id_grupo_materia')
+    if not all([titulo, url_o_nombre, id_grupo_materia]):
+        return jsonify({"status": "error", "message": "Título, enlace y materia son requeridos."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO material_clase (id_profesor, id_grupo_materia, titulo, descripcion, tipo, url_o_nombre)
+            VALUES (%s, %s, %s, %s, %s, %s) RETURNING id_material
+        """, (user_info['id'], id_grupo_materia, titulo, descripcion, tipo, url_o_nombre))
+        id_mat = cur.fetchone()[0]
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({"status": "success", "message": "Material agregado.", "id_material": id_mat})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/profesor/material/<int:id_material>', methods=['DELETE'])
+def eliminar_material(id_material):
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM material_clase WHERE id_material = %s AND id_profesor = %s",
+                    (id_material, user_info['id']))
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({"status": "success", "message": "Material eliminado."})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
 #  RUTAS ADMIN — Períodos, Grupos, Materias, Asignaciones
 # Pega este bloque en app.py antes del if __name__
 
+
+
+# ══════════════════════════════════════════════════════
+#  RUTAS DEL ESTUDIANTE
+# ══════════════════════════════════════════════════════
+
+def get_estudiante_info():
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'estudiante':
+        return None
+    return user_info
+
+@app.route('/estudiante/notas')
+def estudiante_notas():
+    u = get_estudiante_info()
+    if not u: return jsonify({"status":"error","message":"No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT n.id_nota, n.valor, n.descripcion,
+                   TO_CHAR(n.fecha_registro,'DD/MM/YYYY') as fecha,
+                   tn.nombre_tipo,
+                   m.nombre as materia,
+                   p.nombre_completo as profesor
+            FROM notas n
+            JOIN tipos_nota tn ON n.id_tipo = tn.id_tipo
+            JOIN grupo_materias gm ON n.id_grupo_materia = gm.id_grupo_materia
+            JOIN materia m ON gm.id_materia = m.id_materia
+            JOIN profesores p ON gm.id_docente = p.id_profesor
+            WHERE n.id_estudiante = %s
+            ORDER BY m.nombre, n.fecha_registro DESC
+        """, (u['id'],))
+        notas = [dict(n) for n in cur.fetchall()]
+        for n in notas: n['valor'] = float(n['valor'])
+        cur.close(); conn.close()
+        return jsonify({"status":"success","data":notas})
+    except Exception as e:
+        return jsonify({"status":"error","message":str(e)})
+
+
+@app.route('/estudiante/desempeno')
+def estudiante_desempeno():
+    u = get_estudiante_info()
+    if not u: return jsonify({"status":"error","message":"No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT m.nombre as materia,
+                   ROUND(AVG(n.valor)::numeric, 2) as promedio,
+                   COUNT(n.id_nota) as total_notas,
+                   MAX(n.valor) as nota_max,
+                   MIN(n.valor) as nota_min
+            FROM notas n
+            JOIN grupo_materias gm ON n.id_grupo_materia = gm.id_grupo_materia
+            JOIN materia m ON gm.id_materia = m.id_materia
+            WHERE n.id_estudiante = %s
+            GROUP BY m.nombre
+            ORDER BY promedio DESC
+        """, (u['id'],))
+        data = [dict(r) for r in cur.fetchall()]
+        for r in data:
+            r['promedio'] = float(r['promedio'])
+            r['nota_max'] = float(r['nota_max'])
+            r['nota_min'] = float(r['nota_min'])
+        cur.close(); conn.close()
+        return jsonify({"status":"success","data":data})
+    except Exception as e:
+        return jsonify({"status":"error","message":str(e)})
+
+
+@app.route('/estudiante/asistencia')
+def estudiante_asistencia():
+    u = get_estudiante_info()
+    if not u: return jsonify({"status":"error","message":"No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT a.estado,
+                   TO_CHAR(a.fecha,'DD/MM/YYYY') as fecha,
+                   a.fecha as fecha_raw,
+                   m.nombre as materia,
+                   p.nombre_completo as profesor
+            FROM asistencia a
+            JOIN grupo_materias gm ON a.id_grupo_materia = gm.id_grupo_materia
+            JOIN materia m ON gm.id_materia = m.id_materia
+            JOIN profesores p ON gm.id_docente = p.id_profesor
+            WHERE a.id_estudiante = %s
+            ORDER BY a.fecha DESC, m.nombre
+        """, (u['id'],))
+        registros = [dict(r) for r in cur.fetchall()]
+        for r in registros: r.pop('fecha_raw', None)
+
+        # Resumen por materia
+        cur.execute("""
+            SELECT m.nombre as materia,
+                   COUNT(*) as total,
+                   COUNT(CASE WHEN a.estado='presente' THEN 1 END) as presentes,
+                   COUNT(CASE WHEN a.estado='ausente' THEN 1 END) as ausentes,
+                   COUNT(CASE WHEN a.estado='tardanza' THEN 1 END) as tardanzas,
+                   COUNT(CASE WHEN a.estado='justificado' THEN 1 END) as justificados
+            FROM asistencia a
+            JOIN grupo_materias gm ON a.id_grupo_materia = gm.id_grupo_materia
+            JOIN materia m ON gm.id_materia = m.id_materia
+            WHERE a.id_estudiante = %s
+            GROUP BY m.nombre ORDER BY m.nombre
+        """, (u['id'],))
+        resumen = [dict(r) for r in cur.fetchall()]
+        cur.close(); conn.close()
+        return jsonify({"status":"success","data":registros,"resumen":resumen})
+    except Exception as e:
+        return jsonify({"status":"error","message":str(e)})
+
+
+@app.route('/estudiante/material')
+def estudiante_material():
+    u = get_estudiante_info()
+    if not u: return jsonify({"status":"error","message":"No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT mc.id_material, mc.titulo, mc.descripcion, mc.tipo,
+                   mc.url_o_nombre,
+                   TO_CHAR(mc.fecha_subida,'DD/MM/YYYY') as fecha_subida,
+                   m.nombre as materia,
+                   p.nombre_completo as profesor
+            FROM material_clase mc
+            JOIN grupo_materias gm ON mc.id_grupo_materia = gm.id_grupo_materia
+            JOIN materia m ON gm.id_materia = m.id_materia
+            JOIN profesores p ON gm.id_docente = p.id_profesor
+            JOIN grupos g ON gm.id_grupo = g.id_grupo
+            JOIN grupo_estudiantes ge ON g.id_grupo = ge.id_grupo
+            WHERE ge.id_estudiante = %s
+            ORDER BY mc.fecha_subida DESC
+        """, (u['id'],))
+        materiales = [dict(r) for r in cur.fetchall()]
+        cur.close(); conn.close()
+        return jsonify({"status":"success","data":materiales})
+    except Exception as e:
+        return jsonify({"status":"error","message":str(e)})
+
+
+@app.route('/estudiante/observador')
+def estudiante_observador():
+    u = get_estudiante_info()
+    if not u: return jsonify({"status":"error","message":"No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT o.tipo, o.descripcion,
+                   TO_CHAR(o.fecha_registro,'DD/MM/YYYY') as fecha,
+                   p.nombre_completo as profesor
+            FROM observador o
+            JOIN profesores p ON o.id_profesor = p.id_profesor
+            WHERE o.id_estudiante = %s
+            ORDER BY o.fecha_registro DESC
+        """, (u['id'],))
+        obs = [dict(o) for o in cur.fetchall()]
+        cur.close(); conn.close()
+        return jsonify({"status":"success","data":obs})
+    except Exception as e:
+        return jsonify({"status":"error","message":str(e)})
+
+
+@app.route('/change-password', methods=['POST'])
+def change_password():
+    user_info = session.get('user_info')
+    if not user_info:
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    data = request.get_json()
+    current_password = data.get('current_password')
+    new_password = data.get('new_password')
+    if not current_password or not new_password:
+        return jsonify({"status": "error", "message": "Faltan campos."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        tipo = user_info.get('tipo')
+        if tipo == 'estudiante':
+            cur.execute("SELECT contrasena FROM estudiantes WHERE id_estudiante = %s", (user_info['id'],))
+        elif tipo == 'profesor':
+            cur.execute("SELECT contrasena FROM profesores WHERE id_profesor = %s", (user_info['id'],))
+        else:
+            return jsonify({"status": "error", "message": "Tipo no válido."})
+        row = cur.fetchone()
+        if not row or not bcrypt.checkpw(current_password.encode(), row[0].encode()):
+            return jsonify({"status": "error", "message": "Contraseña actual incorrecta."})
+        hashed = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+        if tipo == 'estudiante':
+            cur.execute("UPDATE estudiantes SET contrasena=%s WHERE id_estudiante=%s", (hashed, user_info['id']))
+        else:
+            cur.execute("UPDATE profesores SET contrasena=%s WHERE id_profesor=%s", (hashed, user_info['id']))
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({"status": "success", "message": "Contraseña actualizada exitosamente."})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/update-profile', methods=['POST'])
+def update_profile():
+    user_info = session.get('user_info')
+    if not user_info: return jsonify({"status":"error","message":"No autorizado"}), 401
+    data = request.get_json()
+    fullname = data.get('fullname','').strip()
+    email = data.get('email','').strip()
+    if not fullname: return jsonify({"status":"error","message":"El nombre es requerido."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        tipo = user_info.get('tipo')
+        if tipo == 'estudiante':
+            cur.execute("UPDATE estudiantes SET nombre_completo=%s, correo_electronico=%s WHERE id_estudiante=%s",
+                        (fullname, email, user_info['id']))
+        elif tipo == 'profesor':
+            cur.execute("UPDATE profesores SET nombre_completo=%s, correo_electronico=%s WHERE id_profesor=%s",
+                        (fullname, email, user_info['id']))
+        conn.commit(); cur.close(); conn.close()
+        session['user_info']['nombre'] = fullname
+        return jsonify({"status":"success","message":"Perfil actualizado."})
+    except Exception as e:
+        return jsonify({"status":"error","message":str(e)})
+
+
+# ── FIN RUTAS ESTUDIANTE ──
 
 @app.route('/admin/periodos', methods=['GET'])
 def get_periodos():
@@ -2036,6 +2726,40 @@ def get_estudiantes_grupo(id_grupo):
 
 
 
+
+
+
+@app.route('/admin/administradores', methods=['GET'])
+def get_administradores():
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("SELECT id_admin, nombre_completo, correo_electronico, email_verified FROM administradores ORDER BY id_admin")
+        data = [dict(r) for r in cur.fetchall()]
+        cur.close(); conn.close()
+        return jsonify({"status": "success", "data": data})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+@app.route('/admin/administradores/<int:id_admin>', methods=['DELETE'])
+def eliminar_administrador(id_admin):
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    if id_admin == session['user_id']:
+        return jsonify({"status": "error", "message": "No puedes eliminarte a ti mismo."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM administradores WHERE id_admin = %s", (id_admin,))
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({"status": "success", "message": "Administrador eliminado."})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5006)
-

@@ -4,7 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Profesor - MiBoletín</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/profesor.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/profesor.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   </head>
 
   <body>
@@ -17,6 +18,12 @@
           </button>
           <button class="menu-item" data-section="notas">
             <span>📝</span><span>Subir Notas</span>
+          </button>
+          <button class="menu-item" data-section="asistencia">
+            <span>✅</span><span>Asistencia</span>
+          </button>
+          <button class="menu-item" data-section="material">
+            <span>📁</span><span>Material</span>
           </button>
           <button class="menu-item" data-section="observador">
             <span>👁</span><span>Observador</span>
@@ -58,6 +65,15 @@
         <div class="role">Profesor</div>
         <button class="btn" id="openEdit">Editar Perfil</button>
         <button class="btn" id="openPassword">Cambiar Contraseña</button>
+        <div class="dark-mode-row">
+          <label for="dark-mode-toggle-prof">
+            <span id="dark-icon-prof">🌙</span> Modo Oscuro
+          </label>
+          <label class="dark-toggle-switch">
+            <input type="checkbox" id="dark-mode-toggle-prof">
+            <span class="dark-toggle-track"></span>
+          </label>
+        </div>
         <button class="btn logout" onclick="window.location.href='/logout'">Cerrar Sesión</button>
         <p class="last-access">Código: {{ codigo }}</p>
       </div>
@@ -99,5 +115,44 @@
     </div>
 
     <script src="{{ url_for('static', filename='script/profesor.js') }}"></script>
-  </body>
+    <script>
+    // ── MODO OSCURO PROFESOR ──
+    (function() {
+        const html = document.querySelector('html');
+        const KEY  = 'miboletin_dark_mode';
+        const sys  = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+        function applyTheme(dark) {
+            html.classList.toggle('dark-mode', dark);
+            const chk  = document.getElementById('dark-mode-toggle-prof');
+            const icon = document.getElementById('dark-icon-prof');
+            if (chk)  chk.checked   = dark;
+            if (icon) icon.textContent = dark ? '☀️' : '🌙';
+        }
+
+        function resolveTheme() {
+            const saved = localStorage.getItem(KEY);
+            return saved !== null ? saved === 'true' : sys();
+        }
+
+        applyTheme(resolveTheme());
+
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+            if (localStorage.getItem(KEY) === null) applyTheme(e.matches);
+        });
+
+        // Sincronizar checkbox cuando se abre el modal
+        document.getElementById('profileButton')?.addEventListener('click', () => {
+            const chk = document.getElementById('dark-mode-toggle-prof');
+            if (chk) chk.checked = html.classList.contains('dark-mode');
+        });
+
+        document.addEventListener('change', e => {
+            if (e.target.id !== 'dark-mode-toggle-prof') return;
+            localStorage.setItem(KEY, e.target.checked);
+            applyTheme(e.target.checked);
+        });
+    })();
+    </script>
+</body>
 </html>

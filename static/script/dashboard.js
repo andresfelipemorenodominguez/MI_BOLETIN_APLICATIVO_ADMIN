@@ -1,4 +1,3 @@
-
 // CONSTANTES Y CONFIGURACIÓN
 
 const CONFIG = {
@@ -17,6 +16,8 @@ const CONFIG = {
         nameMinLength: 5
     }
 };
+
+const currentUserId = parseInt(document.getElementById('current-user-data')?.dataset.userId || '0');
 
 const Utils = {
     debounce(func, wait) {
@@ -168,7 +169,8 @@ class NavigationManager {
             'materias-section': () => AdminManager.cargarMaterias(),
             'asignaciones-section': () => AdminManager.cargarDatosAsignaciones(),
             'reportes-section': () => AdminManager.cargarReportes(),
-            'inicio-section': () => window.app?.stats?.refresh()
+            'inicio-section': () => window.app?.stats?.refresh(),
+            'administradores-section': () => AdminManager.cargarAdministradores()
         };
         loaders[sectionId]?.();
     }
@@ -618,11 +620,11 @@ const AdminManager = {
     async cargarDatosAsignaciones() {
         try {
             const [profRes, grupoRes, matRes, asigRes, estRes] = await Promise.all([
-                fetch('/obtener-profesores').then(r => r.json()),
-                fetch('/admin/grupos').then(r => r.json()),
-                fetch('/admin/materias').then(r => r.json()),
+                fetch('/obtener-profesores-ids').then(r => r.json()),
+                fetch('/obtener-grupos-ids').then(r => r.json()),
+                fetch('/obtener-materias-ids').then(r => r.json()),
                 fetch('/admin/asignaciones').then(r => r.json()),
-                fetch('/obtener-estudiantes').then(r => r.json())
+                fetch('/obtener-estudiantes-ids').then(r => r.json())
             ]);
             const fillSelect = (id, items, valKey, labelFn) => {
                 const sel = document.getElementById(id);
@@ -630,12 +632,12 @@ const AdminManager = {
                 sel.innerHTML = '<option value="">Selecciona</option>';
                 (items || []).forEach(i => { const o = document.createElement('option'); o.value = i[valKey]; o.textContent = labelFn(i); sel.appendChild(o); });
             };
-            fillSelect('asig-profesor', profRes.data, 'id', p => `${p.nombre} (${p.id})`);
-            fillSelect('asig-grupo', grupoRes.data, 'id_grupo', g => g.nombre);
-            fillSelect('asig-materia', matRes.data, 'id_materia', m => m.nombre);
-            fillSelect('asig-estudiante', estRes.data, 'id_estudiante', e => `${e.nombre} (${e.id})`);
-            fillSelect('asig-grupo-est', grupoRes.data, 'id_grupo', g => g.nombre);
-            fillSelect('filtro-grupo-est', grupoRes.data, 'id_grupo', g => g.nombre);
+            fillSelect('asig-profesor',   profRes.data,  'id_profesor',   p => `${p.nombre_completo} (${p.codigo_profesor})`);
+            fillSelect('asig-grupo',      grupoRes.data, 'id_grupo',      g => g.nombre);
+            fillSelect('asig-materia',    matRes.data,   'id_materia',    m => m.nombre);
+            fillSelect('asig-estudiante', estRes.data,   'id_estudiante', e => `${e.nombre_completo} (${e.codigo_estudiante})`);
+            fillSelect('asig-grupo-est',  grupoRes.data, 'id_grupo',      g => g.nombre);
+            fillSelect('filtro-grupo-est',grupoRes.data, 'id_grupo',      g => g.nombre);
 
             const tbody = document.getElementById('tbody-asignaciones');
             if (tbody) {
@@ -689,6 +691,39 @@ const AdminManager = {
         if (data.status === 'success') this.cargarEstudiantesGrupo(id_grupo);
     },
 
+
+async cargarAdministradores() {
+        const tbody = document.getElementById('tbody-administradores');
+        if (!tbody) return;
+        try {
+            const res = await fetch('/admin/administradores');
+            const data = await res.json();
+            if (!data.data?.length) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--gray-500);">No hay administradores registrados</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.data.map(a => `
+                <tr>
+                    <td>${a.id_admin}</td>
+                    <td><strong>${a.nombre_completo}</strong></td>
+                    <td>${a.correo_electronico}</td>
+                    <td><span class="${a.email_verified ? 'tag-success' : 'tag-error'}">${a.email_verified ? 'Sí' : 'No'}</span></td>
+                    <td>${a.id_admin !== currentUserId ?
+                        `<button class="btn-danger btn-sm" onclick="AdminManager.eliminarAdmin(${a.id_admin})"><i class="fas fa-trash"></i></button>`
+                        : '–'}</td>
+                </tr>`).join('');
+        } catch(e) {}
+    },
+
+    async eliminarAdmin(id_admin) {
+        if (!confirm('¿Eliminar este administrador?')) return;
+        const res = await fetch(`/admin/administradores/${id_admin}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.status === 'success') { Utils.showToast('Administrador eliminado.', 'success'); this.cargarAdministradores(); }
+        else Utils.showToast(data.message, 'error');
+    },
+
+
     async cargarReportes() {
         try {
             const res = await fetch('/dashboard-stats');
@@ -740,22 +775,25 @@ class UIManager {
 
 class App {
     init() {
-        try {
-            new UIManager().init();
-            this.navigation = new NavigationManager();
-            this.stats = new StatsManager();
+    try {
+        new UIManager().init();
+        this.navigation = new NavigationManager();
+        this.stats = new StatsManager();
+        this.forms = {
+            student: new StudentFormHandler(),
+            professor: new ProfessorFormHandler()
+        };
+        this.tables = {
+            estudiantes: new EstudiantesTableManager(),
+            profesores: new ProfesoresTableManager()
+        };
+        // Cargar inicio DESPUÉS de que window.app esté disponible
+        setTimeout(() => {
             this.stats.refresh();
-            this.forms = {
-                student: new StudentFormHandler(),
-                professor: new ProfessorFormHandler()
-            };
-            this.tables = {
-                estudiantes: new EstudiantesTableManager(),
-                profesores: new ProfesoresTableManager()
-            };
-            console.log('✅ App inicializada');
-        } catch(e) { console.error('Error iniciando app:', e); }
-    }
+        }, 100);
+        console.log('✅ App inicializada');
+    } catch(e) { console.error('Error iniciando app:', e); }
+}
 }
 
 document.addEventListener('DOMContentLoaded', () => {
