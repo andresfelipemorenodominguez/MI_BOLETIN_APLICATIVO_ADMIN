@@ -1,3 +1,5 @@
+#Importa las funciones principales de Flask para crear la app, manejar rutas, sesiones, peticiones y respuestas.
+#
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file
 from fpdf import FPDF
 import io
@@ -18,14 +20,16 @@ load_dotenv()
 
 
 
-app = Flask(__name__)
-app.secret_key = 'tu_clave_secreta_aqui'
+app = Flask(__name__)                      #Crea la aplicación web usando Flask. __name__ le indica a Flask dónde está el archivo principal.
+app.secret_key = 'tu_clave_secreta_aqui'   #Define una clave secreta usada para proteger sesiones, cookies y datos sensibles de la aplicación.
 
 # -------------------------
 # 🔧 CONFIGURACIÓN EMAIL (GMAIL)
 # -------------------------
+##Define los datos necesarios para enviar correos desde la aplicación (por ejemplo: notificaciones o recuperación de contraseña).
+#
 EMAIL_HOST = "smtp.gmail.com"
-EMAIL_PORT = 587
+EMAIL_PORT = 587                                            
 EMAIL_USER = "miboletinpep@gmail.com"
 EMAIL_PASSWORD = "ihpo waip cekq dstv"
 EMAIL_FROM = "MiBoletínAdmin.com <miboletinpep@gmail.com>"
@@ -33,9 +37,8 @@ EMAIL_FROM = "MiBoletínAdmin.com <miboletinpep@gmail.com>"
 # -------------------------
 # 🔌 CONFIGURACIÓN DATABASE
 # -------------------------
-
-
-
+#Define una función para conectarse a la base de datos PostgreSQL.Esta función se usa cada vez que la aplicación necesita consultar o guardar información
+#
 def get_db_connection():
     DATABASE_URL = os.environ.get("DATABASE_URL")
     return psycopg2.connect(DATABASE_URL, sslmode='require')
@@ -45,6 +48,8 @@ def get_db_connection():
 # -------------------------
 # 📧 FUNCIONES DE EMAIL
 # -------------------------
+######Esta función construye un correo visual y personalizado con un código de verificación que el usuario debe usar para completar su registro en el sistema.#######
+#
 def send_verification_email(to_email, verification_code):
     """Envía un email con el código de verificación (para administradores)"""
     try:
@@ -82,6 +87,9 @@ def send_verification_email(to_email, verification_code):
         </body>
         </html>
         """
+        
+        ########Este bloque se encarga de enviar realmente el correo de verificación y manejar errores en caso de fallo.#######
+        #
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
         msg['From'] = EMAIL_FROM
@@ -98,7 +106,8 @@ def send_verification_email(to_email, verification_code):
         print(f"Error enviando email a {to_email}: {str(e)}")
         return False
 
-
+########Esta función crea un correo visual con un enlace seguro que permite al usuario restablecer su contraseña en el sistema.#########
+#
 def send_recovery_email(to_email, recovery_link, user_name):
     """Envía un email con el enlace de recuperación de contraseña"""
     try:
@@ -131,6 +140,8 @@ def send_recovery_email(to_email, recovery_link, user_name):
         </div>
         </body></html>
         """
+        ########Este bloque se encarga de enviar el correo con el enlace de recuperación de contraseña y manejar posibles errores.#########
+        #
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
         msg['From'] = EMAIL_FROM
@@ -146,7 +157,8 @@ def send_recovery_email(to_email, recovery_link, user_name):
         print(f"Error enviando email de recuperación: {str(e)}")
         return False
 
-
+##########Esta función es una forma general de enviar correos dentro del sistema (notificaciones a estudiantes o profesores).#########
+#
 def enviar_correo_admin(destinatario, asunto, cuerpo_html, cuerpo_texto=""):
     """Envía correos electrónicos desde el módulo de usuarios (estudiantes/profesores)"""
     try:
@@ -168,6 +180,8 @@ def enviar_correo_admin(destinatario, asunto, cuerpo_html, cuerpo_texto=""):
 
 
 # 🔑 FUNCIÓN PARA GENERAR CÓDIGO
+######Esta función crea códigos de verificación que pueden ser numéricos o alfanuméricos según su longitud.########
+#
 def generate_verification_code(length=6):
     """Genera un código de verificación aleatorio"""
     if length > 10:
@@ -180,7 +194,8 @@ def generate_verification_code(length=6):
 # =========================================================
 # 📌 RUTAS PRINCIPALES
 # =========================================================
-
+########Esta ruta hace que, al entrar al sistema, el usuario vaya directamente al login del sistema de calificaciones.#######
+#
 @app.route("/")
 def index():
     """
@@ -193,7 +208,8 @@ def index():
 # =========================================================
 # 📌 RUTAS DE USUARIOS (estudiantes y profesores) — inicio.py
 # =========================================================
-
+###########Este bloque permite que estudiantes y profesores inicien sesión, validando sus datos y redirigiéndolos a su respectivo panel.###########
+#
 @app.route('/loginuser', methods=['GET', 'POST'])
 def loginuser():
     if request.method == 'GET':
@@ -262,7 +278,8 @@ def loginuser():
             cur.close()
             conn.close()
 
-
+########Esta ruta muestra el panel del estudiante, solo si ha iniciado sesión correctamente.##########
+#
 @app.route('/estudiante')
 def estudiante_dashboard():
     user_info = session.get('user_info')
@@ -272,7 +289,8 @@ def estudiante_dashboard():
                            nombre=user_info['nombre'],
                            codigo=user_info['codigo'])
 
-
+########Esta ruta permite el acceso al panel del profesor, solo si ha iniciado sesión correctamente.##########
+#
 @app.route('/profesor')
 def profesor_dashboard():
     user_info = session.get('user_info')
@@ -282,7 +300,8 @@ def profesor_dashboard():
                            nombre=user_info['nombre'],
                            codigo=user_info['codigo'])
 
-
+########Esta ruta muestra una página donde los usuarios pueden solicitar acceso, incluyendo la información de contacto del administrador.############
+#
 @app.route('/solicitud_user')
 def solicitud_user():
     conn = get_db_connection()
@@ -302,7 +321,8 @@ def solicitud_user():
                            admin_name=admin_name,
                            admin_email=admin_email)
 
-
+######Esta ruta verifica si un usuario existe (estudiante o profesor) y devuelve la información en formato JSON.#########
+#
 @app.route('/verificar_usuario', methods=['POST'])
 def verificar_usuario():
     data = request.json
@@ -355,7 +375,8 @@ def verificar_usuario():
     return jsonify({'status': 'error',
                     'message': 'Usuario no encontrado. Verifica tu identificador y correo electrónico.'}), 404
 
-
+#########Este bloque permite que un usuario solicite cambio de contraseña, guarda la solicitud en la base de datos y notifica al administrador por correo.###########
+#
 @app.route('/guardar_solicitud', methods=['POST'])
 def guardar_solicitud():
     data = request.json
@@ -443,7 +464,8 @@ def guardar_solicitud():
         conn.close()
         return jsonify({'status': 'error', 'message': f'Error al guardar la solicitud: {str(e)}'}), 500
 
-
+#####Esta ruta se usa para cerrar sesión o limpiar datos temporales del usuario.########
+#
 @app.route('/limpiar_sesion', methods=['POST'])
 def limpiar_sesion():
     session.pop('user_info', None)
@@ -453,33 +475,35 @@ def limpiar_sesion():
 # =========================================================
 # 📌 RUTAS DE ADMINISTRADORES — app.py (panel admin)
 # =========================================================
-
+########Estas rutas solo sirven para mostrar páginas del sistema de administración (login, registro y recuperación de contraseña).########
+#
 @app.route("/admin")
-def admin_login():
+def admin_login():                               #Muestra la página de inicio de sesión para administradores.
     """Página de login para administradores"""
     return render_template('administrador/loginadmin.html')
 
 
 @app.route("/register")
-def register():
+def register():                                                  #Muestra la página para registrar un nuevo administrador.
     return render_template('administrador/registeradmin.html')
 
 
 @app.route("/forgot-password")
-def forgot_password():
+def forgot_password():                                         #Muestra la página para recuperar contraseña (cuando el admin la olvida).
     return render_template('administrador/f-password.html')
 
 
 @app.route("/email-verification")
-def email_verification():
+def email_verification():                                        #Muestra la página donde el administrador ingresa el código de verificación enviado por correo.
     return render_template('administrador/e-verification.html')
 
 
 @app.route("/request-password")
-def request_password():
+def request_password():                                           #Muestra la página para solicitar el cambio o restablecimiento de contraseña.
     return render_template('administrador/r-password.html')
 
-
+#######Esta ruta muestra el panel del administrador, verificando que haya iniciado sesión y cargando sus datos desde la base de datos.########
+#
 @app.route("/dashboard")
 def dashboard():
     """Dashboard del administrador (protegido)"""
@@ -511,7 +535,8 @@ def dashboard():
                                user_name=session.get('user_name', 'Usuario'),
                                user_email=session.get('user_email', 'usuario@ejemplo.com'))
 
-
+#######Esta ruta permite cerrar sesión completamente y volver al login del sistema.########
+#
 @app.route("/logout")
 def logout():
     """Cierra sesión tanto de usuarios como de administradores"""
@@ -522,7 +547,8 @@ def logout():
 # -------------------------
 # 📌 APIs DE ADMINISTRADORES (POST)
 # -------------------------
-
+########Este bloque permite registrar administradores, guardar sus datos de forma segura y enviar un código de verificación por correo.########
+#
 @app.route("/register", methods=["POST"])
 def register_user():
     data = request.get_json()
@@ -569,7 +595,8 @@ def register_user():
         print(f"Unexpected error: {e}")
         return jsonify({"status": "error", "message": "Error inesperado. Intenta más tarde."})
 
-
+#######Este bloque permite que el administrador inicie sesión, validando usuario, correo verificado y contraseña, y luego lo redirige al dashboard.##########
+#
 @app.route("/login", methods=["POST"])
 def login_user():
     """Login de administradores (POST)"""
@@ -616,7 +643,8 @@ def login_user():
         return jsonify({"status": "error", "message": "Error al iniciar sesión. Intenta nuevamente.",
                         "field": "general"})
 
-
+######Este bloque valida el código de verificación enviado por correo, activa la cuenta del administrador y guarda su sesión.########
+#
 @app.route("/verify-code", methods=["POST"])
 def verify_code():
     data = request.get_json()
@@ -670,7 +698,8 @@ def verify_code():
         print(f"Verification error: {e}")
         return jsonify({"status": "error", "message": "Verification failed. Please try again."})
 
-
+########Este bloque permite reenviar un nuevo código de verificación al correo del administrador en caso de que el anterior expire o se pierda.#########
+#
 @app.route("/resend-code", methods=["POST"])
 def resend_code():
     data = request.get_json()
@@ -708,7 +737,8 @@ def resend_code():
         print(f"Resend error: {e}")
         return jsonify({"status": "error", "message": "Failed to resend code. Please try again."})
 
-
+########Este bloque permite cambiar el correo del administrador, generar un nuevo código y volver a verificar el email.#########
+#
 @app.route("/update-email", methods=["POST"])
 def update_email():
     data = request.get_json()
@@ -754,7 +784,8 @@ def update_email():
         print(f"Update email error: {e}")
         return jsonify({"status": "error", "message": "Failed to update email. Please try again."})
 
-
+#######Permite solicitar la recuperación de contraseña generando un token y enviando un enlace al correo del usuario.#########
+#
 @app.route("/request-password", methods=["POST"])
 def request_password_post():
     data = request.get_json()
@@ -801,21 +832,24 @@ def request_password_post():
 
 #  RUTAS DEL PANEL ADMIN (gestión de estudiantes/profesores)
 
-
+######Permite acceder a la vista de gestión de estudiantes solo si el administrador ha iniciado sesión.########
+#
 @app.route("/admin/estudiantes")
 def admin_estudiantes():
     if 'user_id' not in session:
         return redirect(url_for('admin_login'))
     return render_template('administrador/estudiantes.html')
 
-
+#######Permite acceder a la vista de gestión de profesores solo si el administrador ha iniciado sesión.########
+#
 @app.route("/admin/profesores")
 def admin_profesores():
     if 'user_id' not in session:
         return redirect(url_for('admin_login'))
     return render_template('administrador/profesores.html')
 
-
+########Busca y devuelve los datos de un estudiante por su código, validando que el administrador esté autenticado.########
+#
 @app.route("/obtener-estudiante/<codigo>", methods=["GET"])
 def obtener_estudiante(codigo):
     if 'user_id' not in session:
@@ -841,7 +875,8 @@ def obtener_estudiante(codigo):
         print(f"Error obteniendo estudiante: {e}")
         return jsonify({"status": "error", "message": "Error al obtener los datos."})
 
-
+########Obtiene los datos de un profesor por su código, valida la sesión del administrador y convierte las asignaturas en una lista antes de enviarlas.#######
+#
 @app.route("/obtener-profesor/<codigo>", methods=["GET"])
 def obtener_profesor(codigo):
     if 'user_id' not in session:
@@ -870,7 +905,8 @@ def obtener_profesor(codigo):
         print(f"Error obteniendo profesor: {e}")
         return jsonify({"status": "error", "message": "Error al obtener los datos."})
 
-
+########Permite al administrador actualizar los datos de un estudiante, incluyendo opcionalmente su contraseña, validando la sesión, los campos y evitando correos duplicados.########
+#
 @app.route("/actualizar-estudiante", methods=["POST"])
 def actualizar_estudiante():
     if 'user_id' not in session:
@@ -939,7 +975,8 @@ def actualizar_estudiante():
         print(f"Error actualizando estudiante: {e}")
         return jsonify({"status": "error", "message": "Error inesperado. Intenta nuevamente."})
 
-
+#######Permite al administrador actualizar los datos de un profesor, incluyendo asignaturas y contraseña opcional, validando sesión y evitando datos duplicados.#######
+#
 @app.route("/actualizar-profesor", methods=["POST"])
 def actualizar_profesor():
     if 'user_id' not in session:
@@ -1029,7 +1066,8 @@ def actualizar_profesor():
 
 # 📌 RUTAS FALTANTES
 
-
+#######Devuelve los IDs y datos básicos de los profesores para usarlos en listas o selects, validando sesión.#######
+#
 @app.route("/obtener-profesores-ids", methods=["GET"])
 def obtener_profesores_ids():
     """Devuelve id_profesor (entero) para los selects de asignaciones"""
@@ -1045,7 +1083,8 @@ def obtener_profesores_ids():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+########Devuelve los IDs y datos básicos de los estudiantes para usarlos en listas o selects, validando sesión.#######
+#
 @app.route("/obtener-estudiantes-ids", methods=["GET"])
 def obtener_estudiantes_ids():
     """Devuelve id_estudiante (entero) para los selects de asignaciones"""
@@ -1061,7 +1100,8 @@ def obtener_estudiantes_ids():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+#######Devuelve los IDs y nombres de los grupos para usarlos en listas o selects, validando sesión.#######
+#
 @app.route("/obtener-grupos-ids", methods=["GET"])
 def obtener_grupos_ids():
     """Devuelve id_grupo (entero) para los selects de asignaciones"""
@@ -1077,7 +1117,8 @@ def obtener_grupos_ids():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+########Devuelve los IDs y nombres de las materias para usarlos en listas o selects, validando sesión.######
+#
 @app.route("/obtener-materias-ids", methods=["GET"])
 def obtener_materias_ids():
     """Devuelve id_materia (entero) para los selects de asignaciones"""
@@ -1093,7 +1134,8 @@ def obtener_materias_ids():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+#######Obtiene la cantidad de estudiantes y profesores activos para mostrar estadísticas en el dashboard del administrador.#######
+#
 @app.route("/dashboard-stats", methods=["GET"])
 def dashboard_stats():
     if 'user_id' not in session:
@@ -1111,7 +1153,9 @@ def dashboard_stats():
     except Exception as e:
         print(f"Error stats: {e}")
         return jsonify({"status": "error", "message": "Error al obtener estadísticas."})
-
+    
+#######Obtiene y devuelve la lista de estudiantes con sus datos principales, ordenados por fecha de registro, validando sesión.#######
+#
 @app.route("/obtener-estudiantes", methods=["GET"])
 def obtener_estudiantes():
     if 'user_id' not in session:
@@ -1127,7 +1171,9 @@ def obtener_estudiantes():
     except Exception as e:
         print(f"Error obteniendo estudiantes: {e}")
         return jsonify({"status": "error", "message": "Error al obtener los datos."})
-
+    
+########Obtiene y devuelve la lista de profesores con sus datos principales, convirtiendo las asignaturas en lista y validando sesión.#######
+#
 @app.route("/obtener-profesores", methods=["GET"])
 def obtener_profesores():
     if 'user_id' not in session:
@@ -1147,7 +1193,9 @@ def obtener_profesores():
     except Exception as e:
         print(f"Error obteniendo profesores: {e}")
         return jsonify({"status": "error", "message": "Error al obtener los datos."})
-
+    
+########Permite al administrador registrar un nuevo estudiante, validando datos, evitando duplicados y guardando la contraseña de forma segura.######
+#
 @app.route("/registrar-estudiante", methods=["POST"])
 def registrar_estudiante():
     if 'user_id' not in session:
@@ -1187,7 +1235,9 @@ def registrar_estudiante():
     except Exception as e:
         print(f"Error registrando estudiante: {e}")
         return jsonify({"status": "error", "message": "Error en la base de datos."})
-
+    
+#########Permite al administrador registrar un nuevo profesor, validando datos, evitando duplicados, guardando asignaturas y cifrando la contraseña.#######
+#
 @app.route("/registrar-profesor", methods=["POST"])
 def registrar_profesor():
     if 'user_id' not in session:
@@ -1228,7 +1278,9 @@ def registrar_profesor():
     except Exception as e:
         print(f"Error registrando profesor: {e}")
         return jsonify({"status": "error", "message": "Error en la base de datos."})
-
+    
+#######Permite al administrador eliminar un estudiante por su código, validando sesión.######
+#
 @app.route("/eliminar-estudiante", methods=["POST"])
 def eliminar_estudiante():
     if 'user_id' not in session:
@@ -1246,7 +1298,9 @@ def eliminar_estudiante():
     except Exception as e:
         print(f"Error eliminando estudiante: {e}")
         return jsonify({"status": "error", "message": "Error al eliminar."})
-
+    
+#######Permite al administrador eliminar un profesor por su código, validando sesión.#######
+#
 @app.route("/eliminar-profesor", methods=["POST"])
 def eliminar_profesor():
     if 'user_id' not in session:
@@ -1264,7 +1318,9 @@ def eliminar_profesor():
     except Exception as e:
         print(f"Error eliminando profesor: {e}")
         return jsonify({"status": "error", "message": "Error al eliminar."})
-
+    
+######Define el diseño del PDF, agregando un encabezado con título y fecha, y un pie de página con la numeración de las páginas.######
+#
 class MiBoletinPDF(FPDF):
     def header(self):
         self.set_font('helvetica', 'B', 16)
@@ -1280,7 +1336,9 @@ class MiBoletinPDF(FPDF):
         self.set_font('helvetica', 'I', 8)
         self.set_text_color(128, 128, 128)
         self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
-
+        
+#########Genera y descarga un PDF con la lista de estudiantes, permitiendo filtrar por grado y grupo, y mostrando la información en formato de tabla.######
+#
 @app.route("/reporte/estudiantes/pdf", methods=["GET"])
 def reporte_estudiantes_pdf():
     if 'user_id' not in session:
@@ -1370,7 +1428,9 @@ def reporte_estudiantes_pdf():
     except Exception as e:
         print(f"Error generando PDF de estudiantes: {e}")
         return jsonify({"status": "error", "message": "Error generando el reporte PDF."})
-
+    
+##########Genera y descarga un PDF con el listado de profesores, mostrando sus datos en formato de tabla.########
+#
 @app.route("/reporte/profesores/pdf", methods=["GET"])
 def reporte_profesores_pdf():
     if 'user_id' not in session:
@@ -1437,7 +1497,9 @@ def reporte_profesores_pdf():
     except Exception as e:
         print(f"Error generando PDF de profesores: {e}")
         return jsonify({"status": "error", "message": "Error generando el reporte PDF."})
-
+    
+########Genera y descarga un PDF con estadísticas generales del sistema, incluyendo estudiantes, profesores y solicitudes.########
+#
 @app.route("/reporte/resumen/pdf", methods=["GET"])
 def reporte_resumen_pdf():
     if 'user_id' not in session:
@@ -1512,7 +1574,8 @@ def reporte_resumen_pdf():
         print(f"Error generando PDF de estadisticas: {e}")
         return jsonify({"status": "error", "message": "Error generando el reporte PDF."})
 
-
+##########Genera y descarga un PDF con el listado de administradores, mostrando ID, nombre, correo y estado de verificación.########
+#
 @app.route("/reporte/administradores/pdf", methods=["GET"])
 def reporte_administradores_pdf():
     if 'user_id' not in session:
@@ -1573,7 +1636,8 @@ def reporte_administradores_pdf():
 
 # RUTAS DEL PROFESOR
 
-
+#######Obtiene los estudiantes activos asignados al profesor según sus grupos.########
+#
 @app.route('/profesor/estudiantes')
 def profesor_estudiantes():
     user_info = session.get('user_info')
@@ -1600,7 +1664,8 @@ def profesor_estudiantes():
         print(f"Error obteniendo estudiantes del profesor: {e}")
         return jsonify({"status": "error", "message": str(e)})
 
-
+############Lista los tipos de notas disponibles (ej: tareas, exámenes, etc.).###########
+#
 @app.route('/profesor/tipos-nota')
 def profesor_tipos_nota():
     user_info = session.get('user_info')
@@ -1617,7 +1682,8 @@ def profesor_tipos_nota():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+#########obtiene las materias y grupos asignados al profesor#######
+#
 @app.route('/profesor/materias')
 def profesor_materias():
     user_info = session.get('user_info')
@@ -1641,7 +1707,8 @@ def profesor_materias():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+##########crea un nuevo tipo de nota o devuelve uno existente#######
+#
 @app.route('/profesor/tipos-nota', methods=['POST'])
 def crear_tipo_nota():
     user_info = session.get('user_info')
@@ -1670,7 +1737,8 @@ def crear_tipo_nota():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+##########registra una nueva nota para un estudiante, incluyendo valor, descripción, tipo de nota y la materia/grupo asignado por el profesor#########
+#
 @app.route('/profesor/subir-nota', methods=['POST'])
 def subir_nota():
     user_info = session.get('user_info')
@@ -1700,7 +1768,8 @@ def subir_nota():
         print(f"Error subiendo nota: {e}")
         return jsonify({"status": "error", "message": str(e)})
 
-
+######obtiene todas las notas de un estudiante registradas por el profesor, incluyendo valor, descripción, fecha, tipo de nota y materia correspondiente#######
+#
 @app.route('/profesor/notas/<int:id_estudiante>')
 def ver_notas_estudiante(id_estudiante):
     user_info = session.get('user_info')
@@ -1729,7 +1798,8 @@ def ver_notas_estudiante(id_estudiante):
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+#########registra una observación para un estudiante con tipo y descripción########
+#
 @app.route('/profesor/observador', methods=['POST'])
 def agregar_observacion():
     user_info = session.get('user_info')
@@ -1756,7 +1826,8 @@ def agregar_observacion():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+########consulta las observaciones del estudiante hechas por el profesor, con fecha, tipo y detalle##########
+#
 @app.route('/profesor/observador/<int:id_estudiante>') 
 def ver_observaciones(id_estudiante):
     user_info = session.get('user_info')
@@ -1780,7 +1851,8 @@ def ver_observaciones(id_estudiante):
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+############obtiene los eventos del profesor con fecha, hora y estado###########
+#
 @app.route('/profesor/agenda', methods=['GET'])
 def ver_agenda():
     user_info = session.get('user_info')
@@ -1807,7 +1879,8 @@ def ver_agenda():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+########crea un nuevo evento en la agenda con título, descripción, fecha y horario######
+#
 @app.route('/profesor/agenda', methods=['POST'])
 def agregar_agenda():
     user_info = session.get('user_info')
@@ -1836,7 +1909,8 @@ def agregar_agenda():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+#######actualiza el estado de un evento de la agenda del profesor (ej: pendiente, realizado, cancelado)########
+#
 @app.route('/profesor/agenda/<int:id_agenda>', methods=['PUT'])
 def actualizar_estado_agenda(id_agenda):
     user_info = session.get('user_info')
@@ -1858,7 +1932,8 @@ def actualizar_estado_agenda(id_agenda):
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+########obtiene el reporte completo de un estudiante con datos personales, notas por materia, observaciones del profesor y promedio general########
+#
 @app.route('/profesor/reporte/<int:id_estudiante>')
 def reporte_estudiante(id_estudiante):
     user_info = session.get('user_info')
@@ -1909,7 +1984,8 @@ def reporte_estudiante(id_estudiante):
 
 
 
-
+#######genera y descarga un PDF con el reporte completo de todos los estudiantes del profesor, incluyendo datos personales, notas por materia con promedio y observaciones registradas#######
+#
 @app.route('/profesor/reporte/pdf')
 def profesor_reporte_pdf():
     user_info = session.get('user_info')
@@ -2044,7 +2120,8 @@ def profesor_reporte_pdf():
         print(f"Error generando PDF profesor: {e}")
         return jsonify({"status": "error", "message": str(e)})
 
-
+#########obtiene el listado de estudiantes activos asociados a una materia y grupo específico del profesor, incluyendo id, código, nombre, grado y grupo#####
+#
 @app.route('/profesor/estudiantes-por-materia/<int:id_grupo_materia>')
 def estudiantes_por_materia(id_grupo_materia):
     user_info = session.get('user_info')
@@ -2068,7 +2145,8 @@ def estudiantes_por_materia(id_grupo_materia):
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+###########permite registrar múltiples notas en lote para varios estudiantes, guardando valor, descripción, tipo de nota y relación con la materia/grupo correspondiente en una sola operación######
+#
 @app.route('/profesor/subir-notas-masivo', methods=['POST'])
 def subir_notas_masivo():
     user_info = session.get('user_info')
@@ -2097,6 +2175,9 @@ def subir_notas_masivo():
 
 
 # ── ASISTENCIA ──
+
+########consulta la asistencia de los estudiantes para una fecha y materia/grupo específico del profesor, devolviendo el estado (presente, ausente, etc.) por estudiante######
+#
 @app.route('/profesor/asistencia', methods=['GET'])
 def ver_asistencia():
     user_info = session.get('user_info')
@@ -2120,7 +2201,8 @@ def ver_asistencia():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+###########registra o actualiza la asistencia de múltiples estudiantes en una fecha determinada, guardando el estado de cada uno mediante inserción o actualización automática en la base de datos######
+#
 @app.route('/profesor/asistencia', methods=['POST'])
 def guardar_asistencia():
     user_info = session.get('user_info')
@@ -2149,6 +2231,9 @@ def guardar_asistencia():
 
 
 # ── MATERIAL DE CLASE ──
+
+#########obtiene el listado de materiales de clase subidos por el profesor, con título, descripción, tipo, archivo o enlace, fecha de subida y opción de filtrar por materia/grupo específico######
+#
 @app.route('/profesor/material', methods=['GET'])
 def ver_material():
     user_info = session.get('user_info')
@@ -2177,7 +2262,8 @@ def ver_material():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+########permite al profesor subir material de clase registrando título, descripción, tipo (archivo o enlace), recurso (URL o nombre) y la materia/grupo al que pertenece, guardándolo en el sistema para su posterior consulta########
+#
 @app.route('/profesor/material', methods=['POST'])
 def subir_material():
     user_info = session.get('user_info')
@@ -2204,7 +2290,8 @@ def subir_material():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+##########elimina un material de clase específico del profesor, validando que le pertenezca antes de borrarlo del sistema##########
+#
 @app.route('/profesor/material/<int:id_material>', methods=['DELETE'])
 def eliminar_material(id_material):
     user_info = session.get('user_info')
@@ -2236,6 +2323,8 @@ def get_estudiante_info():
         return None
     return user_info
 
+##########obtiene todas las notas del estudiante con valor, descripción, fecha, tipo, materia y profeso#########
+#
 @app.route('/estudiante/notas')
 def estudiante_notas():
     u = get_estudiante_info()
@@ -2264,7 +2353,8 @@ def estudiante_notas():
     except Exception as e:
         return jsonify({"status":"error","message":str(e)})
 
-
+#############muestra el rendimiento por materia incluyendo promedio, cantidad de notas, nota máxima y mínima ordenado por mejor desempeño######
+#
 @app.route('/estudiante/desempeno')
 def estudiante_desempeno():
     u = get_estudiante_info()
@@ -2295,7 +2385,8 @@ def estudiante_desempeno():
     except Exception as e:
         return jsonify({"status":"error","message":str(e)})
 
-
+###########obtiene el historial de asistencia del estudiante con fecha, estado, materia y profesor, además de un resumen por materia (presentes, ausentes, tardanzas y justificados)##########
+#
 @app.route('/estudiante/asistencia')
 def estudiante_asistencia():
     u = get_estudiante_info()
@@ -2339,7 +2430,8 @@ def estudiante_asistencia():
     except Exception as e:
         return jsonify({"status":"error","message":str(e)})
 
-
+########muestra los materiales de clase disponibles para el estudiante con título, descripción, tipo, recurso, fecha, materia y profesor#
+#
 @app.route('/estudiante/material')
 def estudiante_material():
     u = get_estudiante_info()
@@ -2368,7 +2460,8 @@ def estudiante_material():
     except Exception as e:
         return jsonify({"status":"error","message":str(e)})
 
-
+######obtiene las observaciones del estudiante con tipo, descripción, fecha y profesor que la registró#########
+#
 @app.route('/estudiante/observador')
 def estudiante_observador():
     u = get_estudiante_info()
@@ -2391,7 +2484,8 @@ def estudiante_observador():
     except Exception as e:
         return jsonify({"status":"error","message":str(e)})
 
-
+##########permite a estudiantes o profesores cambiar su contraseña validando la actual y guardando la nueva de forma segura en el sistema############
+#
 @app.route('/change-password', methods=['POST'])
 def change_password():
     user_info = session.get('user_info')
@@ -2425,7 +2519,8 @@ def change_password():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+###########permite a estudiantes o profesores actualizar su nombre completo y correo electrónico, guardando los cambios en la base de datos y actualizando la sesión activa########
+#
 @app.route('/update-profile', methods=['POST'])
 def update_profile():
     user_info = session.get('user_info')
@@ -2453,6 +2548,8 @@ def update_profile():
 
 # ── FIN RUTAS ESTUDIANTE ──
 
+##########obtiene el listado de períodos académicos registrados en el sistema, incluyendo id, nombre, fecha de inicio y fecha de finalización formateadas, ordenados de forma descendente según la fecha de inicio#######
+#
 @app.route('/admin/periodos', methods=['GET'])
 def get_periodos():
     if 'user_id' not in session:
@@ -2468,7 +2565,8 @@ def get_periodos():
         print(f"Error periodos: {e}")
         return jsonify({"status": "error", "message": str(e)})
 
-
+###########permite crear un nuevo período académico validando los campos requeridos (nombre, fecha_inicio, fecha_fin) y almacenándolo en la base de datos, retornando el id del período creado junto con un mensaje de confirmación#########
+#
 @app.route('/admin/periodos', methods=['POST'])
 def crear_periodo():
     if 'user_id' not in session:
@@ -2490,7 +2588,8 @@ def crear_periodo():
         print(f"Error creando período: {e}")
         return jsonify({"status": "error", "message": str(e)})
 
-
+###########obtiene todos los grupos registrados junto con su período académico asociado mediante un LEFT JOIN, retornando id del grupo, nombre y nombre del período, ordenados de forma descendente######
+#
 @app.route('/admin/grupos', methods=['GET'])
 def get_grupos():
     if 'user_id' not in session:
@@ -2510,7 +2609,8 @@ def get_grupos():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+########permite crear un nuevo grupo validando los campos obligatorios (nombre e id_periodo), insertándolo en la base de datos y devolviendo el id del grupo creado junto con un mensaje de confirmación########
+#
 @app.route('/admin/grupos', methods=['POST'])
 def crear_grupo():
     if 'user_id' not in session:
@@ -2530,7 +2630,8 @@ def crear_grupo():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+#########obtiene el total de grupos registrados en el sistema mediante una consulta COUNT(*) sobre la tabla grupos, retornando la cantidad como dato numérico########
+#
 @app.route('/admin/grupos-count', methods=['GET'])
 def grupos_count():
     if 'user_id' not in session:
@@ -2545,7 +2646,8 @@ def grupos_count():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+###########lista todas las materias registradas mostrando id, nombre y código, ordenadas alfabéticamente por nombre para facilitar su visualización y selección######
+#
 @app.route('/admin/materias', methods=['GET'])
 def get_materias():
     if 'user_id' not in session:
@@ -2560,7 +2662,8 @@ def get_materias():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+#############permite crear una nueva materia validando el campo obligatorio nombre y un código opcional, insertándola en la base de datos y retornando el id generado, manejando además errores de duplicidad en el código#######
+#
 @app.route('/admin/materias', methods=['POST'])
 def crear_materia():
     if 'user_id' not in session:
@@ -2584,7 +2687,8 @@ def crear_materia():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+##########obtiene el total de materias registradas mediante una consulta COUNT(*) sobre la tabla materia, retornando la cantidad como dato numérico##########
+#
 @app.route('/admin/materias-count', methods=['GET'])
 def materias_count():
     if 'user_id' not in session:
@@ -2599,7 +2703,8 @@ def materias_count():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+###obtiene todas las asignaciones de materias a grupos y profesores mediante múltiples JOINs, retornando id de la asignación, nombre del profesor, grupo y materia, organizados por grupo y materia para una mejor visualización###
+#
 @app.route('/admin/asignaciones', methods=['GET'])
 def get_asignaciones():
     if 'user_id' not in session:
@@ -2622,7 +2727,8 @@ def get_asignaciones():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+####permite crear una nueva asignación validando los campos obligatorios (id_docente, id_grupo, id_materia), insertándola en la tabla grupo_materias y retornando el id generado, incluyendo manejo de errores en caso de asignaciones duplicadas####
+#
 @app.route('/admin/asignaciones', methods=['POST'])
 def crear_asignacion():
     if 'user_id' not in session:
@@ -2650,7 +2756,8 @@ def crear_asignacion():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+#####permite eliminar una asignación específica entre grupo, materia y profesor mediante su id, ejecutando una eliminación directa en la tabla grupo_materias y retornando un mensaje de confirmación#####
+#
 @app.route('/admin/asignaciones/<int:id_grupo_materia>', methods=['DELETE'])
 def eliminar_asignacion(id_grupo_materia):
     if 'user_id' not in session:
@@ -2664,7 +2771,8 @@ def eliminar_asignacion(id_grupo_materia):
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+#####asigna un estudiante a un grupo validando los campos requeridos (id_estudiante, id_grupo), insertándolo en la tabla grupo_estudiantes con control de duplicados mediante ON CONFLICT DO NOTHING para evitar registros repetidos####
+#
 @app.route('/admin/asignar-estudiante', methods=['POST'])
 def asignar_estudiante_grupo():
     if 'user_id' not in session:
@@ -2686,7 +2794,8 @@ def asignar_estudiante_grupo():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+####permite eliminar la relación entre un estudiante y un grupo específico validando id_estudiante e id_grupo, eliminando el registro correspondiente en la tabla grupo_estudiantes y retornando un mensaje de confirmación#####
+#
 @app.route('/admin/quitar-estudiante', methods=['POST'])
 def quitar_estudiante_grupo():
     if 'user_id' not in session:
@@ -2703,7 +2812,8 @@ def quitar_estudiante_grupo():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
+####obtiene el listado de estudiantes pertenecientes a un grupo específico mediante un JOIN entre estudiantes y grupo_estudiantes, retornando id, código y nombre completo, ordenados alfabéticamente para facilitar su visualización####
+#
 @app.route('/admin/grupo/<int:id_grupo>/estudiantes', methods=['GET'])
 def get_estudiantes_grupo(id_grupo):
     if 'user_id' not in session:
@@ -2724,10 +2834,8 @@ def get_estudiantes_grupo(id_grupo):
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
-
-
-
+#######obtiene el listado de administradores registrados en el sistema mostrando id, nombre completo, correo electrónico y estado de verificación de email, ordenados por id para una gestión organizada####
+#
 
 @app.route('/admin/administradores', methods=['GET'])
 def get_administradores():
@@ -2743,6 +2851,8 @@ def get_administradores():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
+###permite eliminar un administrador específico mediante su id, validando previamente que no sea el mismo usuario en sesión para evitar auto-eliminación, y ejecutando la eliminación en la base de datos con confirmación de éxito######
+#
 @app.route('/admin/administradores/<int:id_admin>', methods=['DELETE'])
 def eliminar_administrador(id_admin):
     if 'user_id' not in session:
