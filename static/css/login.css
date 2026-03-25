@@ -94,6 +94,54 @@ body {
 }
 
 /* ==========================================================================
+   MENÚ MÓVIL (Hamburger)
+   ========================================================================== */
+.hamburger {
+    display: none;
+    flex-direction: column;
+    justify-content: space-between;
+    width: 30px;
+    height: 24px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    z-index: 1001;
+}
+
+.hamburger-line {
+    width: 100%;
+    height: 3px;
+    background-color: #FFFFFF;
+    border-radius: 3px;
+    transition: all 0.3s ease;
+}
+
+.hamburger.active .hamburger-line:nth-child(1) {
+    transform: rotate(45deg) translate(6px, 6px);
+}
+
+.hamburger.active .hamburger-line:nth-child(2) {
+    opacity: 0;
+}
+
+.hamburger.active .hamburger-line:nth-child(3) {
+    transform: rotate(-45deg) translate(6px, -6px);
+}
+
+.nav-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 998;
+}
+
+.nav-overlay.active {
+    display: block;
+}
+
+/* ==========================================================================
    CONTENIDO PRINCIPAL (con imagen y formulario)
    ========================================================================== */
 .main-content {
@@ -729,7 +777,11 @@ body {
    ========================================================================== */
 @media (max-width: 1100px) {
     .main-content {
-        gap: 4rem;
+        gap: 3rem;
+    }
+    
+    .programming-svg {
+        max-width: 100%;
     }
 }
 
@@ -747,7 +799,7 @@ body {
 
     .form-section {
         flex: none;
-        max-width: 400px;
+        max-width: 450px;
     }
 
     .info-content h1 {
@@ -757,6 +809,14 @@ body {
     .image-column {
         order: -1;
     }
+
+    .features-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .team-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
 }
 
 @media (max-width: 768px) {
@@ -764,15 +824,46 @@ body {
         padding: 1rem;
     }
 
+    .hamburger {
+        display: flex;
+    }
+
     .nav-links {
-        gap: 1rem;
-        flex-wrap: wrap;
-        justify-content: center;
+        position: fixed;
+        top: 0;
+        right: -280px;
+        width: 280px;
+        height: 100vh;
+        background-color: #003366;
+        flex-direction: column;
+        gap: 0;
+        padding-top: 80px;
+        transition: right 0.3s ease;
+        z-index: 999;
+        box-shadow: -5px 0 20px rgba(0, 0, 0, 0.2);
+    }
+
+    .nav-links.active {
+        right: 0;
+    }
+
+    .nav-links li {
+        width: 100%;
     }
 
     .nav-links a {
-        padding: 0.5rem;
-        font-size: 0.9rem;
+        width: 100%;
+        padding: 1rem 1.5rem;
+        font-size: 1rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .nav-links a:hover {
+        background-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .user-greeting {
+        display: none;
     }
 
     .logo-img {
@@ -830,7 +921,7 @@ body {
 
 @media (max-width: 480px) {
     .navbar {
-        flex-direction: column;
+        flex-direction: row;
         gap: 1rem;
         padding: 0.8rem;
     }
@@ -841,12 +932,70 @@ body {
     }
 
     .main-content {
-        margin-top: 100px;
+        margin-top: 80px;
     }
 
     .info-section,
     .login-container {
         padding: 1rem;
+    }
+
+    .info-content h1 {
+        font-size: 1.5rem;
+    }
+
+    .slogan {
+        font-size: 1rem;
+    }
+
+    .mission p {
+        font-size: 0.9rem;
+    }
+
+    .highlight {
+        font-size: 0.9rem;
+    }
+
+    .feature-card h3 {
+        font-size: 1rem;
+    }
+
+    .feature-card p {
+        font-size: 0.85rem;
+    }
+
+    .team-card {
+        padding: 1rem;
+    }
+
+    .team-card h3 {
+        font-size: 1rem;
+    }
+
+    .team-role {
+        font-size: 0.85rem;
+    }
+
+    .contact-card {
+        padding: 1rem;
+    }
+
+    .contact-card h3 {
+        font-size: 1rem;
+    }
+
+    .contact-card p {
+        font-size: 0.85rem;
+    }
+
+    .form-group input {
+        padding: 0.7rem;
+        font-size: 0.9rem;
+    }
+
+    .login-btn {
+        padding: 0.7rem;
+        font-size: 0.9rem;
     }
 
     .logo-text {
@@ -869,5 +1018,17 @@ body {
 
     .footer-logo-text {
         font-size: 1.3rem;
+    }
+
+    .features-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .team-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .contact-grid {
+        grid-template-columns: 1fr;
     }
 }

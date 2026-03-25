@@ -284,11 +284,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         // Redirigir después de 3 segundos
                         setTimeout(() => {
-                            if (data.redirect) {
-                                window.location.href = data.redirect;
-                            } else {
-                                window.location.href = '/login';
-                            }
+                            window.location.href = data.redirect || '/admin';
                         }, 3000);
                     } else {
                         showMessage(data.message, 'error');
@@ -319,7 +315,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Botón para ir a inicio de sesión
         if (goToLoginBtn) {
             goToLoginBtn.addEventListener('click', () => {
-                window.location.href = '/login';
+                window.location.href = '/admin';
             });
         }
         
