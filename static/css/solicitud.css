@@ -435,3 +435,53 @@ body {
         max-width: 250px;
     }
 }
+
+/* Móviles pequeños */
+@media (max-width: 480px) {
+    body {
+        padding: 10px;
+    }
+    
+    .container {
+        padding: 20px;
+        margin: 10px auto;
+    }
+    
+    .header h1 {
+        font-size: 22px;
+    }
+    
+    .header h1 i {
+        font-size: 24px;
+    }
+    
+    .instructions {
+        font-size: 14px;
+        max-width: 100%;
+    }
+    
+    .form-group {
+        margin-bottom: 20px;
+    }
+    
+    .form-group label {
+        font-size: 13px;
+    }
+    
+    .form-group input,
+    .form-group textarea {
+        padding: 12px;
+        font-size: 14px;
+    }
+    
+    .btn {
+        padding: 12px 20px;
+        font-size: 14px;
+        width: 100%;
+    }
+    
+    .footer {
+        font-size: 12px;
+        padding: 12px;
+    }
+}

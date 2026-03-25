@@ -490,7 +490,59 @@ def register():                                                  #Muestra la pá
 
 @app.route("/forgot-password")
 def forgot_password():                                         #Muestra la página para recuperar contraseña (cuando el admin la olvida).
-    return render_template('administrador/f-password.html')
+    token = request.args.get('token', '')
+    return render_template('administrador/f-password.html', token=token)
+
+
+@app.route("/reset-password", methods=["POST"])
+def reset_password():
+    """Procesa el cambio de contraseña con el token de recuperación"""
+    data = request.get_json()
+    token = data.get('token')
+    new_password = data.get('new_password')
+    
+    if not token or not new_password:
+        return jsonify({"status": "error", "message": "Token o contraseña no proporcionados."}), 400
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        
+        # Buscar administrador con el token válido y no expirado
+        cur.execute(
+            "SELECT id_admin, nombre_completo, correo_electronico FROM administradores "
+            "WHERE recovery_token = %s AND recovery_token_expires > %s",
+            (token, datetime.now())
+        )
+        user = cur.fetchone()
+        
+        if not user:
+            cur.close()
+            conn.close()
+            return jsonify({"status": "error", "message": "El enlace de recuperación es inválido o ha expirado."}), 400
+        
+        # Encriptar la nueva contraseña
+        hashed_password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        
+        # Actualizar la contraseña y limpiar el token
+        cur.execute(
+            "UPDATE administradores SET contrasena = %s, recovery_token = NULL, recovery_token_expires = NULL "
+            "WHERE id_admin = %s",
+            (hashed_password, user['id_admin'])
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            "status": "success",
+            "message": "Contraseña actualizada exitosamente. Ya puedes iniciar sesión.",
+            "redirect": "/admin"
+        })
+        
+    except Exception as e:
+        print(f"Error al restablecer contraseña: {str(e)}")
+        return jsonify({"status": "error", "message": "Error al procesar la solicitud. Intenta más tarde."}), 500
 
 
 @app.route("/email-verification")

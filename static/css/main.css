@@ -4740,7 +4740,76 @@ li {
             .form-row { grid-template-columns: 1fr !important; }
             .mgmt-grid { grid-template-columns: 1fr !important; }
             h1 { font-size: var(--font-size-3xl) !important; }
+            
+            /* Tablas responsive */
+            .table-container {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            .data-table {
+                font-size: var(--font-size-sm);
+                min-width: 600px;
+            }
+            
+            /* Cards en columna única */
+            .card-grid {
+                grid-template-columns: 1fr !important;
+            }
         }
+        
+        @media (max-width: 600px) {
+            .welcome-section h1 {
+                font-size: var(--font-size-2xl) !important;
+            }
+            .welcome-text {
+                font-size: var(--font-size-sm);
+            }
+            .overview-card {
+                padding: var(--space-md);
+            }
+            .card-icon {
+                font-size: 1.5rem;
+            }
+            .card-title {
+                font-size: var(--font-size-sm);
+            }
+            .card-value {
+                font-size: var(--font-size-xl);
+            }
+        }
+        
         @media (max-width: 480px) {
             .quick-actions-grid { grid-template-columns: 1fr !important; }
+            .sidebar { width: 85% !important; left: -85%; }
+            .sidebar.open { left: 0; }
+            .sidebar-header { padding: var(--space-sm); }
+            .sidebar-footer { padding: var(--space-sm); }
+            .user-profile { padding: var(--space-sm); }
+            .user-avatar { width: 40px; height: 40px; }
+            .user-name { font-size: var(--font-size-sm); }
+            .user-email { font-size: var(--font-size-xs); }
+            .nav-link { padding: var(--space-sm) var(--space-md); }
+            .nav-text { font-size: var(--font-size-sm); }
+            
+            /* Modal responsive */
+            .modal-content {
+                width: 95% !important;
+                max-width: 95% !important;
+                margin: 10% auto !important;
+                padding: var(--space-md) !important;
+            }
+            
+            /* Formularios */
+            .form-group { margin-bottom: var(--space-md); }
+            .form-group label { font-size: var(--font-size-sm); }
+            .form-group input,
+            .form-group select,
+            .form-group textarea {
+                padding: var(--space-sm) !important;
+                font-size: var(--font-size-sm) !important;
+            }
+            .btn {
+                padding: var(--space-sm) var(--space-md) !important;
+                font-size: var(--font-size-sm) !important;
+            }
         }

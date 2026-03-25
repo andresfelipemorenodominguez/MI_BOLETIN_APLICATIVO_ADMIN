@@ -963,4 +963,157 @@ html.dark-mode .evento-item{background:var(--dm-surface2);border-color:var(--dm-
 html.dark-mode .evento-info strong{color:var(--dm-text);}
 html.dark-mode .asist-btn{background:var(--dm-surface2);border-color:var(--dm-border);}
 html.dark-mode .nota-input,.dark-mode .desc-input{background:var(--dm-surface2);border-color:var(--dm-border);color:var(--dm-text);}
+
+/* ==========================================================================
+   RESPONSIVE ADICIONAL
+   ========================================================================== */
+
+/* Tablets */
+@media (max-width: 768px) {
+    .profesor-layout {
+        flex-direction: column;
+    }
+    
+    .profesor-sidebar {
+        width: 100%;
+        height: auto;
+        position: relative;
+        border-right: none;
+        border-bottom: 1px solid var(--gray-200);
+    }
+    
+    .profesor-main {
+        padding: var(--space-md);
+    }
+    
+    .prof-hero-card {
+        padding: var(--space-md);
+    }
+    
+    .prof-hero-icon {
+        width: 50px;
+        height: 50px;
+        font-size: 1.5rem;
+    }
+    
+    .prof-hero-text h2 {
+        font-size: var(--font-size-xl);
+    }
+    
+    .prof-hero-text p {
+        font-size: var(--font-size-sm);
+    }
+    
+    .prof-quick-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .grade-table {
+        font-size: var(--font-size-sm);
+    }
+    
+    .tabla-scroll {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .grade-table {
+        min-width: 600px;
+    }
+    
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        padding: var(--space-sm);
+        font-size: var(--font-size-sm);
+    }
+    
+    .btn {
+        padding: var(--space-sm) var(--space-md);
+        font-size: var(--font-size-sm);
+    }
+}
+
+/* Móviles */
+@media (max-width: 480px) {
+    .profesor-sidebar {
+        padding: var(--space-md);
+    }
+    
+    .profesor-main {
+        padding: var(--space-sm);
+    }
+    
+    .section-title {
+        font-size: var(--font-size-lg);
+    }
+    
+    .prof-quick-card {
+        padding: var(--space-sm);
+    }
+    
+    .pqc-info strong {
+        font-size: var(--font-size-sm);
+    }
+    
+    .pqc-info span {
+        font-size: var(--font-size-xs);
+    }
+    
+    .filtros-bar {
+        flex-direction: column;
+        gap: var(--space-sm);
+    }
+    
+    .filtro-group {
+        width: 100%;
+    }
+    
+    .filtro-group select,
+    .filtro-group input {
+        width: 100%;
+    }
+    
+    .btn-nuevo-tipo {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .table-footer {
+        flex-direction: column;
+        gap: var(--space-sm);
+    }
+    
+    .material-form-panel,
+    .material-list-panel {
+        padding: var(--space-md);
+    }
+    
+    .agenda-form-panel,
+    .agenda-cal-panel {
+        padding: var(--space-md);
+    }
+    
+    .cal-grid {
+        gap: 2px;
+    }
+    
+    .cal-cell {
+        min-height: 40px;
+        padding: 4px;
+    }
+    
+    .cal-num {
+        font-size: 12px;
+    }
+    
+    .cal-dots {
+        gap: 2px;
+    }
+    
+    .cal-dot {
+        width: 5px;
+        height: 5px;
+    }
+}
 html.dark-mode .codigo-badge{background:rgba(96,165,250,0.2);color:#93c5fd;}

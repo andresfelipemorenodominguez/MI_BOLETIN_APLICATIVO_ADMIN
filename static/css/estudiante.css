@@ -344,4 +344,123 @@ html.dark-mode .btn-cancel { background: var(--dm-surface2); color: var(--dm-tex
 /* Scrollbar */
 html.dark-mode ::-webkit-scrollbar { width: 6px; }
 html.dark-mode ::-webkit-scrollbar-track { background: var(--dm-surface); }
+
+/* ==========================================================================
+   RESPONSIVE (Media Queries)
+   ========================================================================== */
+
+/* Tablets */
+@media (max-width: 992px) {
+    .student-layout {
+        flex-direction: column;
+    }
+    
+    .student-sidebar {
+        width: 100%;
+        height: auto;
+        position: relative;
+        border-right: none;
+        border-bottom: 1px solid var(--gray-200);
+    }
+    
+    .student-main {
+        padding: var(--space-md);
+    }
+    
+    .notas-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Móviles grandes */
+@media (max-width: 768px) {
+    .notas-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .stat-card {
+        padding: var(--space-md);
+    }
+    
+    .period-tabs {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .period-tab {
+        white-space: nowrap;
+        padding: var(--space-sm) var(--space-md);
+    }
+    
+    .table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .notas-table {
+        font-size: var(--font-size-sm);
+        min-width: 500px;
+    }
+}
+
+/* Móviles pequeños */
+@media (max-width: 480px) {
+    .student-sidebar {
+        padding: var(--space-md);
+    }
+    
+    .student-main {
+        padding: var(--space-sm);
+    }
+    
+    .section-title {
+        font-size: var(--font-size-lg);
+    }
+    
+    .nota-materia {
+        font-size: var(--font-size-sm);
+    }
+    
+    .nota-periodo {
+        font-size: var(--font-size-xs);
+    }
+    
+    .stat-value {
+        font-size: var(--font-size-xl);
+    }
+    
+    .stat-label {
+        font-size: var(--font-size-xs);
+    }
+    
+    .asignatura-card {
+        padding: var(--space-sm);
+    }
+    
+    .modal-box {
+        width: 95%;
+        max-width: 95%;
+        margin: 10% auto;
+        padding: var(--space-md);
+    }
+    
+    .form-group {
+        margin-bottom: var(--space-md);
+    }
+    
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        padding: var(--space-sm);
+        font-size: var(--font-size-sm);
+    }
+}
 html.dark-mode ::-webkit-scrollbar-thumb { background: var(--dm-border); border-radius: 4px; }
