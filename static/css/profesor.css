@@ -970,11 +970,11 @@ html.dark-mode .nota-input,.dark-mode .desc-input{background:var(--dm-surface2);
 
 /* Tablets */
 @media (max-width: 768px) {
-    .profesor-layout {
+    .layout {
         flex-direction: column;
     }
     
-    .profesor-sidebar {
+    .sidebar {
         width: 100%;
         height: auto;
         position: relative;
@@ -982,8 +982,9 @@ html.dark-mode .nota-input,.dark-mode .desc-input{background:var(--dm-surface2);
         border-bottom: 1px solid var(--gray-200);
     }
     
-    .profesor-main {
+    .main {
         padding: var(--space-md);
+        margin-left: 0;
     }
     
     .prof-hero-card {
@@ -1036,11 +1037,11 @@ html.dark-mode .nota-input,.dark-mode .desc-input{background:var(--dm-surface2);
 
 /* Móviles */
 @media (max-width: 480px) {
-    .profesor-sidebar {
+    .sidebar {
         padding: var(--space-md);
     }
     
-    .profesor-main {
+    .main {
         padding: var(--space-sm);
     }
     

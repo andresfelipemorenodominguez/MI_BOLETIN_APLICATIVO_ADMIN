@@ -926,11 +926,6 @@ body {
         padding: 0.8rem;
     }
 
-    .nav-links {
-        width: 100%;
-        justify-content: space-around;
-    }
-
     .main-content {
         margin-top: 80px;
     }
