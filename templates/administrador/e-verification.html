@@ -1,23 +1,37 @@
+<!----------------------------------------------------------->
+<!------------- Página de Verificación de Email ------------->
+<!----------------------------------------------------------->
+
+
+
+
+
+
 <!DOCTYPE html>
 <html lang="es" class="page-verification">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Verificación de Cuenta - MiBoletín</title>
+    
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
+    <!-- SECCIÓN 1: CONTENEDOR PRINCIPAL -->
     <div class="container">
         <header class="header">
             <div class="logo-container">
                 <i class="fa-solid fa-book logo-icon"></i>
                 <h1 class="logo-text">MiBoletín<span class="org"> Admin</span></h1>
             </div>
+            <!-- Subtítulo descriptivo -->
             <p class="subtitle">Verifica tu identidad para activar tu cuenta de administrador en el sistema.</p>
         </header>
 
+        <!-- SECCIÓN 2: CONTENIDO PRINCIPAL -->
         <main class="main-content">
+            <!-- INFORMACIÓN DE VERIFICACIÓN -->
             <div class="verification-info">
                 <div class="icon-container">
                     <i class="fas fa-shield-alt"></i>
@@ -36,9 +50,12 @@
                 </div>
             </div>
 
+            <!-- FORMULARIO DE VERIFICACIÓN -->
             <form id="verificationForm" class="verification-form">
+                <!-- CAMPO: Código de Verificación -->
                 <div class="form-group">
                     <label for="code">Código de Verificación</label>
+                    <!-- Inputs individuales para cada dígito del código -->
                     <div class="code-inputs" id="code-inputs">
                         <input type="text" maxlength="1" class="code-input" id="digit-1" data-index="1" autofocus>
                         <input type="text" maxlength="1" class="code-input" id="digit-2" data-index="2">
@@ -48,23 +65,28 @@
                         <input type="text" maxlength="1" class="code-input" id="digit-6" data-index="6">
                     </div>
                     <div class="error-message" id="code-error"></div>
+                    <!-- Temporizador de expiración del código -->
                     <div class="timer-container" id="timer-container">
                         <p>El código expira en: <span id="countdown">05:00</span></p>
                     </div>
                 </div>
 
+                <!-- ACCIONES DEL FORMULARIO -->
                 <div class="form-actions">
                     <button type="submit" class="verify-btn">
                         <i class="fas fa-check-circle"></i> Verificar Cuenta
                     </button>
                 </div>
 
+                <!-- OPCIONES ADICIONALES -->
                 <div class="form-footer">
                     <p class="no-code-text">¿No recibiste el código?</p>
                     <div class="resend-options">
+                        <!-- Botón para reenviar código con temporizador -->
                         <button type="button" class="resend-btn" id="resend-btn" disabled>
                             Reenviar Código <span id="resend-timer">(60s)</span>
                         </button>
+                        <!-- Opción para cambiar email si es incorrecto -->
                         <p class="wrong-email">
                             ¿Correo incorrecto? <button type="button" class="text-btn" id="change-email-btn">Cambiar Email</button>
                         </p>
@@ -74,7 +96,8 @@
         </main>
     </div>
 
-    <!-- Modal para Cambiar Email -->
+    <!-- SECCIÓN 3: MODAL PARA CAMBIAR EMAIL -->
+    <!-- Modal que permite actualizar el correo electrónico si es incorrecto -->
     <div id="change-email-modal" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header">
@@ -96,7 +119,8 @@
         </div>
     </div>
 
-    <!-- Modal de Éxito - ACTUALIZADO -->
+    <!-- SECCIÓN 4: MODAL DE ÉXITO -->
+    <!-- Modal que se muestra cuando la verificación es exitosa -->
     <div id="success-modal" class="modal hidden">
         <div class="modal-content success-modal">
             <div class="modal-body">
@@ -114,6 +138,8 @@
         </div>
     </div>
 
+    <!-- SECCIÓN 5: CONTENEDOR DE MENSAJES -->
+    <!-- Contenedor para mostrar mensajes de error o éxito dinámicamente -->
     <div id="message" class="message hidden">
         <span id="message-text"></span>
         <button id="close-message" class="close-btn">&times;</button>

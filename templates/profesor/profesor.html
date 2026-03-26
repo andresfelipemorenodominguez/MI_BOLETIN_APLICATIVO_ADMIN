@@ -1,17 +1,25 @@
+<!----------------------------------------->
+<!--- Página del Dashboard de Profesor ---->
+<!----------------------------------------->
+
 <!DOCTYPE html>
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Profesor - MiBoletín</title>
+    
     <link rel="stylesheet" href="{{ url_for('static', filename='css/profesor.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   </head>
 
   <body>
+    <!-- SECCIÓN 1: LAYOUT PRINCIPAL -->
     <div class="layout">
+      <!-- SIDEBAR: Navegación lateral -->
       <aside class="sidebar">
         <div class="logo">📘 MiBoletín</div>
+        <!-- Menú de navegación con secciones del profesor -->
         <nav class="menu" aria-label="Navegación principal">
           <button class="menu-item active" data-section="inicio">
             <span>🏠</span><span>Inicio</span>
@@ -36,6 +44,7 @@
           </button>
         </nav>
 
+        <!-- Botón de perfil con avatar e información del profesor -->
         <button class="profile" id="profileButton" type="button" aria-label="Abrir perfil">
           <div class="avatar" id="mainAvatar">{{ nombre[:2].upper() if nombre else 'PR' }}</div>
           <div class="profile-info">
@@ -45,26 +54,35 @@
         </button>
       </aside>
 
+      <!-- CONTENIDO PRINCIPAL -->
       <main class="main">
+        <!-- Header del contenido principal -->
         <header class="main-header">
           <h1 class="main-title">Bienvenido, {{ nombre }}</h1>
           <p class="main-description">Selecciona una sección del menú para comenzar.</p>
         </header>
+        <!-- Sección donde se carga dinámicamente el contenido de cada sección -->
         <section class="content" id="content"></section>
       </main>
     </div>
 
-    <!-- MODAL PERFIL -->
+    <!-- SECCIÓN 2: MODAL DE PERFIL -->
+    <!-- Modal que muestra la información del perfil del profesor y opciones de configuración -->
     <div class="profile-modal" id="profileModal" role="dialog" aria-modal="true" aria-hidden="true">
       <div class="modal-content">
+        <!-- Botón para cerrar el modal -->
         <button class="close-btn" id="closeModal" aria-label="Cerrar">✕</button>
         <h2>Perfil del Usuario</h2>
+        <!-- Avatar grande del profesor -->
         <div class="modal-avatar" id="modalAvatar">{{ nombre[:2].upper() if nombre else 'PR' }}</div>
         <h3 class="modal-name" id="modalName">{{ nombre }}</h3>
         <p class="email modal-email" id="modalEmail">{{ codigo }}</p>
+        <!-- Badge que indica el rol del usuario -->
         <div class="role">Profesor</div>
+        <!-- Botones de acciones del perfil -->
         <button class="btn" id="openEdit">Editar Perfil</button>
         <button class="btn" id="openPassword">Cambiar Contraseña</button>
+        <!-- Opción de modo oscuro -->
         <div class="dark-mode-row">
           <label for="dark-mode-toggle-prof">
             <span id="dark-icon-prof">🌙</span> Modo Oscuro
@@ -79,16 +97,21 @@
       </div>
     </div>
 
-    <!-- MODAL EDITAR PERFIL -->
+    <!-- SECCIÓN 3: MODAL EDITAR PERFIL -->
+    <!-- Modal para editar la información del perfil del profesor -->
     <div class="edit-modal" id="editModal" aria-hidden="true">
       <div class="edit-content">
+        <!-- Botón para cerrar el modal -->
         <button class="close-btn" id="closeEdit" aria-label="Cerrar">✕</button>
         <h2>Editar Perfil</h2>
+        <!-- Avatar preview que se actualiza con los cambios -->
         <div class="edit-avatar" id="previewAvatar">{{ nombre[:2].upper() if nombre else 'PR' }}</div>
+        <!-- Formulario de edición -->
         <label>Nombre completo</label>
         <input type="text" id="editName" value="{{ nombre }}" />
         <label>Correo electrónico</label>
         <input type="email" id="editEmail" placeholder="correo@ejemplo.com" />
+        <!-- Botones de acciones -->
         <div class="buttons">
           <button class="cancel" id="cancelEdit">Cancelar</button>
           <button class="save" id="saveProfile">Guardar cambios</button>
@@ -96,17 +119,21 @@
       </div>
     </div>
 
-    <!-- MODAL CAMBIAR CONTRASEÑA -->
+    <!-- SECCIÓN 4: MODAL CAMBIAR CONTRASEÑA -->
+    <!-- Modal para cambiar la contraseña del profesor -->
     <div class="password-modal" id="passwordModal" aria-hidden="true">
       <div class="password-content">
+        <!-- Botón para cerrar el modal -->
         <button class="close-btn" id="closePassword" aria-label="Cerrar">✕</button>
         <h2>Cambiar Contraseña</h2>
+        <!-- Formulario de cambio de contraseña -->
         <label>Contraseña actual</label>
         <input type="password" id="currentPassword" placeholder="Ingresa tu contraseña actual" />
         <label>Nueva contraseña</label>
         <input type="password" id="newPassword" placeholder="Ingresa la nueva contraseña" />
         <label>Confirmar nueva contraseña</label>
         <input type="password" id="confirmPassword" placeholder="Confirma la nueva contraseña" />
+        <!-- Botones de acciones -->
         <div class="buttons">
           <button class="cancel" id="cancelPassword">Cancelar</button>
           <button class="save" id="savePassword">Cambiar contraseña</button>
@@ -114,7 +141,10 @@
       </div>
     </div>
 
+    <!-- SECCIÓN 5: SCRIPTS -->
+    <!-- Script principal de funcionalidad del dashboard de profesor -->
     <script src="{{ url_for('static', filename='script/profesor.js') }}"></script>
+    <!-- Script inline para la funcionalidad del modo oscuro -->
     <script>
     // ── MODO OSCURO PROFESOR ──
     (function() {
