@@ -4738,7 +4738,8 @@ li {
             h1 { font-size: var(--font-size-3xl) !important; }
             
             /* Tablas responsive */
-            .table-container {
+            .table-wrapper {
+                width: 100%;
                 overflow-x: auto;
                 -webkit-overflow-scrolling: touch;
             }

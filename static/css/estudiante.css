@@ -351,11 +351,11 @@ html.dark-mode ::-webkit-scrollbar-track { background: var(--dm-surface); }
 
 /* Tablets */
 @media (max-width: 992px) {
-    .student-layout {
+    .layout {
         flex-direction: column;
     }
     
-    .student-sidebar {
+    .sidebar {
         width: 100%;
         height: auto;
         position: relative;
@@ -363,8 +363,9 @@ html.dark-mode ::-webkit-scrollbar-track { background: var(--dm-surface); }
         border-bottom: 1px solid var(--gray-200);
     }
     
-    .student-main {
+    .main {
         padding: var(--space-md);
+        margin-left: 0;
     }
     
     .notas-grid {
@@ -413,11 +414,11 @@ html.dark-mode ::-webkit-scrollbar-track { background: var(--dm-surface); }
 
 /* Móviles pequeños */
 @media (max-width: 480px) {
-    .student-sidebar {
+    .sidebar {
         padding: var(--space-md);
     }
     
-    .student-main {
+    .main {
         padding: var(--space-sm);
     }
     
