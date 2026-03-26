@@ -2867,7 +2867,7 @@ li {
 }
 
 .page-loginuser .nav-links a {
-    color: #FFFFFF;
+    color: #ff0000;
     text-decoration: none;
     display: flex;
     align-items: center;
@@ -2935,11 +2935,8 @@ li {
 }
 
 .page-loginuser .login-container {
-    background: #FFFFFF;
-    border-radius: 10px;
-    padding: 2.5rem;
-    box-shadow: 0 8px 25px rgba(0, 51, 102, 0.15);
-    border: 1px solid #CCCCCC;
+    max-width: 850px !important; 
+    width: 95% !important;
 }
 
 .page-loginuser .login-header {
@@ -2965,13 +2962,12 @@ li {
 .page-loginuser .login-form {
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
 }
 
 .page-loginuser .form-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+    flex: 1;
+    margin-bottom: 15px;
+    min-width: 180px; /* Evita que se aplasten demasiado */
 }
 
 .page-loginuser .form-group label {
