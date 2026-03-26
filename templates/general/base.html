@@ -47,7 +47,7 @@
                 <li><a href="#contacto"><i class="fas fa-headset"></i> Soporte</a></li>
 
                 <!-- Información del usuario si está autenticado -->
-
+                {% if session.get('user_info') %}
                 <li class="user-greeting">
                     <span><i class="fas fa-user-circle"></i> {{ session['user_info']['nombre'].split(' ')[0] }}</span>
                 </li>
