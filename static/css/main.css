@@ -3919,6 +3919,41 @@ li {
 }
 
 @media (max-width: 600px) {
+    .page-dashboard .welcome-section h1 {
+        font-size: var(--font-size-2xl) !important;
+    }
+
+    .page-dashboard .welcome-text {
+        font-size: var(--font-size-sm);
+    }
+
+    .page-dashboard .welcome-date {
+        font-size: var(--font-size-xs);
+    }
+
+    .page-dashboard .overview-card {
+        padding: var(--space-md);
+    }
+
+    .page-dashboard .card-icon {
+        width: 44px;
+        height: 44px;
+        font-size: var(--font-size-lg);
+    }
+
+    .page-dashboard .card-title {
+        font-size: var(--font-size-sm);
+    }
+
+    .page-dashboard .card-value {
+        font-size: var(--font-size-xl);
+    }
+
+    .page-dashboard .quick-action-btn {
+        padding: var(--space-sm) var(--space-md);
+        font-size: var(--font-size-sm);
+    }
+
     .page-dashboard .modal-overlay {
         padding: var(--space-sm);
     }

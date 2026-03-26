@@ -14,6 +14,13 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
 </head>
 <body>
+<!-- Botón hamburguesa para menú móvil -->
+<button class="hamburger-btn" id="hamburger-btn" aria-label="Menú">
+    <i class="fas fa-bars"></i>
+</button>
+<!-- Overlay para cerrar sidebar en móviles -->
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+
 <!-- SECCIÓN 1: LAYOUT PRINCIPAL -->
 <div class="layout">
   <!-- SIDEBAR: Navegación lateral -->
@@ -162,6 +169,30 @@
     localStorage.setItem(KEY, e.target.checked);
     applyTheme(e.target.checked);
   });
+})();
+// ── SIDEBAR MOBILE TOGGLE ──
+(function() {
+    const hamburger = document.getElementById('hamburger-btn');
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (hamburger && sidebar && overlay) {
+        hamburger.addEventListener('click', () => {
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('active');
+        });
+        overlay.addEventListener('click', () => {
+            sidebar.classList.remove('open');
+            overlay.classList.remove('active');
+        });
+        document.querySelectorAll('.menu-item').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (window.innerWidth <= 768) {
+                    sidebar.classList.remove('open');
+                    overlay.classList.remove('active');
+                }
+            });
+        });
+    }
 })();
 </script>
 </body>
