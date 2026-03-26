@@ -1,3 +1,7 @@
+<!----------------------------------------->
+<!-- Página de Registro de Administrador -->
+<!----------------------------------------->
+
 <!DOCTYPE html>
 <html lang="es" class="page-auth">
 <head>
@@ -8,6 +12,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
+    <!-- SECCIÓN 1: CONTENEDOR PRINCIPAL -->
     <div class="container">
         <header class="header">
             <div class="logo-container">
@@ -17,17 +22,21 @@
             <p class="subtitle">Crea tu cuenta de administrador para gestionar el sistema y sus funcionalidades.</p>
         </header>
 
+        <!-- SECCIÓN 2: FORMULARIO DE REGISTRO -->
         <main class="main-content">
             <form id="registerForm" class="register-form" method="POST" action="/register">
+                <!-- CAMPO 1: Nombre Completo -->
                 <div class="form-group">
                     <label for="fullname">Nombre Completo</label>
                     <div class="input-container">
                         <i class="fas fa-user input-icon"></i>
                         <input type="text" id="fullname" name="fullname" placeholder="Tu nombre completo">
                     </div>
+                    <!-- Contenedor para mensajes de error -->
                     <div class="error-message" id="fullname-error"></div>
                 </div>
 
+                <!-- CAMPO 2: Correo Electrónico -->
                 <div class="form-group">
                     <label for="email">Correo Electrónico</label>
                     <div class="input-container">
@@ -37,16 +46,19 @@
                     <div class="error-message" id="email-error"></div>
                 </div>
 
+                <!-- CAMPO 3: Contraseña -->
                 <div class="form-group">
                     <label for="password">Contraseña</label>
                     <div class="input-container">
                         <i class="fas fa-lock input-icon"></i>
                         <input type="password" id="password" name="password" placeholder="Crea una contraseña segura">
+                        <!-- Botón para mostrar/ocultar contraseña -->
                         <button type="button" class="toggle-password" id="togglePassword">
                             <i class="fas fa-eye"></i>
                         </button>
                     </div>
                     <div class="error-message" id="password-error"></div>
+                    <!-- Indicador de fortaleza de contraseña -->
                     <div class="password-strength">
                         <div class="strength-bar">
                             <div class="strength-fill" id="strength-fill"></div>
@@ -55,11 +67,13 @@
                     </div>
                 </div>
 
+                <!-- CAMPO 4: Confirmar Contraseña -->
                 <div class="form-group">
                     <label for="confirmPassword">Confirmar Contraseña</label>
                     <div class="input-container">
                         <i class="fas fa-lock input-icon"></i>
                         <input type="password" id="confirmPassword" name="confirmPassword" placeholder="Confirma tu contraseña">
+                        <!-- Botón para mostrar/ocultar confirmación de contraseña -->
                         <button type="button" class="toggle-password" id="toggleConfirmPassword">
                             <i class="fas fa-eye"></i>
                         </button>
@@ -67,6 +81,7 @@
                     <div class="error-message" id="confirmPassword-error"></div>
                 </div>
 
+                <!-- CAMPO 5: Términos y Condiciones -->
                 <div class="form-group terms">
                     <input type="checkbox" id="terms" name="terms">
                     <label for="terms" class="terms-label">
@@ -75,12 +90,15 @@
                     <div class="error-message" id="terms-error"></div>
                 </div>
 
+                <!-- SECCIÓN 3: ACCIONES DEL FORMULARIO -->
                 <div class="form-actions">
+                    <!-- Botón de envío del formulario -->
                     <button type="submit" class="register-btn">
                         <i class="fas fa-user-plus"></i> Crear Cuenta
                     </button>
                 </div>
 
+                <!-- SECCIÓN 4: ENLACE PARA USUARIOS EXISTENTES -->
                 <div class="form-footer">
                     <p class="already-account">
                         ¿Ya tienes una cuenta? <a href="{{ url_for('admin_login') }}" class="link">Iniciar sesión</a>
@@ -90,11 +108,15 @@
         </main>
     </div>
 
+    <!-- SECCIÓN 5: CONTENEDOR DE MENSAJES -->
+    <!-- Contenedor para mostrar mensajes de error o éxito dinámicamente -->
     <div id="message" class="message hidden">
         <span id="message-text"></span>
+        <!-- Botón para cerrar el mensaje -->
         <button id="close-message" class="close-btn">&times;</button>
     </div>
 
+    <!-- SECCIÓN 6: SCRIPTS -->
     <script src="{{ url_for('static', filename='script/register.js') }}"></script>
 </body>
 </html>

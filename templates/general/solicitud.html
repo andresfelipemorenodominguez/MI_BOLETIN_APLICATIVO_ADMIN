@@ -1,3 +1,6 @@
+<!------------------------------------------------->
+<!-- Página de Solicitud de Cambio de Contraseña -->
+<!------------------------------------------------->
 <!DOCTYPE html>
 <html lang="es">
 
@@ -10,13 +13,18 @@
 </head>
 
 <body>
+    <!-- SECCIÓN 1: CONTENEDOR PRINCIPAL -->
     <div class="container">
         <header class="header">
             <h1><i class="fas fa-key"></i> Cambio de Contraseña</h1>
         </header>
 
+        <!-- CONTENIDO PRINCIPAL -->
         <main>
+            <!-- SECCIÓN 2: FORMULARIO DE SOLICITUD -->
+            <!-- Formulario para que el usuario solicite cambio o restablecimiento de contraseña -->
             <form id="passwordRequestForm" class="form">
+                <!-- CAMPO 1: Identificador de Usuario -->
                 <div class="form-group">
                     <label for="userIdentifier"><i class="fas fa-user"></i> Identificador de Usuario</label>
                     <input type="text" id="userIdentifier" name="userIdentifier" required
@@ -25,12 +33,14 @@
                     <div class="error-message" id="userIdentifierError"></div>
                 </div>
 
+                <!-- CAMPO 2: Correo Electrónico Registrado -->
                 <div class="form-group">
                     <label for="userEmail"><i class="fas fa-envelope"></i> Correo Electrónico Registrado</label>
                     <input type="email" id="userEmail" name="userEmail" required placeholder="tucorreo@ejemplo.com">
                     <div class="error-message" id="userEmailError"></div>
                 </div>
 
+                <!-- CAMPO 3: Motivo de la Solicitud -->
                 <div class="form-group">
                     <label for="requestReason"><i class="fas fa-comment"></i> Motivo de la Solicitud</label>
                     <textarea id="requestReason" name="requestReason" rows="5" required
@@ -38,59 +48,68 @@
                     <div class="error-message" id="requestReasonError"></div>
                 </div>
 
-                <!-- Campos ocultos del administrador (ahora con valores dinámicos) -->
+                <!-- CAMPOS OCULTOS: Información del administrador (valores dinámicos desde servidor) -->
                 <input type="hidden" id="adminId" name="adminId" value="{{ admin_id }}">
                 <input type="hidden" id="adminName" name="adminName" value="{{ admin_name }}">
                 <input type="hidden" id="adminEmail" name="adminEmail" value="{{ admin_email }}">
 
+                <!-- ACCIONES DEL FORMULARIO -->
                 <div class="button-group">
+                    <!-- Botón para enviar la solicitud -->
                     <button type="submit" class="btn btn-primary">
                         <i class="fas fa-paper-plane"></i> Enviar Solicitud
                     </button>
+                    <!-- Botón para volver al login -->
                     <button type="button" id="backToLogin" class="btn btn-secondary">
                         <i class="fas fa-sign-in-alt"></i> Volver
                     </button>
                 </div>
             </form>
 
-            <!-- Mensaje de éxito (inicialmente oculto) -->
+            <!-- SECCIÓN 3: MENSAJE DE ÉXITO -->
+            <!-- Mensaje que se muestra cuando la solicitud es enviada exitosamente (inicialmente oculto) -->
             <div id="successMessage" class="success-message hidden">
                 <div class="success-icon">
                     <i class="fas fa-check-circle"></i>
                 </div>
                 <h2>Solicitud enviada con éxito</h2>
                 <p id="successMessageText">
-                    <!-- El texto se completará dinámicamente con JavaScript -->
                 </p>
                 <p>El administrador revisará tu solicitud y se pondrá en contacto contigo en la dirección de correo
                     proporcionada para continuar con el proceso.</p>
 
-                <!-- Botones en el mensaje de éxito -->
+                <!-- BOTONES EN EL MENSAJE DE ÉXITO -->
                 <div class="button-group" style="justify-content: center; margin-top: 20px;">
+                    <!-- Botón para crear una nueva solicitud -->
                     <button type="button" id="newRequest" class="btn btn-secondary">
                         <i class="fas fa-plus"></i> Nueva Solicitud
                     </button>
-                    <!-- NUEVO BOTÓN VOLVER -->
+                    <!-- Botón para volver al inicio de sesión -->
                     <button type="button" id="backFromSuccess" class="btn btn-primary">
                         <i class="fas fa-sign-in-alt"></i> Volver al Inicio
                     </button>
                 </div>
             </div>
 
-            <!-- Mensaje de error (inicialmente oculto) -->
+            <!-- SECCIÓN 4: MENSAJE DE ERROR -->
+            <!-- Mensaje que se muestra cuando hay un error al enviar la solicitud (inicialmente oculto) -->
             <div id="errorMessage" class="error-message-container hidden">
                 <div class="error-icon">
                     <i class="fas fa-exclamation-circle"></i>
                 </div>
                 <h2>Error al enviar la solicitud</h2>
                 <p id="errorMessageText">Lo sentimos, ha ocurrido un problema al enviar tu solicitud.</p>
+                <!-- Botón para reintentar -->
                 <button type="button" id="tryAgain" class="btn btn-primary">
                     <i class="fas fa-redo"></i> Intentar de nuevo
                 </button>
             </div>
         </main>
 
+        <!-- SECCIÓN 5: FOOTER Y REFERENCIAS A SCRIPTS -->
+        <!-- Footer con información de derechos de autor -->
         <footer class="footer">
+            <!-- Información de copyright  -->
             <p>MI BOLETÍN &copy; 2023</p>
         </footer>
     </div>

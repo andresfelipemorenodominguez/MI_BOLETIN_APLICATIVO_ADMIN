@@ -1,9 +1,16 @@
+<!--
+================================================================================
+ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
+==============================================================================
+-->
+
 <!DOCTYPE html>
 <html lang="es" class="page-dashboard">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MiBoletín Admin</title>
+    
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard-extra.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -11,13 +18,23 @@
 </head>
 <body>
 
+<!-- SECCIÓN 2: ESTRUCTURA PRINCIPAL DEL BODY -->
+<!-- Contenedor principal del dashboard administrativo -->
+
+<!-- Botón hamburguesa para menú móvil -->
 <button class="hamburger" id="hamburger-btn" aria-label="Menú">
     <i class="fas fa-bars"></i>
 </button>
+
+<!-- Overlay para cerrar sidebar en móviles -->
 <div class="sidebar-overlay" id="sidebar-overlay"></div>
 
+<!-- Contenedor principal de la aplicación -->
 <div class="app-container">
+    <!-- SECCIÓN 3: SIDEBAR DE NAVEGACIÓN -->
+    <!-- Panel lateral con menú de navegación y perfil de usuario -->
     <aside class="sidebar" id="sidebar">
+        <!-- Header del sidebar con logo -->
         <div class="sidebar-header">
             <button id="logo-btn" class="logo-btn">
                 <i class="fas fa-newspaper logo-icon"></i>
@@ -25,56 +42,66 @@
             </button>
         </div>
 
+        <!-- Navegación principal -->
         <nav class="sidebar-nav">
             <ul class="nav-list">
+                <!-- Enlace a sección de inicio -->
                 <li class="nav-item">
                     <a href="#" class="nav-link active" data-section="inicio-section">
                         <i class="fas fa-home nav-icon"></i>
                         <span class="nav-text">Inicio</span>
                     </a>
                 </li>
+                <!-- Enlace a gestión de estudiantes -->
                 <li class="nav-item">
                     <a href="#" class="nav-link" data-section="agregar-estudiante-section">
                         <i class="fa-solid fa-user nav-icon"></i>
                         <span class="nav-text">Estudiantes</span>
                     </a>
                 </li>
+                <!-- Enlace a gestión de profesores -->
                 <li class="nav-item">
                     <a href="#" class="nav-link" data-section="agregar-profesor-section">
                         <i class="fa-solid fa-chalkboard-user nav-icon"></i>
                         <span class="nav-text">Profesores</span>
                     </a>
                 </li>
+                <!-- Enlace a gestión de períodos académicos -->
                 <li class="nav-item">
                     <a href="#" class="nav-link" data-section="periodos-section">
                         <i class="fas fa-calendar-alt nav-icon"></i>
                         <span class="nav-text">Períodos</span>
                     </a>
                 </li>
+                <!-- Enlace a gestión de grupos -->
                 <li class="nav-item">
                     <a href="#" class="nav-link" data-section="grupos-section">
                         <i class="fas fa-users nav-icon"></i>
                         <span class="nav-text">Grupos</span>
                     </a>
                 </li>
+                <!-- Enlace a gestión de materias -->
                 <li class="nav-item">
                     <a href="#" class="nav-link" data-section="materias-section">
                         <i class="fas fa-book nav-icon"></i>
                         <span class="nav-text">Materias</span>
                     </a>
                 </li>
+                <!-- Enlace a asignaciones profesor-grupo-materia -->
                 <li class="nav-item">
                     <a href="#" class="nav-link" data-section="asignaciones-section">
                         <i class="fas fa-link nav-icon"></i>
                         <span class="nav-text">Asignaciones</span>
                     </a>
                 </li>
+                <!-- Enlace a reportes y estadísticas -->
                 <li class="nav-item">
                     <a href="#" class="nav-link" data-section="reportes-section">
                         <i class="fa-solid fa-chart-bar nav-icon"></i>
                         <span class="nav-text">Reportes</span>
                     </a>
                 </li>
+               <!-- Enlace a gestión de administradores -->
                <li class="nav-item">
                 <a href="#" class="nav-link" data-section="administradores-section">
                     <i class="fas fa-user-shield nav-icon"></i>
@@ -84,15 +111,19 @@
             </ul>
         </nav>
 
+        <!-- Footer del sidebar con información del usuario -->
         <div class="sidebar-footer">
             <div class="user-profile">
+                <!-- Avatar generado dinámicamente -->
                 <div class="user-avatar">
                     <img src="https://ui-avatars.com/api/?name={{ user_name|urlencode }}&background=003366&color=fff" alt="Avatar">
                 </div>
+                <!-- Información del usuario actual -->
                 <div class="user-info">
                     <h3 class="user-name">{{ user_name }}</h3>
                     <p class="user-email">{{ user_email }}</p>
                 </div>
+                <!-- Botón para abrir modal de perfil -->
                 <button id="profile-btn" class="profile-btn" title="Ver perfil">
                     <i class="fas fa-chevron-right"></i>
                 </button>
@@ -100,19 +131,26 @@
         </div>
     </aside>
 
+    <!-- SECCIÓN 4: CONTENIDO PRINCIPAL -->
+    <!-- Área principal donde se muestran las diferentes secciones del dashboard -->
     <main class="main-content">
 
-        <!-- ── INICIO ── -->
+        <!-- ── SECCIÓN 4.1: INICIO ── -->
+        <!-- Dashboard principal con bienvenida, estadísticas y accesos rápidos -->
         <section id="inicio-section" class="content-section active">
             <div class="content-wrapper">
+                <!-- Mensaje de bienvenida personalizado -->
                 <div class="welcome-section">
                     <h1>Bienvenido, {{ user_name }}</h1>
                     <p class="welcome-text">Panel de control de MiBoletín. Gestiona estudiantes, profesores, grupos y más.</p>
                     <p class="welcome-date">Hoy es <span id="current-date"></span></p>
                 </div>
+                
+                <!-- Resumen general con estadísticas del sistema -->
                 <div class="overview-section">
                     <h2 class="section-title">Resumen General</h2>
                     <div class="overview-cards">
+                        <!-- Tarjeta de estadísticas de estudiantes -->
                         <div class="overview-card">
                             <div class="card-icon"><i class="fas fa-users"></i></div>
                             <div class="card-content">
@@ -121,6 +159,7 @@
                                 <p class="card-subtitle">Activos</p>
                             </div>
                         </div>
+                        <!-- Tarjeta de estadísticas de profesores -->
                         <div class="overview-card">
                             <div class="card-icon"><i class="fas fa-chalkboard-teacher"></i></div>
                             <div class="card-content">
@@ -129,6 +168,7 @@
                                 <p class="card-subtitle">Activos</p>
                             </div>
                         </div>
+                        <!-- Tarjeta de estadísticas de grupos -->
                         <div class="overview-card">
                             <div class="card-icon"><i class="fas fa-users"></i></div>
                             <div class="card-content">
@@ -137,6 +177,7 @@
                                 <p class="card-subtitle">Registrados</p>
                             </div>
                         </div>
+                        <!-- Tarjeta de estadísticas de administradores -->
                         <div class="overview-card">
                             <div class="card-icon"><i class="fas fa-book"></i></div>
                             <div class="card-content">
@@ -147,24 +188,31 @@
                         </div>
                     </div>
                 </div>
+                <!-- Accesos rápidos a las funciones principales -->
                 <div class="quick-actions-section">
                     <h2 class="section-title">Accesos Rápidos</h2>
                     <div class="quick-actions-grid">
+                        <!-- Botón para agregar estudiantes -->
                         <button class="quick-action-btn" data-section="agregar-estudiante-section">
                             <i class="fas fa-user-plus"></i><span>Agregar Estudiante</span>
                         </button>
+                        <!-- Botón para agregar profesores -->
                         <button class="quick-action-btn" data-section="agregar-profesor-section">
                             <i class="fas fa-chalkboard-teacher"></i><span>Agregar Profesores</span>
                         </button>
+                        <!-- Botón para gestionar períodos -->
                         <button class="quick-action-btn" data-section="periodos-section">
                             <i class="fas fa-calendar-alt"></i><span>Períodos</span>
                         </button>
+                        <!-- Botón para gestionar grupos -->
                         <button class="quick-action-btn" data-section="grupos-section">
                             <i class="fas fa-users"></i><span>Grupos</span>
                         </button>
+                        <!-- Botón para gestionar materias -->
                         <button class="quick-action-btn" data-section="materias-section">
                             <i class="fas fa-book"></i><span>Materias</span>
                         </button>
+                        <!-- Botón para hacer asignaciones -->
                         <button class="quick-action-btn" data-section="asignaciones-section">
                             <i class="fas fa-link"></i><span>Asignaciones</span>
                         </button>
@@ -176,17 +224,23 @@
             </div>
         </section>
 
-        <!-- ── ESTUDIANTES ── -->
+        <!-- ── SECCIÓN 4.2: ESTUDIANTES ── -->
+        <!-- Formulario para registrar estudiantes y tabla de estudiantes existentes -->
         <section id="agregar-estudiante-section" class="content-section">
             <div class="content-wrapper">
+                <!-- Header de la sección -->
                 <div class="form-header">
                     <h1>Estudiantes</h1>
                     <p class="form-subtitle">Registra y gestiona los estudiantes del sistema.</p>
                 </div>
+                
+                <!-- Formulario de registro de estudiantes -->
                 <form id="estudiante-form" class="student-form">
+                    <!-- Sección de información personal -->
                     <div class="form-section">
                         <h3 class="form-section-title"><i class="fas fa-user-circle"></i> Información Personal</h3>
                         <div class="form-row">
+                            <!-- Campo para nombre completo del estudiante -->
                             <div class="form-group full-width">
                                 <label for="nombre-completo" class="form-label">Nombre Completo <span class="required">*</span></label>
                                 <div class="input-with-icon">
@@ -197,6 +251,7 @@
                             </div>
                         </div>
                         <div class="form-row">
+                            <!-- Selector de tipo de documento de identidad -->
                             <div class="form-group">
                                 <label class="form-label">Tipo de Documento <span class="required">*</span></label>
                                 <div class="select-wrapper">
@@ -211,6 +266,7 @@
                                 </div>
                                 <div class="error-message" id="tipo-documento-error"></div>
                             </div>
+                            <!-- Campo para número de documento -->
                             <div class="form-group">
                                 <label class="form-label">Número de Documento <span class="required">*</span></label>
                                 <div class="input-with-icon">
@@ -221,6 +277,7 @@
                             </div>
                         </div>
                         <div class="form-row">
+                            <!-- Campo para correo electrónico del estudiante -->
                             <div class="form-group">
                                 <label class="form-label">Correo Electrónico <span class="required">*</span></label>
                                 <div class="input-with-icon">
@@ -231,9 +288,11 @@
                             </div>
                         </div>
                     </div>
+                    <!-- Sección de información académica -->
                     <div class="form-section">
                         <h3 class="form-section-title"><i class="fas fa-graduation-cap"></i> Información Académica</h3>
                         <div class="form-row">
+                            <!-- Selector de grado académico del estudiante -->
                             <div class="form-group">
                                 <label class="form-label">Grado <span class="required">*</span></label>
                                 <div class="select-wrapper">
@@ -250,6 +309,7 @@
                                 </div>
                                 <div class="error-message" id="grado-error"></div>
                             </div>
+                            <!-- Selector de grupo del estudiante -->
                             <div class="form-group">
                                 <label class="form-label">Grupo <span class="required">*</span></label>
                                 <div class="select-wrapper">
@@ -266,6 +326,7 @@
                             </div>
                         </div>
                     </div>
+                    <!-- Sección de seguridad y acceso -->
                     <div class="form-section">
                         <h3 class="form-section-title"><i class="fas fa-lock"></i> Seguridad y Acceso</h3>
                         <div class="form-group">
@@ -275,9 +336,12 @@
                                     <i class="fas fa-lock input-icon"></i>
                                     <input type="password" id="contrasena" class="form-input password-input" placeholder="Mínimo 8 caracteres" required>
                                 </div>
+                                <!-- Botón para mostrar/ocultar contraseña -->
                                 <button type="button" class="toggle-password-btn" data-target="contrasena"><i class="fas fa-eye"></i></button>
+                                <!-- Botón para generar contraseña automática -->
                                 <button type="button" class="btn-secondary btn-secondary generate-password-btn" id="generate-student-password"><i class="fas fa-random"></i> Generar</button>
                             </div>
+                            <!-- Indicador de fuerza de contraseña -->
                             <div class="password-strength" style="margin-top:8px;">
                                 <span class="strength-text">Seguridad:</span>
                                 <div class="strength-bar"><div class="strength-fill" id="student-password-strength-fill"></div></div>
@@ -286,16 +350,19 @@
                             <div class="error-message" id="contrasena-error"></div>
                         </div>
                     </div>
+                    <!-- Botones de acción del formulario -->
                     <div class="form-actions">
                         <button type="button" class="btn-secondary cancel-btn" id="cancel-estudiante">Cancelar</button>
                         <button type="submit" class="btn-primary"><i class="fas fa-save"></i> Registrar Estudiante</button>
                     </div>
                 </form>
 
+                <!-- Tabla de estudiantes registrados -->
                 <div class="table-section" style="margin-top:32px;">
                     <div class="table-header">
                         <h2>Estudiantes Registrados</h2>
                         <div class="table-controls">
+                            <!-- Campo de búsqueda para filtrar estudiantes -->
                             <div class="search-box">
                                 <i class="fas fa-search search-icon"></i>
                                 <input type="text" id="search-estudiantes" placeholder="Buscar estudiante..." class="search-input">
@@ -303,6 +370,7 @@
                         </div>
                     </div>
                     <div class="table-wrapper">
+                        <!-- Tabla con datos de estudiantes -->
                         <table class="data-table" id="tabla-estudiantes">
                             <thead>
                                 <tr>
@@ -320,6 +388,8 @@
         </section>
 
         <!-- ── PROFESORES ── -->
+        <!-- ── SECCIÓN 4.3: PROFESORES ── -->
+        <!-- Formulario para registrar profesores y tabla de profesores existentes -->
         <section id="agregar-profesor-section" class="content-section">
             <div class="content-wrapper">
                 <div class="form-header">
@@ -327,9 +397,11 @@
                     <p class="form-subtitle">Registra y gestiona los profesores del sistema.</p>
                 </div>
                 <form id="profesor-form" class="student-form">
+                    <!-- Sección de información personal del profesor -->
                     <div class="form-section">
                         <h3 class="form-section-title"><i class="fas fa-user-circle"></i> Información Personal</h3>
                         <div class="form-row">
+                            <!-- Campo para nombre completo del profesor -->
                             <div class="form-group full-width">
                                 <label class="form-label">Nombre Completo <span class="required">*</span></label>
                                 <div class="input-with-icon">
@@ -339,6 +411,7 @@
                             </div>
                         </div>
                         <div class="form-row">
+                            <!-- Selector de tipo de documento del profesor -->
                             <div class="form-group">
                                 <label class="form-label">Tipo de Documento <span class="required">*</span></label>
                                 <div class="select-wrapper">
@@ -351,6 +424,7 @@
                                     </select>
                                 </div>
                             </div>
+                            <!-- Campo para número de documento del profesor -->
                             <div class="form-group">
                                 <label class="form-label">Número de Documento <span class="required">*</span></label>
                                 <div class="input-with-icon">
@@ -360,6 +434,7 @@
                             </div>
                         </div>
                         <div class="form-row">
+                            <!-- Campo para correo electrónico del profesor -->
                             <div class="form-group">
                                 <label class="form-label">Correo Electrónico <span class="required">*</span></label>
                                 <div class="input-with-icon">
@@ -367,6 +442,7 @@
                                     <input type="email" id="prof-correo" class="form-input" placeholder="correo@ejemplo.com" required>
                                 </div>
                             </div>
+                            <!-- Campo para teléfono del profesor -->
                             <div class="form-group">
                                 <label class="form-label">Teléfono <span class="required">*</span></label>
                                 <div class="input-with-icon">
@@ -376,12 +452,14 @@
                             </div>
                         </div>
                     </div>
+                    <!-- Sección de asignaturas que imparte el profesor -->
                     <div class="form-section">
                         <h3 class="form-section-title"><i class="fas fa-graduation-cap"></i> Asignaturas</h3>
                         <div class="form-group">
                             <label class="form-label">Asignatura(s) <span class="required">*</span></label>
                             <div class="select-wrapper multi-select-wrapper">
                                 <i class="fas fa-book select-icon"></i>
+                                <!-- Selector múltiple de asignaturas -->
                                 <select id="prof-asignaturas" class="form-select" multiple required>
                                     <option value="matematicas">Matemáticas</option>
                                     <option value="español">Español</option>
@@ -398,6 +476,7 @@
                                     <option value="biologia">Biología</option>
                                     <option value="filosofia">Filosofía</option>
                                 </select>
+                                <!-- Información del selector múltiple -->
                                 <div class="multi-select-info">
                                     <span id="asignaturas-count">0 seleccionadas</span>
                                     <small>(Mantén Ctrl para seleccionar varias)</small>
@@ -405,6 +484,7 @@
                             </div>
                         </div>
                     </div>
+                    <!-- Sección de contraseña del profesor -->
                     <div class="form-section">
                         <h3 class="form-section-title"><i class="fas fa-lock"></i> Contraseña</h3>
                         <div class="form-group">
@@ -413,26 +493,32 @@
                                     <i class="fas fa-lock input-icon"></i>
                                     <input type="password" id="prof-contrasena" class="form-input password-input" placeholder="Mínimo 8 caracteres" required>
                                 </div>
+                                <!-- Botón para mostrar/ocultar contraseña -->
                                 <button type="button" class="toggle-password-btn" data-target="prof-contrasena"><i class="fas fa-eye"></i></button>
+                                <!-- Botón para generar contraseña automática -->
                                 <button type="button" class="btn-secondary btn-secondary generate-password-btn" id="generate-profesor-password"><i class="fas fa-random"></i> Generar</button>
                             </div>
                         </div>
                     </div>
+                    <!-- Botones de acción del formulario de profesor -->
                     <div class="form-actions">
                         <button type="button" class="btn-secondary" id="cancel-profesor">Cancelar</button>
                         <button type="submit" class="btn-primary"><i class="fas fa-save"></i> Registrar Profesor</button>
                     </div>
                 </form>
 
+                <!-- Tabla de profesores registrados -->
                 <div class="table-section" style="margin-top:32px;">
                     <div class="table-header">
                         <h2>Profesores Registrados</h2>
+                        <!-- Campo de búsqueda para filtrar profesores -->
                         <div class="search-box">
                             <i class="fas fa-search search-icon"></i>
                             <input type="text" id="search-profesores" placeholder="Buscar profesor..." class="search-input">
                         </div>
                     </div>
                     <div class="table-wrapper">
+                        <!-- Tabla con datos de profesores -->
                         <table class="data-table">
                             <thead>
                                 <tr>
@@ -450,6 +536,8 @@
         </section>
 
         <!-- ── PERÍODOS ── -->
+        <!-- ── SECCIÓN 4.4: PERÍODOS ACADÉMICOS ── -->
+        <!-- Gestión de períodos académicos del año escolar -->
         <section id="periodos-section" class="content-section">
             <div class="content-wrapper">
                 <div class="form-header">
@@ -459,25 +547,31 @@
                 <div class="mgmt-card">
                     <h3><i class="fas fa-plus-circle"></i> Crear Período</h3>
                     <div class="mgmt-grid">
+                        <!-- Campo para nombre del período académico -->
                         <div class="form-group">
                             <label class="form-label">Nombre <span class="required">*</span></label>
                             <input type="text" id="periodo-nombre" class="form-input" placeholder="Ej: 2026-1">
                         </div>
+                        <!-- Campo para fecha de inicio del período -->
                         <div class="form-group">
                             <label class="form-label">Fecha Inicio <span class="required">*</span></label>
                             <input type="date" id="periodo-inicio" class="form-input">
                         </div>
+                        <!-- Campo para fecha de fin del período -->
                         <div class="form-group">
                             <label class="form-label">Fecha Fin <span class="required">*</span></label>
                             <input type="date" id="periodo-fin" class="form-input">
                         </div>
                     </div>
+                    <!-- Botón para crear el período -->
                     <button class="btn-primary" onclick="crearPeriodo()"><i class="fas fa-plus"></i> Crear Período</button>
+                    <!-- Área para mostrar mensajes de resultado -->
                     <div id="periodo-msg"></div>
                 </div>
                 <div class="mgmt-card">
                     <h3><i class="fas fa-list"></i> Períodos Registrados</h3>
                     <div style="overflow-x:auto;">
+                        <!-- Tabla con períodos académicos registrados -->
                         <table class="mgmt-table" id="tabla-periodos">
                             <thead><tr><th>ID</th><th>Nombre</th><th>Inicio</th><th>Fin</th></tr></thead>
                             <tbody id="tbody-periodos"><tr><td colspan="4" style="text-align:center;padding:16px;">Cargando...</td></tr></tbody>
@@ -488,6 +582,8 @@
         </section>
 
         <!-- ── GRUPOS ── -->
+        <!-- ── SECCIÓN 4.5: GRUPOS ── -->
+        <!-- Creación y gestión de grupos asignados a períodos académicos -->
         <section id="grupos-section" class="content-section">
             <div class="content-wrapper">
                 <div class="form-header">
@@ -497,10 +593,12 @@
                 <div class="mgmt-card">
                     <h3><i class="fas fa-plus-circle"></i> Crear Grupo</h3>
                     <div class="mgmt-grid">
+                        <!-- Campo para nombre del grupo -->
                         <div class="form-group">
                             <label class="form-label">Nombre del Grupo <span class="required">*</span></label>
                             <input type="text" id="grupo-nombre" class="form-input" placeholder="Ej: 10A, 11B">
                         </div>
+                        <!-- Selector de período académico para el grupo -->
                         <div class="form-group">
                             <label class="form-label">Período Académico <span class="required">*</span></label>
                             <select id="grupo-periodo" class="form-select">
@@ -508,12 +606,15 @@
                             </select>
                         </div>
                     </div>
+                    <!-- Botón para crear el grupo -->
                     <button class="btn-primary" onclick="crearGrupo()"><i class="fas fa-plus"></i> Crear Grupo</button>
+                    <!-- Área para mostrar mensajes de resultado -->
                     <div id="grupo-msg"></div>
                 </div>
                 <div class="mgmt-card">
                     <h3><i class="fas fa-list"></i> Grupos Registrados</h3>
                     <div style="overflow-x:auto;">
+                        <!-- Tabla con grupos registrados -->
                         <table class="mgmt-table">
                             <thead><tr><th>ID</th><th>Nombre</th><th>Período</th></tr></thead>
                             <tbody id="tbody-grupos"><tr><td colspan="3" style="text-align:center;padding:16px;">Cargando...</td></tr></tbody>
@@ -524,6 +625,8 @@
         </section>
 
         <!-- ── MATERIAS ── -->
+        <!-- ── SECCIÓN 4.6: MATERIAS ── -->
+        <!-- Gestión del catálogo de materias del sistema educativo -->
         <section id="materias-section" class="content-section">
             <div class="content-wrapper">
                 <div class="form-header">
@@ -533,21 +636,26 @@
                 <div class="mgmt-card">
                     <h3><i class="fas fa-plus-circle"></i> Crear Materia</h3>
                     <div class="mgmt-grid">
+                        <!-- Campo para nombre de la materia -->
                         <div class="form-group">
                             <label class="form-label">Nombre <span class="required">*</span></label>
                             <input type="text" id="materia-nombre" class="form-input" placeholder="Ej: Matemáticas">
                         </div>
+                        <!-- Campo opcional para código de la materia -->
                         <div class="form-group">
                             <label class="form-label">Código (opcional)</label>
                             <input type="text" id="materia-codigo" class="form-input" placeholder="Ej: MAT001">
                         </div>
                     </div>
+                    <!-- Botón para crear la materia -->
                     <button class="btn-primary" onclick="crearMateria()"><i class="fas fa-plus"></i> Crear Materia</button>
+                    <!-- Área para mostrar mensajes de resultado -->
                     <div id="materia-msg"></div>
                 </div>
                 <div class="mgmt-card">
                     <h3><i class="fas fa-list"></i> Materias Registradas</h3>
                     <div style="overflow-x:auto;">
+                        <!-- Tabla con materias registradas -->
                         <table class="mgmt-table">
                             <thead><tr><th>ID</th><th>Nombre</th><th>Código</th></tr></thead>
                             <tbody id="tbody-materias"><tr><td colspan="3" style="text-align:center;padding:16px;">Cargando...</td></tr></tbody>
@@ -558,6 +666,8 @@
         </section>
 
         <!-- ── ASIGNACIONES ── -->
+        <!-- ── SECCIÓN 4.7: ASIGNACIONES ── -->
+        <!-- Asignación de profesores a grupos/materias y estudiantes a grupos -->
         <section id="asignaciones-section" class="content-section">
             <div class="content-wrapper">
                 <div class="form-header">
@@ -568,18 +678,21 @@
                 <div class="mgmt-card">
                     <h3><i class="fas fa-chalkboard-teacher"></i> Asignar Profesor → Grupo + Materia</h3>
                     <div class="mgmt-grid">
+                        <!-- Selector de profesor para asignar -->
                         <div class="form-group">
                             <label class="form-label">Profesor <span class="required">*</span></label>
                             <select id="asig-profesor" class="form-select">
                                 <option value="">Selecciona un profesor</option>
                             </select>
                         </div>
+                        <!-- Selector de grupo para la asignación -->
                         <div class="form-group">
                             <label class="form-label">Grupo <span class="required">*</span></label>
                             <select id="asig-grupo" class="form-select">
                                 <option value="">Selecciona un grupo</option>
                             </select>
                         </div>
+                        <!-- Selector de materia para la asignación -->
                         <div class="form-group">
                             <label class="form-label">Materia <span class="required">*</span></label>
                             <select id="asig-materia" class="form-select">
@@ -587,19 +700,23 @@
                             </select>
                         </div>
                     </div>
+                    <!-- Botón para realizar la asignación profesor-grupo-materia -->
                     <button class="btn-primary" onclick="asignarProfesor()"><i class="fas fa-link"></i> Asignar</button>
+                    <!-- Área para mostrar mensajes de resultado -->
                     <div id="asig-profesor-msg"></div>
                 </div>
 
                 <div class="mgmt-card">
                     <h3><i class="fas fa-user-graduate"></i> Asignar Estudiante → Grupo</h3>
                     <div class="mgmt-grid">
+                        <!-- Selector de estudiante para asignar -->
                         <div class="form-group">
                             <label class="form-label">Estudiante <span class="required">*</span></label>
                             <select id="asig-estudiante" class="form-select">
                                 <option value="">Selecciona un estudiante</option>
                             </select>
                         </div>
+                        <!-- Selector de grupo para asignar al estudiante -->
                         <div class="form-group">
                             <label class="form-label">Grupo <span class="required">*</span></label>
                             <select id="asig-grupo-est" class="form-select">
@@ -607,13 +724,16 @@
                             </select>
                         </div>
                     </div>
+                    <!-- Botón para realizar la asignación estudiante-grupo -->
                     <button class="btn-primary" onclick="asignarEstudiante()"><i class="fas fa-link"></i> Asignar</button>
+                    <!-- Área para mostrar mensajes de resultado -->
                     <div id="asig-estudiante-msg"></div>
                 </div>
 
                 <div class="mgmt-card">
                     <h3><i class="fas fa-list"></i> Asignaciones Profesor-Grupo-Materia</h3>
                     <div style="overflow-x:auto;">
+                        <!-- Tabla con asignaciones profesor-grupo-materia existentes -->
                         <table class="mgmt-table">
                             <thead><tr><th>Profesor</th><th>Grupo</th><th>Materia</th><th>Acción</th></tr></thead>
                             <tbody id="tbody-asignaciones"><tr><td colspan="4" style="text-align:center;padding:16px;">Cargando...</td></tr></tbody>
@@ -623,12 +743,14 @@
 
                 <div class="mgmt-card">
                     <h3><i class="fas fa-list"></i> Estudiantes por Grupo</h3>
+                    <!-- Filtro para seleccionar grupo y ver estudiantes asignados -->
                     <div class="form-group" style="margin-bottom:16px;">
                         <select id="filtro-grupo-est" class="form-select" onchange="cargarEstudiantesGrupo(this.value)">
                             <option value="">Selecciona un grupo para ver estudiantes</option>
                         </select>
                     </div>
                     <div style="overflow-x:auto;">
+                        <!-- Tabla con estudiantes asignados al grupo seleccionado -->
                         <table class="mgmt-table">
                             <thead><tr><th>Código</th><th>Nombre</th><th>Acción</th></tr></thead>
                             <tbody id="tbody-est-grupo"><tr><td colspan="3" style="text-align:center;padding:16px;">Selecciona un grupo</td></tr></tbody>
@@ -639,6 +761,8 @@
         </section>
 
         <!-- ── REPORTES ── -->
+        <!-- ── SECCIÓN 4.8: REPORTES ── -->
+        <!-- Estadísticas del sistema y descarga de reportes en PDF -->
         <section id="reportes-section" class="content-section">
             <div class="content-wrapper">
                 <div class="form-header">
@@ -649,6 +773,7 @@
                 <!-- Estadísticas -->
                 <div class="mgmt-card">
                     <h3><i class="fas fa-chart-bar"></i> Estadísticas Generales</h3>
+                    <!-- Área donde se muestran las estadísticas dinámicas del sistema -->
                     <div class="mgmt-grid" id="reportes-stats">
                         <div style="text-align:center;padding:20px;color:var(--gray-500);">Cargando estadísticas...</div>
                     </div>
@@ -659,6 +784,7 @@
                     <h3><i class="fas fa-user-graduate"></i> Reporte de Estudiantes</h3>
                     <p style="color:var(--gray-600);margin-bottom:16px;">Descarga la lista de estudiantes en PDF. Puedes filtrar por grado y grupo.</p>
                     <div class="mgmt-grid" style="margin-bottom:16px;">
+                        <!-- Filtro por grado para el reporte de estudiantes -->
                         <div class="form-group">
                             <label class="form-label">Grado (opcional)</label>
                             <select id="filtro-grado-reporte" class="form-select">
@@ -671,6 +797,7 @@
                                 <option value="11">11°</option>
                             </select>
                         </div>
+                        <!-- Filtro por grupo para el reporte de estudiantes -->
                         <div class="form-group">
                             <label class="form-label">Grupo (opcional)</label>
                             <select id="filtro-grupo-reporte" class="form-select">
@@ -682,6 +809,7 @@
                             </select>
                         </div>
                     </div>
+                    <!-- Botón para descargar reporte de estudiantes filtrado -->
                     <button class="btn-primary" onclick="descargarReporteEstudiantes()">
                         <i class="fas fa-file-pdf"></i> Descargar PDF Estudiantes
                     </button>
@@ -691,6 +819,7 @@
                 <div class="mgmt-card">
                     <h3><i class="fas fa-chalkboard-teacher"></i> Reporte de Profesores</h3>
                     <p style="color:var(--gray-600);margin-bottom:16px;">Descarga el directorio completo de profesores activos en PDF.</p>
+                    <!-- Botón para descargar reporte completo de profesores -->
                     <button class="btn-primary" onclick="window.location.href='/reporte/profesores/pdf'">
                         <i class="fas fa-file-pdf"></i> Descargar PDF Profesores
                     </button>
@@ -700,6 +829,7 @@
                 <div class="mgmt-card">
                     <h3><i class="fas fa-user-shield"></i> Reporte de Administradores</h3>
                     <p style="color:var(--gray-600);margin-bottom:16px;">Descarga el listado de administradores registrados en el sistema.</p>
+                    <!-- Botón para descargar reporte de administradores -->
                     <button class="btn-primary" onclick="window.location.href='/reporte/administradores/pdf'">
                         <i class="fas fa-file-pdf"></i> Descargar PDF Administradores
                     </button>
@@ -709,6 +839,7 @@
                 <div class="mgmt-card">
                     <h3><i class="fas fa-clipboard-list"></i> Resumen General del Sistema</h3>
                     <p style="color:var(--gray-600);margin-bottom:16px;">Descarga un resumen con estadísticas globales del sistema.</p>
+                    <!-- Botón para descargar reporte resumen del sistema -->
                     <button class="btn-primary" onclick="window.location.href='/reporte/resumen/pdf'">
                         <i class="fas fa-file-pdf"></i> Descargar PDF Resumen
                     </button>
@@ -717,6 +848,8 @@
         </section>
 
         <!-- ── ADMINISTRADORES ── -->
+        <!-- ── SECCIÓN 4.9: ADMINISTRADORES ── -->
+        <!-- Gestión de usuarios administradores del sistema -->
         <section id="administradores-section" class="content-section">
             <div class="content-wrapper">
                 <div class="form-header">
@@ -728,6 +861,7 @@
                     <p style="color:var(--gray-600);margin-bottom:16px;">
                         El registro de administradores requiere verificación por correo electrónico.
                     </p>
+                    <!-- Enlace externo al formulario de registro de administradores -->
                     <a href="/register" target="_blank" class="btn-primary" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px;">
                         <i class="fas fa-external-link-alt"></i> Ir al formulario de registro
                     </a>
@@ -735,6 +869,7 @@
                 <div class="mgmt-card">
                     <h3><i class="fas fa-list"></i> Administradores Registrados</h3>
                     <div style="overflow-x:auto;">
+                        <!-- Tabla con administradores registrados y su estado de verificación -->
                         <table class="mgmt-table">
                             <thead>
                                 <tr>
@@ -757,20 +892,25 @@
     </main>
 </div>
 
+<!-- SECCIÓN 5: MODAL DE PERFIL -->
+<!-- Modal para gestionar la información del perfil del administrador -->
 <!-- Modal Perfil -->
 <div class="modal-overlay" id="profile-modal-overlay">
     <div class="modal" id="profile-modal">
+        <!-- Cabecera del modal con título e icono, y botón de cerrar -->
         <div class="modal-header">
             <h2 class="modal-title"><i class="fas fa-user-circle"></i> Mi Perfil</h2>
             <button class="modal-close" id="close-profile-modal"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body">
+            <!-- Información del perfil con avatar y datos básicos -->
             <div style="text-align:center;margin-bottom:24px;">
                 <img src="https://ui-avatars.com/api/?name={{ user_name|urlencode }}&background=003366&color=fff&size=80"
                     style="border-radius:50%;width:80px;height:80px;" alt="Avatar">
                 <h3 style="margin:12px 0 4px;color:var(--primary);">{{ user_name }}</h3>
                 <p style="color:var(--gray-500);margin:0;font-size:14px;">{{ user_email }}</p>
             </div>
+            <!-- Formulario para editar nombre y correo -->
             <div class="form-group">
                 <label class="form-label">Nombre Completo</label>
                 <input type="text" id="profile-name" class="form-input" value="{{ user_name }}">
@@ -779,6 +919,7 @@
                 <label class="form-label">Correo Electrónico</label>
                 <input type="email" id="profile-email" class="form-input" value="{{ user_email }}">
             </div>
+            <!-- Control del modo oscuro -->
             <div class="dark-mode-row">
                 <label for="dark-mode-toggle">
                     <i class="fas fa-moon"></i> Modo Oscuro
@@ -790,11 +931,13 @@
             </div>
         </div>
         <div class="modal-footer">
+            <!-- Botones de acción del modal: cancelar y guardar cambios -->
             <button class="btn-secondary" id="cancel-profile">Cancelar</button>
             <button class="btn-primary" onclick="guardarPerfil()">
                 <i class="fas fa-save"></i> Guardar
             </button>
         </div>
+        <!-- Botón adicional para cerrar sesión -->
         <div style="padding:0 0 8px;">
             <button class="btn-danger" style="width:100%;" onclick="window.location.href='/logout'">
                 <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
@@ -808,9 +951,11 @@
 
 <div id="current-user-data" data-user-id="{{ session['user_id'] }}" style="display:none;"></div>
 
+<!-- SECCIÓN 6: SCRIPTS JAVASCRIPT -->
+<!-- Scripts para la funcionalidad del dashboard administrativo -->
 <script src="{{ url_for('static', filename='script/dashboard.js') }}"></script>
 <script>
-// Descarga reporte estudiantes con filtros
+// Función para descargar reportes de estudiantes con filtros aplicados
 window.descargarReporteEstudiantes = function() {
     const grado = document.getElementById('filtro-grado-reporte')?.value || '';
     const grupo = document.getElementById('filtro-grupo-reporte')?.value || '';
@@ -825,6 +970,7 @@ window.descargarReporteEstudiantes = function() {
 
 <script>
 // ── MODO OSCURO ──
+// Sistema de gestión del tema oscuro/claro con persistencia en localStorage
 (function() {
     const html    = document.querySelector('html');
     const KEY     = 'miboletin_dark_mode';

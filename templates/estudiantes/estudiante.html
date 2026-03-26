@@ -1,16 +1,25 @@
+<!----------------------------------------->
+<!-- Página del Dashboard de Estudiante --->
+<!----------------------------------------->
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
+
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Estudiante - MiBoletín</title>
+  
   <link rel="stylesheet" href="{{ url_for('static', filename='css/estudiante.css') }}"/>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
 </head>
 <body>
+<!-- SECCIÓN 1: LAYOUT PRINCIPAL -->
 <div class="layout">
+  <!-- SIDEBAR: Navegación lateral -->
   <aside class="sidebar">
     <div class="logo"><i class="fas fa-book-open"></i> MiBoletín</div>
+    <!-- Menú de navegación con secciones del estudiante -->
     <nav class="menu">
       <button class="menu-item active" data-section="inicio"><i class="fas fa-home"></i><span>Inicio</span></button>
       <button class="menu-item" data-section="notas"><i class="fas fa-graduation-cap"></i><span>Mis Notas</span></button>
@@ -19,6 +28,7 @@
       <button class="menu-item" data-section="material"><i class="fas fa-folder-open"></i><span>Material</span></button>
       <button class="menu-item" data-section="observador"><i class="fas fa-eye"></i><span>Observador</span></button>
     </nav>
+    <!-- Botón de perfil con avatar y información del estudiante -->
     <button class="profile-btn" id="profileButton">
       <div class="avatar">{{ nombre[:2].upper() if nombre else 'ES' }}</div>
       <div class="profile-info">
@@ -29,24 +39,32 @@
     </button>
   </aside>
 
+  <!-- CONTENIDO PRINCIPAL -->
   <main class="main">
+    <!-- Header del contenido principal -->
     <div class="main-header">
       <h1 class="main-title">Bienvenido, {{ nombre }}</h1>
       <p class="main-desc">Consulta tus notas, asistencia y material de clase.</p>
     </div>
+    <!-- Sección donde se carga dinámicamente el contenido de cada sección -->
     <section id="content"></section>
   </main>
 </div>
 
-<!-- Modal Perfil -->
+<!-- SECCIÓN 2: MODAL DE PERFIL -->
+<!-- Modal que muestra la información del perfil del estudiante y opciones de configuración -->
 <div class="modal-overlay" id="profileModal">
   <div class="modal-box">
+    <!-- Botón para cerrar el modal -->
     <button class="modal-close" id="closeModal"><i class="fas fa-times"></i></button>
+    <!-- Avatar grande del estudiante -->
     <div class="modal-avatar-big">{{ nombre[:2].upper() if nombre else 'ES' }}</div>
     <h3 class="modal-nombre">{{ nombre }}</h3>
     <p class="modal-codigo">{{ codigo }}</p>
+    <!-- Badge que indica el rol del usuario -->
     <span class="role-badge">Estudiante</span>
 
+    <!-- Opción de modo oscuro -->
     <div class="dark-mode-row">
       <label><i class="fas fa-moon"></i> Modo Oscuro</label>
       <label class="toggle-switch">
@@ -55,17 +73,21 @@
       </label>
     </div>
 
+    <!-- Botones de acciones del perfil -->
     <button class="modal-btn" id="openEdit"><i class="fas fa-user-edit"></i> Editar Perfil</button>
     <button class="modal-btn" id="openPassword"><i class="fas fa-key"></i> Cambiar Contraseña</button>
     <button class="modal-btn logout-btn" onclick="window.location.href='/logout'"><i class="fas fa-sign-out-alt"></i> Cerrar Sesión</button>
   </div>
 </div>
 
-<!-- Modal Editar Perfil -->
+<!-- SECCIÓN 3: MODAL EDITAR PERFIL -->
+<!-- Modal para editar la información del perfil del estudiante -->
 <div class="modal-overlay" id="editModal">
   <div class="modal-box" style="max-width:400px;">
+    <!-- Botón para cerrar el modal -->
     <button class="modal-close" id="closeEdit"><i class="fas fa-times"></i></button>
     <h3 style="margin:0 0 20px;color:#1f3a5d;">Editar Perfil</h3>
+    <!-- Formulario de edición -->
     <div class="form-group">
       <label>Nombre Completo</label>
       <input type="text" id="editName" value="{{ nombre }}">
@@ -74,6 +96,7 @@
       <label>Correo Electrónico</label>
       <input type="email" id="editEmail" placeholder="tu@email.com">
     </div>
+    <!-- Acciones del modal -->
     <div class="modal-actions">
       <button class="btn-cancel" id="cancelEdit">Cancelar</button>
       <button class="btn-save" onclick="guardarPerfil()">Guardar</button>
@@ -81,11 +104,14 @@
   </div>
 </div>
 
-<!-- Modal Cambiar Contraseña -->
+<!-- SECCIÓN 4: MODAL CAMBIAR CONTRASEÑA -->
+<!-- Modal para cambiar la contraseña del estudiante -->
 <div class="modal-overlay" id="passwordModal">
   <div class="modal-box" style="max-width:400px;">
+    <!-- Botón para cerrar el modal -->
     <button class="modal-close" id="closePassword"><i class="fas fa-times"></i></button>
     <h3 style="margin:0 0 20px;color:#1f3a5d;">Cambiar Contraseña</h3>
+    <!-- Formulario de cambio de contraseña -->
     <div class="form-group">
       <label>Contraseña Actual</label>
       <input type="password" id="currentPassword" placeholder="••••••••">
@@ -98,7 +124,9 @@
       <label>Confirmar Nueva Contraseña</label>
       <input type="password" id="confirmPassword" placeholder="••••••••">
     </div>
+    <!-- Contenedor para mensajes de validación -->
     <div id="pw-msg" style="min-height:20px;font-size:13px;margin-bottom:8px;"></div>
+    <!-- Acciones del modal -->
     <div class="modal-actions">
       <button class="btn-cancel" id="cancelPassword">Cancelar</button>
       <button class="btn-save" id="savePassword">Cambiar</button>
@@ -106,7 +134,10 @@
   </div>
 </div>
 
+<!-- SECCIÓN 5: SCRIPTS -->
+<!-- Script principal de funcionalidad del dashboard de estudiante -->
 <script src="{{ url_for('static', filename='script/estudiante.js') }}"></script>
+<!-- Script inline para la funcionalidad del modo oscuro -->
 <script>
 // ── MODO OSCURO ──
 (function() {

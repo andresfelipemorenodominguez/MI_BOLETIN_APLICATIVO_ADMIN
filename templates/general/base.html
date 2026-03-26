@@ -1,3 +1,6 @@
+<!----------------------------------------->
+<!------ Plantilla Base de MiBoletín ------>
+ <!---------------------------------------->
 <!DOCTYPE html>
 <html lang="es">
 
@@ -6,7 +9,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MiBoletín - {% block title %}{% endblock %}</title>
 
+    <!-- Iconos Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Estilos CSS principales -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/estilo.css') }}">
 
     {% block styles %}{% endblock %}
@@ -14,8 +19,10 @@
 
 <body>
 
+    <!-- SECCIÓN 1: HEADER Y NAVEGACIÓN -->
     <header class="header">
         <nav class="navbar">
+            <!-- Logo con enlace a inicio -->
             <a href="{{ url_for('index') }}" class="logo-link">
                 <div class="logo">
                     <img src="{{ url_for('static', filename='img/Logo.png') }}" alt="Logo" class="logo-img">
@@ -28,8 +35,10 @@
                 <span class="hamburger-line"></span>
             </button>
 
+            <!-- Overlay oscuro para cerrar menú móvil -->
             <div class="nav-overlay" id="nav-overlay"></div>
 
+            <!-- Enlaces de navegación -->
             <ul class="nav-links" id="nav-links">
                 <li><a href="{{ url_for('index') }}"><i class="fas fa-home"></i> Inicio</a></li>
                 <li><a href="#acerca"><i class="fas fa-info-circle"></i> Institución</a></li>
@@ -37,7 +46,8 @@
                 <li><a href="#equipo"><i class="fas fa-users"></i> Equipo</a></li>
                 <li><a href="#contacto"><i class="fas fa-headset"></i> Soporte</a></li>
 
-                {% if session.get('user_info') %}
+                <!-- Información del usuario si está autenticado -->
+
                 <li class="user-greeting">
                     <span><i class="fas fa-user-circle"></i> {{ session['user_info']['nombre'].split(' ')[0] }}</span>
                 </li>
@@ -53,8 +63,10 @@
         {% endblock %}
     </main>
 
+    <!-- SECCIÓN 3: FOOTER -->
     <footer class="footer">
         <div class="footer-content">
+            <!-- Sección del logo con misión y redes sociales -->
             <div class="footer-section footer-logo-section">
                 <a href="{{ url_for('loginuser') }}" class="footer-logo-link">
                     <div class="footer-logo">
@@ -62,6 +74,7 @@
                     </div>
                 </a>
                 <p class="footer-mission">Promoviendo la innovación digital y la excelencia académica.</p>
+                <!-- Enlaces a redes sociales -->
                 <div class="footer-social">
                     <a href="#" class="social-icon"><i class="fab fa-facebook-f"></i></a>
                     <a href="#" class="social-icon"><i class="fab fa-twitter"></i></a>
@@ -70,6 +83,7 @@
                 </div>
             </div>
 
+            <!-- Sección de enlaces rápidos -->
             <div class="footer-section">
                 <h3><i class="fas fa-link"></i> Enlaces rápidos</h3>
                 <ul>
@@ -80,6 +94,7 @@
                 </ul>
             </div>
 
+            <!-- Sección de información de contacto -->
             <div class="footer-section">
                 <h3><i class="fas fa-envelope"></i> Contacto</h3>
                 <p><i class="fas fa-phone"></i> +57 323 317 5941</p>
@@ -88,6 +103,7 @@
             </div>
         </div>
 
+        <!-- Información de derechos de autor -->
         <div class="footer-bottom">
             <p>&copy; 2026 MI BOLETÍN. Todos los derechos reservados.</p>
         </div>
@@ -95,6 +111,8 @@
 
     {% block scripts %}{% endblock %}
     
+    <!-- SECCIÓN 4: SCRIPTS INLINE -->
+    <!-- Funcionalidad del menú hamburguesa responsive -->
     <script>
         // Menú hamburguesa responsive
         document.addEventListener('DOMContentLoaded', function() {
@@ -103,12 +121,14 @@
             const navOverlay = document.getElementById('nav-overlay');
 
             if (hamburger && navLinks) {
+                // Toggle del menú
                 hamburger.addEventListener('click', function() {
                     hamburger.classList.toggle('active');
                     navLinks.classList.toggle('active');
                     if (navOverlay) navOverlay.classList.toggle('active');
                 });
 
+                // Cerrar menú al hacer clic en el overlay
                 if (navOverlay) {
                     navOverlay.addEventListener('click', function() {
                         hamburger.classList.remove('active');
