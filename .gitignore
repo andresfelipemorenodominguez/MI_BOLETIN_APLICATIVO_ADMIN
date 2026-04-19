@@ -1,1 +1,12 @@
 .env
+venv/
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+*.so
+.pytest_cache/
+.mypy_cache/
+*.backup
+miboletin_backup.backup
+.DS_Store

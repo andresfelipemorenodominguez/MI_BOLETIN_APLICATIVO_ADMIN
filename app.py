@@ -19,20 +19,40 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def _require_secret_key():
+    key = os.environ.get("SECRET_KEY")
+    if not key:
+        raise RuntimeError(
+            "Falta SECRET_KEY. Configúrala en el archivo .env (consulta .env.example)."
+        )
+    return key
 
-app = Flask(__name__)                      #Crea la aplicación web usando Flask. __name__ le indica a Flask dónde está el archivo principal.
-app.secret_key = 'tu_clave_secreta_aqui'   #Define una clave secreta usada para proteger sesiones, cookies y datos sensibles de la aplicación.
+
+def _api_error_response(exc, public_message="Error en el servidor. Intenta más tarde."):
+    """Registra la excepción y devuelve un mensaje seguro al cliente."""
+    print(f"Error API: {exc!r}")
+    return jsonify({"status": "error", "message": public_message})
+
+
+def _smtp_config_ok():
+    return bool(EMAIL_USER and EMAIL_PASSWORD)
+
+
+app = Flask(__name__)
+app.secret_key = _require_secret_key()
 
 # -------------------------
-# 🔧 CONFIGURACIÓN EMAIL (GMAIL)
+# 🔧 CONFIGURACIÓN EMAIL (GMAIL) — desde variables de entorno
 # -------------------------
-##Define los datos necesarios para enviar correos desde la aplicación (por ejemplo: notificaciones o recuperación de contraseña).
-#
-EMAIL_HOST = "smtp.gmail.com"
-EMAIL_PORT = 587                                            
-EMAIL_USER = "miboletinpep@gmail.com"
-EMAIL_PASSWORD = "ihpo waip cekq dstv"
-EMAIL_FROM = "MiBoletínAdmin.com <miboletinpep@gmail.com>"
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_USER = os.environ.get("EMAIL_USER", "")
+EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD", "")
+EMAIL_FROM = os.environ.get("EMAIL_FROM") or (
+    f"MiBoletín <{EMAIL_USER}>" if EMAIL_USER else ""
+)
+# URL pública de la app (enlaces en correos, p. ej. recuperación de contraseña)
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "http://127.0.0.1:5005").rstrip("/")
 
 # -------------------------
 # 🔌 CONFIGURACIÓN DATABASE
@@ -52,6 +72,9 @@ def get_db_connection():
 #
 def send_verification_email(to_email, verification_code):
     """Envía un email con el código de verificación (para administradores)"""
+    if not _smtp_config_ok():
+        print("SMTP no configurado: define EMAIL_USER y EMAIL_PASSWORD en .env")
+        return False
     try:
         subject = "Verifica tu cuenta en MiBoletín.com"
         html_content = f"""
@@ -161,10 +184,13 @@ def send_recovery_email(to_email, recovery_link, user_name):
 #
 def enviar_correo_admin(destinatario, asunto, cuerpo_html, cuerpo_texto=""):
     """Envía correos electrónicos desde el módulo de usuarios (estudiantes/profesores)"""
+    if not _smtp_config_ok():
+        print("SMTP no configurado: define EMAIL_USER y EMAIL_PASSWORD en .env")
+        return False
     try:
         mensaje = MIMEMultipart('alternative')
         mensaje['Subject'] = asunto
-        mensaje['From'] = EMAIL_USER
+        mensaje['From'] = EMAIL_FROM or EMAIL_USER
         mensaje['To'] = destinatario
         mensaje.attach(MIMEText(cuerpo_texto, 'plain'))
         mensaje.attach(MIMEText(cuerpo_html, 'html'))
@@ -462,7 +488,8 @@ def guardar_solicitud():
         conn.rollback()
         cur.close()
         conn.close()
-        return jsonify({'status': 'error', 'message': f'Error al guardar la solicitud: {str(e)}'}), 500
+        print(f"Error al guardar solicitud: {e!r}")
+        return jsonify({'status': 'error', 'message': 'Error al guardar la solicitud. Intenta más tarde.'}), 500
 
 #####Esta ruta se usa para cerrar sesión o limpiar datos temporales del usuario.########
 #
@@ -868,7 +895,7 @@ def request_password_post():
         cur.close()
         conn.close()
 
-        recovery_link = f"http://localhost:5006/forgot-password?token={recovery_code}"
+        recovery_link = f"{PUBLIC_BASE_URL}/forgot-password?token={recovery_code}"
         email_sent = send_recovery_email(email, recovery_link, user[1])
 
         if email_sent:
@@ -1133,7 +1160,7 @@ def obtener_profesores_ids():
         cur.close(); conn.close()
         return jsonify({"status": "success", "data": data})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 ########Devuelve los IDs y datos básicos de los estudiantes para usarlos en listas o selects, validando sesión.#######
 #
@@ -1150,7 +1177,7 @@ def obtener_estudiantes_ids():
         cur.close(); conn.close()
         return jsonify({"status": "success", "data": data})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 #######Devuelve los IDs y nombres de los grupos para usarlos en listas o selects, validando sesión.#######
 #
@@ -1167,7 +1194,7 @@ def obtener_grupos_ids():
         cur.close(); conn.close()
         return jsonify({"status": "success", "data": data})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 ########Devuelve los IDs y nombres de las materias para usarlos en listas o selects, validando sesión.######
 #
@@ -1184,7 +1211,7 @@ def obtener_materias_ids():
         cur.close(); conn.close()
         return jsonify({"status": "success", "data": data})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 #######Obtiene la cantidad de estudiantes y profesores activos para mostrar estadísticas en el dashboard del administrador.#######
 #
@@ -1714,7 +1741,7 @@ def profesor_estudiantes():
         return jsonify({"status": "success", "data": estudiantes})
     except Exception as e:
         print(f"Error obteniendo estudiantes del profesor: {e}")
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 ############Lista los tipos de notas disponibles (ej: tareas, exámenes, etc.).###########
 #
@@ -1732,7 +1759,7 @@ def profesor_tipos_nota():
         conn.close()
         return jsonify({"status": "success", "data": tipos})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 #########obtiene las materias y grupos asignados al profesor#######
 #
@@ -1757,7 +1784,7 @@ def profesor_materias():
         conn.close()
         return jsonify({"status": "success", "data": materias})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 ##########crea un nuevo tipo de nota o devuelve uno existente#######
 #
@@ -1787,7 +1814,7 @@ def crear_tipo_nota():
         conn.commit(); cur.close(); conn.close()
         return jsonify({"status": "success", "message": f"Tipo '{nombre_tipo}' creado.", "id_tipo": row[0]})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 ##########registra una nueva nota para un estudiante, incluyendo valor, descripción, tipo de nota y la materia/grupo asignado por el profesor#########
 #
@@ -1818,7 +1845,7 @@ def subir_nota():
         return jsonify({"status": "success", "message": "Nota registrada exitosamente!", "id_nota": id_nota})
     except Exception as e:
         print(f"Error subiendo nota: {e}")
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 ######obtiene todas las notas de un estudiante registradas por el profesor, incluyendo valor, descripción, fecha, tipo de nota y materia correspondiente#######
 #
@@ -1848,7 +1875,7 @@ def ver_notas_estudiante(id_estudiante):
         conn.close()
         return jsonify({"status": "success", "data": notas})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 #########registra una observación para un estudiante con tipo y descripción########
 #
@@ -1876,7 +1903,7 @@ def agregar_observacion():
         conn.close()
         return jsonify({"status": "success", "message": "Observación registrada!", "id_observacion": id_obs})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 ########consulta las observaciones del estudiante hechas por el profesor, con fecha, tipo y detalle##########
 #
@@ -1901,7 +1928,7 @@ def ver_observaciones(id_estudiante):
         conn.close()
         return jsonify({"status": "success", "data": obs})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 ############obtiene los eventos del profesor con fecha, hora y estado###########
 #
@@ -1929,7 +1956,7 @@ def ver_agenda():
         conn.close()
         return jsonify({"status": "success", "data": eventos})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 ########crea un nuevo evento en la agenda con título, descripción, fecha y horario######
 #
@@ -1959,7 +1986,7 @@ def agregar_agenda():
         conn.close()
         return jsonify({"status": "success", "message": "Evento agregado!", "id_agenda": id_agenda})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 #######actualiza el estado de un evento de la agenda del profesor (ej: pendiente, realizado, cancelado)########
 #
@@ -1982,7 +2009,7 @@ def actualizar_estado_agenda(id_agenda):
         conn.close()
         return jsonify({"status": "success", "message": "Estado actualizado!"})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 ########obtiene el reporte completo de un estudiante con datos personales, notas por materia, observaciones del profesor y promedio general########
 #
@@ -2032,7 +2059,7 @@ def reporte_estudiante(id_estudiante):
             }
         })
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 
 
@@ -2170,7 +2197,7 @@ def profesor_reporte_pdf():
                          mimetype='application/pdf')
     except Exception as e:
         print(f"Error generando PDF profesor: {e}")
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 #########obtiene el listado de estudiantes activos asociados a una materia y grupo específico del profesor, incluyendo id, código, nombre, grado y grupo#####
 #
@@ -2195,7 +2222,7 @@ def estudiantes_por_materia(id_grupo_materia):
         cur.close(); conn.close()
         return jsonify({"status": "success", "data": estudiantes})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 ###########permite registrar múltiples notas en lote para varios estudiantes, guardando valor, descripción, tipo de nota y relación con la materia/grupo correspondiente en una sola operación######
 #
@@ -2223,7 +2250,7 @@ def subir_notas_masivo():
         conn.commit(); cur.close(); conn.close()
         return jsonify({"status": "success", "message": f"{guardadas} nota(s) guardadas exitosamente."})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 
 # ── ASISTENCIA ──
@@ -2251,7 +2278,7 @@ def ver_asistencia():
         cur.close(); conn.close()
         return jsonify({"status": "success", "data": registros})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 ###########registra o actualiza la asistencia de múltiples estudiantes en una fecha determinada, guardando el estado de cada uno mediante inserción o actualización automática en la base de datos######
 #
@@ -2279,12 +2306,12 @@ def guardar_asistencia():
         conn.commit(); cur.close(); conn.close()
         return jsonify({"status": "success", "message": f"Asistencia del {fecha} guardada."})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 
 # ── MATERIAL DE CLASE ──
 
-#########obtiene el listado de materiales de clase subidos por el profesor, con título, descripción, tipo, archivo o enlace, fecha de subida y opción de filtrar por materia/grupo específico######
+#obtiene el listado de materiales de clase subidos por el profesor, con título, descripción, tipo, archivo o enlace, fecha de subida y opción de filtrar por materia/grupo específico######
 #
 @app.route('/profesor/material', methods=['GET'])
 def ver_material():
@@ -2312,7 +2339,7 @@ def ver_material():
         cur.close(); conn.close()
         return jsonify({"status": "success", "data": materiales})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 ########permite al profesor subir material de clase registrando título, descripción, tipo (archivo o enlace), recurso (URL o nombre) y la materia/grupo al que pertenece, guardándolo en el sistema para su posterior consulta########
 #
@@ -2340,7 +2367,7 @@ def subir_material():
         conn.commit(); cur.close(); conn.close()
         return jsonify({"status": "success", "message": "Material agregado.", "id_material": id_mat})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 ##########elimina un material de clase específico del profesor, validando que le pertenezca antes de borrarlo del sistema##########
 #
@@ -2357,7 +2384,7 @@ def eliminar_material(id_material):
         conn.commit(); cur.close(); conn.close()
         return jsonify({"status": "success", "message": "Material eliminado."})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 
 #  RUTAS ADMIN — Períodos, Grupos, Materias, Asignaciones
@@ -2403,7 +2430,7 @@ def estudiante_notas():
         cur.close(); conn.close()
         return jsonify({"status":"success","data":notas})
     except Exception as e:
-        return jsonify({"status":"error","message":str(e)})
+        return _api_error_response(e)
 
 #############muestra el rendimiento por materia incluyendo promedio, cantidad de notas, nota máxima y mínima ordenado por mejor desempeño######
 #
@@ -2435,7 +2462,7 @@ def estudiante_desempeno():
         cur.close(); conn.close()
         return jsonify({"status":"success","data":data})
     except Exception as e:
-        return jsonify({"status":"error","message":str(e)})
+        return _api_error_response(e)
 
 ###########obtiene el historial de asistencia del estudiante con fecha, estado, materia y profesor, además de un resumen por materia (presentes, ausentes, tardanzas y justificados)##########
 #
@@ -2480,7 +2507,7 @@ def estudiante_asistencia():
         cur.close(); conn.close()
         return jsonify({"status":"success","data":registros,"resumen":resumen})
     except Exception as e:
-        return jsonify({"status":"error","message":str(e)})
+        return _api_error_response(e)
 
 ########muestra los materiales de clase disponibles para el estudiante con título, descripción, tipo, recurso, fecha, materia y profesor#
 #
@@ -2510,7 +2537,7 @@ def estudiante_material():
         cur.close(); conn.close()
         return jsonify({"status":"success","data":materiales})
     except Exception as e:
-        return jsonify({"status":"error","message":str(e)})
+        return _api_error_response(e)
 
 ######obtiene las observaciones del estudiante con tipo, descripción, fecha y profesor que la registró#########
 #
@@ -2534,7 +2561,7 @@ def estudiante_observador():
         cur.close(); conn.close()
         return jsonify({"status":"success","data":obs})
     except Exception as e:
-        return jsonify({"status":"error","message":str(e)})
+        return _api_error_response(e)
 
 ##########permite a estudiantes o profesores cambiar su contraseña validando la actual y guardando la nueva de forma segura en el sistema############
 #
@@ -2569,7 +2596,7 @@ def change_password():
         conn.commit(); cur.close(); conn.close()
         return jsonify({"status": "success", "message": "Contraseña actualizada exitosamente."})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 ###########permite a estudiantes o profesores actualizar su nombre completo y correo electrónico, guardando los cambios en la base de datos y actualizando la sesión activa########
 #
@@ -2595,7 +2622,7 @@ def update_profile():
         session['user_info']['nombre'] = fullname
         return jsonify({"status":"success","message":"Perfil actualizado."})
     except Exception as e:
-        return jsonify({"status":"error","message":str(e)})
+        return _api_error_response(e)
 
 
 # ── FIN RUTAS ESTUDIANTE ──
@@ -2615,7 +2642,7 @@ def get_periodos():
         return jsonify({"status": "success", "data": data})
     except Exception as e:
         print(f"Error periodos: {e}")
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 ###########permite crear un nuevo período académico validando los campos requeridos (nombre, fecha_inicio, fecha_fin) y almacenándolo en la base de datos, retornando el id del período creado junto con un mensaje de confirmación#########
 #
@@ -2638,7 +2665,7 @@ def crear_periodo():
         return jsonify({"status": "success", "message": "Período creado exitosamente!", "id_periodo": id_periodo})
     except Exception as e:
         print(f"Error creando período: {e}")
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 ###########obtiene todos los grupos registrados junto con su período académico asociado mediante un LEFT JOIN, retornando id del grupo, nombre y nombre del período, ordenados de forma descendente######
 #
@@ -2659,7 +2686,7 @@ def get_grupos():
         cur.close(); conn.close()
         return jsonify({"status": "success", "data": data})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 ########permite crear un nuevo grupo validando los campos obligatorios (nombre e id_periodo), insertándolo en la base de datos y devolviendo el id del grupo creado junto con un mensaje de confirmación########
 #
@@ -2680,7 +2707,7 @@ def crear_grupo():
         conn.commit(); cur.close(); conn.close()
         return jsonify({"status": "success", "message": "Grupo creado exitosamente!", "id_grupo": id_grupo})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 #########obtiene el total de grupos registrados en el sistema mediante una consulta COUNT(*) sobre la tabla grupos, retornando la cantidad como dato numérico########
 #
@@ -2696,7 +2723,7 @@ def grupos_count():
         cur.close(); conn.close()
         return jsonify({"status": "success", "data": count})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 ###########lista todas las materias registradas mostrando id, nombre y código, ordenadas alfabéticamente por nombre para facilitar su visualización y selección######
 #
@@ -2712,7 +2739,7 @@ def get_materias():
         cur.close(); conn.close()
         return jsonify({"status": "success", "data": data})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 #############permite crear una nueva materia validando el campo obligatorio nombre y un código opcional, insertándola en la base de datos y retornando el id generado, manejando además errores de duplicidad en el código#######
 #
@@ -2735,9 +2762,9 @@ def crear_materia():
     except psycopg2.Error as e:
         if "unique" in str(e).lower():
             return jsonify({"status": "error", "message": "El código ya existe."})
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 ##########obtiene el total de materias registradas mediante una consulta COUNT(*) sobre la tabla materia, retornando la cantidad como dato numérico##########
 #
@@ -2753,7 +2780,7 @@ def materias_count():
         cur.close(); conn.close()
         return jsonify({"status": "success", "data": count})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 ###obtiene todas las asignaciones de materias a grupos y profesores mediante múltiples JOINs, retornando id de la asignación, nombre del profesor, grupo y materia, organizados por grupo y materia para una mejor visualización###
 #
@@ -2777,7 +2804,7 @@ def get_asignaciones():
         cur.close(); conn.close()
         return jsonify({"status": "success", "data": data})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 ####permite crear una nueva asignación validando los campos obligatorios (id_docente, id_grupo, id_materia), insertándola en la tabla grupo_materias y retornando el id generado, incluyendo manejo de errores en caso de asignaciones duplicadas####
 #
@@ -2804,9 +2831,9 @@ def crear_asignacion():
     except psycopg2.Error as e:
         if "unique" in str(e).lower():
             return jsonify({"status": "error", "message": "Esta asignación ya existe."})
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 #####permite eliminar una asignación específica entre grupo, materia y profesor mediante su id, ejecutando una eliminación directa en la tabla grupo_materias y retornando un mensaje de confirmación#####
 #
@@ -2821,7 +2848,7 @@ def eliminar_asignacion(id_grupo_materia):
         conn.commit(); cur.close(); conn.close()
         return jsonify({"status": "success", "message": "Asignación eliminada."})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 #####asigna un estudiante a un grupo validando los campos requeridos (id_estudiante, id_grupo), insertándolo en la tabla grupo_estudiantes con control de duplicados mediante ON CONFLICT DO NOTHING para evitar registros repetidos####
 #
@@ -2844,7 +2871,7 @@ def asignar_estudiante_grupo():
         conn.commit(); cur.close(); conn.close()
         return jsonify({"status": "success", "message": "Estudiante asignado al grupo exitosamente!"})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 ####permite eliminar la relación entre un estudiante y un grupo específico validando id_estudiante e id_grupo, eliminando el registro correspondiente en la tabla grupo_estudiantes y retornando un mensaje de confirmación#####
 #
@@ -2862,7 +2889,7 @@ def quitar_estudiante_grupo():
         conn.commit(); cur.close(); conn.close()
         return jsonify({"status": "success", "message": "Estudiante quitado del grupo."})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 ####obtiene el listado de estudiantes pertenecientes a un grupo específico mediante un JOIN entre estudiantes y grupo_estudiantes, retornando id, código y nombre completo, ordenados alfabéticamente para facilitar su visualización####
 #
@@ -2884,7 +2911,7 @@ def get_estudiantes_grupo(id_grupo):
         cur.close(); conn.close()
         return jsonify({"status": "success", "data": data})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 #######obtiene el listado de administradores registrados en el sistema mostrando id, nombre completo, correo electrónico y estado de verificación de email, ordenados por id para una gestión organizada####
 #
@@ -2901,7 +2928,7 @@ def get_administradores():
         cur.close(); conn.close()
         return jsonify({"status": "success", "data": data})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 ###permite eliminar un administrador específico mediante su id, validando previamente que no sea el mismo usuario en sesión para evitar auto-eliminación, y ejecutando la eliminación en la base de datos con confirmación de éxito######
 #
@@ -2918,10 +2945,11 @@ def eliminar_administrador(id_admin):
         conn.commit(); cur.close(); conn.close()
         return jsonify({"status": "success", "message": "Administrador eliminado."})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return _api_error_response(e)
 
 
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5006)
+    port = int(os.environ.get("PORT", "5005"))
+    app.run(host="0.0.0.0", port=port)
