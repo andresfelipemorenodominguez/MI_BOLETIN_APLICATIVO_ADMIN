@@ -933,6 +933,12 @@ html.dark-mode .section-title{color:var(--dm-text);}
 html.dark-mode .grade-table thead tr{background:#1e3a5f;}
 html.dark-mode .grade-table td{border-bottom-color:var(--dm-border);color:var(--dm-text);}
 html.dark-mode .grade-table tr:hover td{background:var(--dm-surface2);}
+html.dark-mode .row-aprobado td{background:#1a3a2a !important;}
+html.dark-mode .row-reprobado td{background:#3a1a1a !important;}
+html.dark-mode .chip-aprobado{background:#276749 !important;color:#c6f6d5 !important;}
+html.dark-mode .chip-reprobado{background:#9b2c2c !important;color:#fed7d7 !important;}
+html.dark-mode .chip-vacio{background:var(--dm-surface2) !important;color:var(--dm-muted) !important;}
+html.dark-mode .nota-input, html.dark-mode .desc-input{background:var(--dm-surface2) !important;border-color:var(--dm-border) !important;color:var(--dm-text) !important;}
 html.dark-mode .tabla-scroll{border-color:var(--dm-border);}
 html.dark-mode .table-footer{background:var(--dm-surface2);border-top-color:var(--dm-border);color:var(--dm-muted);}
 html.dark-mode .material-form-panel,html.dark-mode .material-list-panel,html.dark-mode .agenda-form-panel,html.dark-mode .agenda-cal-panel{background:var(--dm-surface);border-color:var(--dm-border);}

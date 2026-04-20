@@ -319,8 +319,8 @@ class ProfesoresTableManager extends TableManager {
             <td><span class="table-badge badge-primary">${p.id}</span></td>
             <td class="nombre-cell">${p.nombre}</td>
             <td class="email-cell">${p.email}</td>
-            <td title="${Array.isArray(p.asignaturas) ? p.asignaturas.join(', ') : ''}">${asigs}</td>
             <td>${p.telefono || 'N/A'}</td>
+            <td title="${Array.isArray(p.asignaturas) ? p.asignaturas.join(', ') : ''}">${asigs}</td>
             <td>${p.fecha_registro || '–'}</td>
             <td><div class="table-actions">
                 <button class="action-btn delete" title="Eliminar" data-codigo="${p.id}"><i class="fas fa-trash"></i></button>
@@ -483,8 +483,26 @@ class ProfessorFormHandler {
         ['prof-num-doc', 'prof-telefono'].forEach(id => {
             document.getElementById(id)?.addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, ''); });
         });
+        this.cargarAsignaturas();
     }
-
+    async cargarAsignaturas() {
+        const sel = document.getElementById('prof-asignaturas');
+        if (!sel) return;
+        try {
+            const res  = await fetch('/admin/materias');
+            const data = await res.json();
+            const materias = data.data || [];
+            if (!materias.length) {
+                sel.innerHTML = '<option disabled>No hay materias registradas</option>';
+                return;
+            }
+            sel.innerHTML = materias.map(m =>
+                `<option value="${m.nombre}">${m.nombre}</option>`
+            ).join('');
+        } catch(e) {
+            console.error('Error cargando materias:', e);
+        }
+    }
     async handleSubmit(e) {
         e.preventDefault();
         const sel = document.getElementById('prof-asignaturas');

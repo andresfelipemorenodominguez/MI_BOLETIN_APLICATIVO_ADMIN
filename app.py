@@ -14,9 +14,17 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
+from werkzeug.utils import secure_filename
 import json
 from dotenv import load_dotenv
 load_dotenv()
+
+UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'static', 'uploads_material')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'txt', 'png', 'jpg', 'jpeg', 'zip'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 def _require_secret_key():
@@ -41,9 +49,9 @@ def _smtp_config_ok():
 app = Flask(__name__)
 app.secret_key = _require_secret_key()
 
-# -------------------------
-# 🔧 CONFIGURACIÓN EMAIL (GMAIL) — desde variables de entorno
-# -------------------------
+
+#  CONFIGURACIÓN EMAIL (GMAIL) — desde variables de entorno
+
 EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
 EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
 EMAIL_USER = os.environ.get("EMAIL_USER", "")
@@ -54,9 +62,9 @@ EMAIL_FROM = os.environ.get("EMAIL_FROM") or (
 # URL pública de la app (enlaces en correos, p. ej. recuperación de contraseña)
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "http://127.0.0.1:5005").rstrip("/")
 
-# -------------------------
-# 🔌 CONFIGURACIÓN DATABASE
-# -------------------------
+
+# CONFIGURACIÓN DATABASE
+
 #Define una función para conectarse a la base de datos PostgreSQL.Esta función se usa cada vez que la aplicación necesita consultar o guardar información
 #
 def get_db_connection():
@@ -65,9 +73,8 @@ def get_db_connection():
 
 
 
-# -------------------------
-# 📧 FUNCIONES DE EMAIL
-# -------------------------
+# FUNCIONES DE EMAIL
+
 ######Esta función construye un correo visual y personalizado con un código de verificación que el usuario debe usar para completar su registro en el sistema.#######
 #
 def send_verification_email(to_email, verification_code):
@@ -110,9 +117,6 @@ def send_verification_email(to_email, verification_code):
         </body>
         </html>
         """
-        
-        ########Este bloque se encarga de enviar realmente el correo de verificación y manejar errores en caso de fallo.#######
-        #
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
         msg['From'] = EMAIL_FROM
@@ -127,6 +131,8 @@ def send_verification_email(to_email, verification_code):
         return True
     except Exception as e:
         print(f"Error enviando email a {to_email}: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return False
 
 ########Esta función crea un correo visual con un enlace seguro que permite al usuario restablecer su contraseña en el sistema.#########
@@ -2348,17 +2354,41 @@ def subir_material():
     user_info = session.get('user_info')
     if not user_info or user_info.get('tipo') != 'profesor':
         return jsonify({"status": "error", "message": "No autorizado"}), 401
-    data = request.get_json()
-    titulo = data.get('titulo')
-    descripcion = data.get('descripcion', '')
-    tipo = data.get('tipo', 'enlace')
-    url_o_nombre = data.get('url_o_nombre')
-    id_grupo_materia = data.get('id_grupo_materia')
+
+    titulo          = request.form.get('titulo') or (request.get_json() or {}).get('titulo')
+    descripcion     = request.form.get('descripcion', '')
+    tipo            = request.form.get('tipo', 'enlace')
+    url_o_nombre    = request.form.get('url_o_nombre', '')
+    id_grupo_materia= request.form.get('id_grupo_materia')
+
+    # Si viene como JSON (enlace/video/otro)
+    if request.is_json:
+        data         = request.get_json()
+        titulo       = data.get('titulo')
+        descripcion  = data.get('descripcion', '')
+        tipo         = data.get('tipo', 'enlace')
+        url_o_nombre = data.get('url_o_nombre')
+        id_grupo_materia = data.get('id_grupo_materia')
+
+    # Si vino archivo
+    archivo = request.files.get('archivo')
+    if archivo and archivo.filename:
+        if not allowed_file(archivo.filename):
+            return jsonify({"status": "error", "message": "Tipo de archivo no permitido."})
+        filename = secure_filename(archivo.filename)
+        # Nombre único para evitar colisiones
+        import uuid
+        filename = f"{uuid.uuid4().hex}_{filename}"
+        archivo.save(os.path.join(UPLOAD_FOLDER, filename))
+        url_o_nombre = f"/material/archivo/{filename}"
+        tipo = 'archivo'
+
     if not all([titulo, url_o_nombre, id_grupo_materia]):
-        return jsonify({"status": "error", "message": "Título, enlace y materia son requeridos."})
+        return jsonify({"status": "error", "message": "Título, recurso y materia son requeridos."})
+
     try:
         conn = get_db_connection()
-        cur = conn.cursor()
+        cur  = conn.cursor()
         cur.execute("""
             INSERT INTO material_clase (id_profesor, id_grupo_materia, titulo, descripcion, tipo, url_o_nombre)
             VALUES (%s, %s, %s, %s, %s, %s) RETURNING id_material
@@ -2369,6 +2399,10 @@ def subir_material():
     except Exception as e:
         return _api_error_response(e)
 
+@app.route('/material/archivo/<path:filename>')
+def servir_material(filename):
+    return send_file(os.path.join(UPLOAD_FOLDER, filename), as_attachment=True)
+
 ##########elimina un material de clase específico del profesor, validando que le pertenezca antes de borrarlo del sistema##########
 #
 @app.route('/profesor/material/<int:id_material>', methods=['DELETE'])
@@ -2378,14 +2412,21 @@ def eliminar_material(id_material):
         return jsonify({"status": "error", "message": "No autorizado"}), 401
     try:
         conn = get_db_connection()
-        cur = conn.cursor()
+        cur  = conn.cursor()
+        cur.execute("SELECT tipo, url_o_nombre FROM material_clase WHERE id_material = %s AND id_profesor = %s",
+                    (id_material, user_info['id']))
+        row = cur.fetchone()
+        if row and row[0] == 'archivo':
+            filename = row[1].split('/')[-1]
+            path = os.path.join(UPLOAD_FOLDER, filename)
+            if os.path.exists(path):
+                os.remove(path)
         cur.execute("DELETE FROM material_clase WHERE id_material = %s AND id_profesor = %s",
                     (id_material, user_info['id']))
         conn.commit(); cur.close(); conn.close()
         return jsonify({"status": "success", "message": "Material eliminado."})
     except Exception as e:
         return _api_error_response(e)
-
 
 #  RUTAS ADMIN — Períodos, Grupos, Materias, Asignaciones
 # Pega este bloque en app.py antes del if __name__
@@ -2602,28 +2643,39 @@ def change_password():
 #
 @app.route('/update-profile', methods=['POST'])
 def update_profile():
-    user_info = session.get('user_info')
-    if not user_info: return jsonify({"status":"error","message":"No autorizado"}), 401
     data = request.get_json()
-    fullname = data.get('fullname','').strip()
-    email = data.get('email','').strip()
-    if not fullname: return jsonify({"status":"error","message":"El nombre es requerido."})
+    fullname = data.get('fullname', '').strip()
+    email = data.get('email', '').strip()
+    if not fullname:
+        return jsonify({"status": "error", "message": "El nombre es requerido."})
+
+    user_info = session.get('user_info')
+    user_id   = session.get('user_id')
+
     try:
         conn = get_db_connection()
-        cur = conn.cursor()
-        tipo = user_info.get('tipo')
-        if tipo == 'estudiante':
-            cur.execute("UPDATE estudiantes SET nombre_completo=%s, correo_electronico=%s WHERE id_estudiante=%s",
-                        (fullname, email, user_info['id']))
-        elif tipo == 'profesor':
-            cur.execute("UPDATE profesores SET nombre_completo=%s, correo_electronico=%s WHERE id_profesor=%s",
-                        (fullname, email, user_info['id']))
+        cur  = conn.cursor()
+
+        if user_info:
+            tipo = user_info.get('tipo')
+            if tipo == 'estudiante':
+                cur.execute("UPDATE estudiantes SET nombre_completo=%s, correo_electronico=%s WHERE id_estudiante=%s",
+                            (fullname, email, user_info['id']))
+            elif tipo == 'profesor':
+                cur.execute("UPDATE profesores SET nombre_completo=%s, correo_electronico=%s WHERE id_profesor=%s",
+                            (fullname, email, user_info['id']))
+            session['user_info']['nombre'] = fullname
+        elif user_id:
+            cur.execute("UPDATE administradores SET nombre_completo=%s, correo_electronico=%s WHERE id_admin=%s",
+                        (fullname, email, user_id))
+            session['user_name'] = fullname
+        else:
+            return jsonify({"status": "error", "message": "No autorizado"}), 401
+
         conn.commit(); cur.close(); conn.close()
-        session['user_info']['nombre'] = fullname
-        return jsonify({"status":"success","message":"Perfil actualizado."})
+        return jsonify({"status": "success", "message": "Perfil actualizado."})
     except Exception as e:
         return _api_error_response(e)
-
 
 # ── FIN RUTAS ESTUDIANTE ──
 
@@ -2941,6 +2993,7 @@ def eliminar_administrador(id_admin):
     try:
         conn = get_db_connection()
         cur = conn.cursor()
+        cur.execute("DELETE FROM solicitudes_cambio_contrasena WHERE id_admin = %s", (id_admin,))
         cur.execute("DELETE FROM administradores WHERE id_admin = %s", (id_admin,))
         conn.commit(); cur.close(); conn.close()
         return jsonify({"status": "success", "message": "Administrador eliminado."})

@@ -614,28 +614,33 @@ async function renderMaterial() {
         <label>Título</label>
         <input type="text" id="mat-titulo" placeholder="Ej: Guía de estudio parcial 1">
       </div>
-      <div class="form-group">
+<div class="form-group">
         <label>Tipo</label>
-        <select id="mat-tipo">
+        <select id="mat-tipo" onchange="toggleTipoMaterial(this.value)">
           <option value="enlace">🔗 Enlace web</option>
-          <option value="documento">📄 Documento (Google Drive, etc.)</option>
+          <option value="documento">📄 Documento (Drive, etc.)</option>
           <option value="video">🎬 Video (YouTube, etc.)</option>
+          <option value="archivo">📁 Archivo desde mi PC</option>
           <option value="otro">📎 Otro</option>
+
         </select>
       </div>
-      <div class="form-group">
+      <div class="form-group" id="mat-url-group">
         <label>URL / Enlace</label>
         <input type="url" id="mat-url" placeholder="https://...">
       </div>
-      <div class="form-group">
-        <label>Descripción (opcional)</label>
-        <textarea id="mat-desc" placeholder="Breve descripción del material..."></textarea>
+      <div class="form-group" id="mat-file-group" style="display:none;">
+        <label>Seleccionar archivo</label>
+        <input type="file" id="mat-archivo" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.png,.jpg,.jpeg,.zip">
+        <small style="color:#6b7a8a;font-size:12px;">PDF, Word, Excel, PPT, imágenes, ZIP — máx. 10 MB</small>
       </div>
-      <button class="btn-guardar" onclick="agregarMaterial()">
+      <div id="mat-msg" class="nota-msg"></div>
+      <div class="form-group">
+     <button class="btn-guardar" onclick="agregarMaterial()">
         <span>📤</span> Publicar Material
       </button>
-      <div id="mat-msg" class="nota-msg"></div>
-    </div>
+      </div>
+</div>
 
     <!-- Lista de materiales -->
     <div class="material-list-panel">
@@ -682,42 +687,67 @@ window.cargarMateriales = async function(id_gm) {
       </div>
       <h4 class="material-titulo">${m.titulo}</h4>
       ${m.descripcion ? `<p class="material-desc">${m.descripcion}</p>` : ''}
-      <a href="${m.url_o_nombre}" target="_blank" rel="noopener" class="material-link">
-        🔗 Abrir recurso
-      </a>
+      ${m.tipo === 'archivo'
+        ? `<a href="${m.url_o_nombre}" class="material-link" download>⬇️ Descargar archivo</a>`
+        : `<a href="${m.url_o_nombre}" target="_blank" rel="noopener" class="material-link">🔗 Abrir recurso</a>`
+      }
     </div>`).join('');
+};
+
+window.toggleTipoMaterial = function(tipo) {
+  const urlGroup  = document.getElementById('mat-url-group');
+  const fileGroup = document.getElementById('mat-file-group');
+  if (tipo === 'archivo') {
+    urlGroup.style.display  = 'none';
+    fileGroup.style.display = 'block';
+  } else {
+    urlGroup.style.display  = 'block';
+    fileGroup.style.display = 'none';
+  }
 };
 
 window.agregarMaterial = async function() {
   const id_gm      = document.getElementById('mat-materia')?.value;
-  const titulo     = document.getElementById('mat-titulo')?.value;
+  const titulo     = document.getElementById('mat-titulo')?.value?.trim();
   const tipo       = document.getElementById('mat-tipo')?.value;
-  const url        = document.getElementById('mat-url')?.value;
-  const descripcion= document.getElementById('mat-desc')?.value;
+  const descripcion= document.getElementById('mat-desc')?.value || '';
   const msg        = document.getElementById('mat-msg');
 
-  if (!id_gm||!titulo||!url) { msg.innerHTML=`<span class="msg-err">⚠️ Materia, título y URL son requeridos.</span>`; return; }
+  if (!id_gm || !titulo) {
+    msg.innerHTML = `<span class="msg-err">⚠️ Materia y título son requeridos.</span>`; return;
+  }
 
-  const res  = await fetch('/profesor/material', { method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({id_grupo_materia:id_gm, titulo, tipo, url_o_nombre:url, descripcion}) });
+  let res;
+
+  if (tipo === 'archivo') {
+    const archivoInput = document.getElementById('mat-archivo');
+    if (!archivoInput.files.length) {
+      msg.innerHTML = `<span class="msg-err">⚠️ Selecciona un archivo.</span>`; return;
+    }
+    const formData = new FormData();
+    formData.append('id_grupo_materia', id_gm);
+    formData.append('titulo', titulo);
+    formData.append('tipo', tipo);
+    formData.append('descripcion', descripcion);
+    formData.append('archivo', archivoInput.files[0]);
+    msg.innerHTML = `<span class="msg-ok">⏳ Subiendo archivo...</span>`;
+    res = await fetch('/profesor/material', { method: 'POST', body: formData });
+  } else {
+    const url = document.getElementById('mat-url')?.value;
+    if (!url) { msg.innerHTML = `<span class="msg-err">⚠️ La URL es requerida.</span>`; return; }
+    res = await fetch('/profesor/material', { method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({id_grupo_materia:id_gm, titulo, tipo, url_o_nombre:url, descripcion}) });
+  }
+
   const data = await res.json();
   msg.innerHTML = `<span class="${data.status==='success'?'msg-ok':'msg-err'}">${data.message}</span>`;
-  if (data.status==='success') {
-    document.getElementById('mat-titulo').value='';
-    document.getElementById('mat-url').value='';
-    document.getElementById('mat-desc').value='';
-    const filtro = document.getElementById('filtro-mat-materia')?.value||'';
-    cargarMateriales(filtro);
-  }
-};
-
-window.eliminarMaterial = async function(id) {
-  if (!confirm('¿Eliminar este material?')) return;
-  const res  = await fetch(`/profesor/material/${id}`, { method:'DELETE' });
-  const data = await res.json();
-  if (data.status==='success') {
-    const filtro = document.getElementById('filtro-mat-materia')?.value||'';
+  if (data.status === 'success') {
+    document.getElementById('mat-titulo').value = '';
+    document.getElementById('mat-url').value = '';
+    document.getElementById('mat-desc').value = '';
+    document.getElementById('mat-archivo').value = '';
+    const filtro = document.getElementById('filtro-mat-materia')?.value || '';
     cargarMateriales(filtro);
   }
 };

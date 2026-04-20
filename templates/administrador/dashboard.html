@@ -460,20 +460,7 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
                                 <i class="fas fa-book select-icon"></i>
                                 <!-- Selector múltiple de asignaturas -->
                                 <select id="prof-asignaturas" class="form-select" multiple required>
-                                    <option value="matematicas">Matemáticas</option>
-                                    <option value="español">Español</option>
-                                    <option value="ciencias-naturales">Ciencias Naturales</option>
-                                    <option value="ciencias-sociales">Ciencias Sociales</option>
-                                    <option value="ingles">Inglés</option>
-                                    <option value="educacion-fisica">Educación Física</option>
-                                    <option value="arte">Arte</option>
-                                    <option value="musica">Música</option>
-                                    <option value="tecnologia">Tecnología</option>
-                                    <option value="etica">Ética y Valores</option>
-                                    <option value="fisica">Física</option>
-                                    <option value="quimica">Química</option>
-                                    <option value="biologia">Biología</option>
-                                    <option value="filosofia">Filosofía</option>
+
                                 </select>
                                 <!-- Información del selector múltiple -->
                                 <div class="multi-select-info">
@@ -488,14 +475,16 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
                         <h3 class="form-section-title"><i class="fas fa-lock"></i> Contraseña</h3>
                         <div class="form-group">
                             <div class="password-container">
-                                <div class="input-with-icon">
+                                <div class="input-with-icon" style="position:relative; flex:1;">
                                     <i class="fas fa-lock input-icon"></i>
                                     <input type="password" id="prof-contrasena" class="form-input password-input" placeholder="Mínimo 8 caracteres" required>
+                                    <button type="button" class="toggle-password-btn" data-target="prof-contrasena" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; color:#6b7280;">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
                                 </div>
-                                <!-- Botón para mostrar/ocultar contraseña -->
-                                <button type="button" class="toggle-password-btn" data-target="prof-contrasena"><i class="fas fa-eye"></i></button>
-                                <!-- Botón para generar contraseña automática -->
-                                <button type="button" class="btn-secondary btn-secondary generate-password-btn" id="generate-profesor-password"><i class="fas fa-random"></i> Generar</button>
+                                <button type="button" class="btn-secondary generate-password-btn" id="generate-profesor-password">
+                                    <i class="fas fa-random"></i> Generar
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -518,7 +507,7 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
                     </div>
                     <div class="table-wrapper">
                         <!-- Tabla con datos de profesores -->
-                        <table class="data-table">
+                        <table class="data-table" id="tabla-profesores">
                             <thead>
                                 <tr>
                                     <th>Código</th><th>Nombre</th><th>Correo</th>

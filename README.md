@@ -27,6 +27,7 @@
 - [Generación de Reportes](#-generación-de-reportes)
 - [Seguridad](#-seguridad)
 - [Contribución](#-contribución)
+- [Historial de Git](#historial-de-git)
 - [Licencia](#-licencia)
 
 ---
@@ -409,6 +410,27 @@ Los PDFs incluyen:
 - Sigue el estilo de código existente
 - Agrega comentarios descriptivos
 - Actualiza la documentación si es necesario
+
+---
+
+## 🔄 Historial de Git
+
+Si la rama `main` se ha **reescrito** en el remoto (por ejemplo, para eliminar del historial archivos que no debían estar versionados, como un entorno virtual o copias de respaldo), el push habitual puede rechazarse. En ese caso, quien mantenga el repositorio debe usar:
+
+```bash
+git push --force-with-lease origin main
+```
+
+`--force-with-lease` es más seguro que `--force` porque evita sobrescribir trabajo ajeno si el remoto tiene commits nuevos que tú aún no has visto.
+
+**Colaboradores** con un clon anterior a esa limpieza: tras un `git fetch origin`, alinear la copia local con el remoto, por ejemplo:
+
+```bash
+git checkout main
+git reset --hard origin/main
+```
+
+Si prefieren no perder cambios locales sin commitear, pueden guardarlos antes con `git stash` o crear una rama de respaldo. Quien tenga ramas propias basadas en el historial antiguo deberá **rebasarlas** sobre el nuevo `main` o recrearlas.
 
 ---
 
