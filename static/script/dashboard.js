@@ -819,3 +819,322 @@ document.addEventListener('DOMContentLoaded', () => {
     window.app = app;
     app.init();
 });
+
+
+// ============================================================
+//  ADDON: Editar Estudiantes y Profesores
+//  Pega este bloque AL FINAL de dashboard.js,
+//  justo antes del cierre del DOMContentLoaded o al final del archivo.
+// ============================================================
+
+// ── MODAL EDITAR ESTUDIANTE ──────────────────────────────────
+
+const EditarEstudiante = {
+    modal: null,
+    currentCodigo: null,
+
+    init() {
+        this.modal = document.getElementById('modal-editar-estudiante');
+        document.getElementById('cerrar-modal-est')?.addEventListener('click', () => this.close());
+        document.getElementById('cancelar-editar-est')?.addEventListener('click', () => this.close());
+        document.getElementById('form-editar-estudiante')?.addEventListener('submit', e => this.guardar(e));
+        // Cerrar al hacer clic fuera
+        this.modal?.addEventListener('click', e => { if (e.target === this.modal) this.close(); });
+    },
+
+    open(data) {
+        this.currentCodigo = data.id;
+        document.getElementById('edit-est-codigo').value      = data.id       || '';
+        document.getElementById('edit-est-nombre').value      = data.nombre   || '';
+        document.getElementById('edit-est-correo').value      = data.email    || '';
+        document.getElementById('edit-est-grado').value       = data.grado    || '';
+        document.getElementById('edit-est-grupo').value       = data.grupo    || '';
+        document.getElementById('edit-est-nueva-pass').value  = '';
+        document.getElementById('edit-est-msg').textContent   = '';
+        this.modal?.classList.add('active');
+    },
+
+    close() {
+        this.modal?.classList.remove('active');
+        this.currentCodigo = null;
+    },
+
+    async guardar(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btn-guardar-est');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+
+        const payload = {
+            id:                  document.getElementById('edit-est-codigo').value,
+            nombre_completo:     document.getElementById('edit-est-nombre').value,
+            tipo_documento:      document.getElementById('edit-est-tipo-doc').value,
+            numero_documento:    document.getElementById('edit-est-num-doc').value,
+            correo_electronico:  document.getElementById('edit-est-correo').value,
+            grado:               document.getElementById('edit-est-grado').value,
+            grupo:               document.getElementById('edit-est-grupo').value,
+            nueva_contrasena:    document.getElementById('edit-est-nueva-pass').value || null
+        };
+
+        try {
+            const res  = await fetch('/actualizar-estudiante', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            const msg  = document.getElementById('edit-est-msg');
+
+            if (data.status === 'success') {
+                msg.style.color = 'var(--success, #16a34a)';
+                msg.textContent = '✅ ' + data.message;
+                Utils.showToast(data.message, 'success');
+                window.app?.tables?.estudiantes?.loadData();
+                setTimeout(() => this.close(), 1200);
+            } else {
+                msg.style.color = 'var(--error, #dc2626)';
+                msg.textContent = '❌ ' + data.message;
+            }
+        } catch (err) {
+            document.getElementById('edit-est-msg').textContent = '❌ Error de conexión';
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save"></i> Guardar cambios';
+        }
+    }
+};
+
+// ── MODAL EDITAR PROFESOR ────────────────────────────────────
+
+const ASIGNATURAS_DISPONIBLES = [
+    'Matemáticas', 'Lenguaje', 'Ciencias Naturales', 'Ciencias Sociales',
+    'Inglés', 'Educación Física', 'Informática', 'Ética y Valores', 'Artes', 'Química'
+];
+
+const EditarProfesor = {
+    modal: null,
+    currentCodigo: null,
+
+    init() {
+        this.modal = document.getElementById('modal-editar-profesor');
+        document.getElementById('cerrar-modal-prof')?.addEventListener('click', () => this.close());
+        document.getElementById('cancelar-editar-prof')?.addEventListener('click', () => this.close());
+        document.getElementById('form-editar-profesor')?.addEventListener('submit', e => this.guardar(e));
+        this.modal?.addEventListener('click', e => { if (e.target === this.modal) this.close(); });
+
+        // Renderizar checkboxes de asignaturas
+        const container = document.getElementById('edit-prof-asignaturas');
+        if (container) {
+            container.innerHTML = ASIGNATURAS_DISPONIBLES.map(a =>
+                `<label class="check-asig">
+                    <input type="checkbox" value="${a}" name="asignatura"> ${a}
+                </label>`
+            ).join('');
+        }
+    },
+
+    open(data) {
+        this.currentCodigo = data.id;
+        document.getElementById('edit-prof-codigo').value     = data.id       || '';
+        document.getElementById('edit-prof-nombre').value     = data.nombre   || '';
+        document.getElementById('edit-prof-correo').value     = data.email    || '';
+        document.getElementById('edit-prof-telefono').value   = data.telefono || '';
+        document.getElementById('edit-prof-nueva-pass').value = '';
+        document.getElementById('edit-prof-msg').textContent  = '';
+
+        // Marcar checkboxes según asignaturas actuales
+        const actuales = Array.isArray(data.asignaturas)
+            ? data.asignaturas.map(a => a.trim())
+            : (data.asignaturas || '').split(',').map(a => a.trim());
+
+        document.querySelectorAll('#edit-prof-asignaturas input[type="checkbox"]').forEach(cb => {
+            cb.checked = actuales.includes(cb.value);
+        });
+
+        this.modal?.classList.add('active');
+    },
+
+    close() {
+        this.modal?.classList.remove('active');
+        this.currentCodigo = null;
+    },
+
+    async guardar(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btn-guardar-prof');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+
+        const asignaturas = [...document.querySelectorAll('#edit-prof-asignaturas input:checked')]
+            .map(cb => cb.value);
+
+        const payload = {
+            id:                 document.getElementById('edit-prof-codigo').value,
+            nombre_completo:    document.getElementById('edit-prof-nombre').value,
+            tipo_documento:     document.getElementById('edit-prof-tipo-doc').value,
+            numero_documento:   document.getElementById('edit-prof-num-doc').value,
+            correo_electronico: document.getElementById('edit-prof-correo').value,
+            telefono:           document.getElementById('edit-prof-telefono').value,
+            asignaturas:        asignaturas,
+            nueva_contrasena:   document.getElementById('edit-prof-nueva-pass').value || null
+        };
+
+        try {
+            const res  = await fetch('/actualizar-profesor', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            const msg  = document.getElementById('edit-prof-msg');
+
+            if (data.status === 'success') {
+                msg.style.color = 'var(--success, #16a34a)';
+                msg.textContent = '✅ ' + data.message;
+                Utils.showToast(data.message, 'success');
+                window.app?.tables?.profesores?.loadData();
+                setTimeout(() => this.close(), 1200);
+            } else {
+                msg.style.color = 'var(--error, #dc2626)';
+                msg.textContent = '❌ ' + data.message;
+            }
+        } catch (err) {
+            document.getElementById('edit-prof-msg').textContent = '❌ Error de conexión';
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save"></i> Guardar cambios';
+        }
+    }
+};
+
+// ── PARCHEAR renderRow PARA AGREGAR BOTÓN EDITAR ────────────
+
+// Sobrescribir renderRow de EstudiantesTableManager
+EstudiantesTableManager.prototype.renderRow = function(e) {
+    return `<tr data-codigo="${e.id}">
+        <td><span class="table-badge badge-primary">${e.id}</span></td>
+        <td class="nombre-cell">${e.nombre}</td>
+        <td class="email-cell">${e.email}</td>
+        <td><span class="table-badge">${e.grado}</span></td>
+        <td><span class="table-badge">${e.grupo}</span></td>
+        <td>${e.fecha_registro || '–'}</td>
+        <td><div class="table-actions">
+            <button class="action-btn edit" title="Editar" data-codigo="${e.id}">
+                <i class="fas fa-pen"></i>
+            </button>
+            <button class="action-btn delete" title="Eliminar" data-codigo="${e.id}">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div></td>
+    </tr>`;
+};
+
+EstudiantesTableManager.prototype.setupRowListeners = function() {
+    const tbody = document.querySelector(`#${this.tableId} tbody`);
+
+    // Botones eliminar (sin cambios)
+    tbody?.querySelectorAll('.action-btn.delete').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const codigo = btn.dataset.codigo;
+            const nombre = btn.closest('tr')?.querySelector('.nombre-cell')?.textContent;
+            if (!confirm(`¿Eliminar al estudiante "${nombre}"?`)) return;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            btn.disabled = true;
+            const res = await fetch('/eliminar-estudiante', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ codigo })
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+                Utils.showToast(data.message, 'success');
+                this.loadData();
+                window.app?.stats?.refresh();
+            } else {
+                Utils.showToast(data.message, 'error');
+                btn.innerHTML = '<i class="fas fa-trash"></i>';
+                btn.disabled = false;
+            }
+        });
+    });
+
+    // Botones editar
+    tbody?.querySelectorAll('.action-btn.edit').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const codigo = btn.dataset.codigo;
+            const item   = this.originalData.find(e => e.id === codigo);
+            if (item) EditarEstudiante.open(item);
+        });
+    });
+};
+
+// Sobrescribir renderRow de ProfesoresTableManager
+ProfesoresTableManager.prototype.renderRow = function(p) {
+    const asigs = Array.isArray(p.asignaturas)
+        ? (p.asignaturas.length > 2 ? p.asignaturas.slice(0, 2).join(', ') + '...' : p.asignaturas.join(', '))
+        : (p.asignaturas || '');
+    return `<tr data-codigo="${p.id}">
+        <td><span class="table-badge badge-primary">${p.id}</span></td>
+        <td class="nombre-cell">${p.nombre}</td>
+        <td class="email-cell">${p.email}</td>
+        <td>${p.telefono || 'N/A'}</td>
+        <td title="${Array.isArray(p.asignaturas) ? p.asignaturas.join(', ') : ''}">${asigs}</td>
+        <td>${p.fecha_registro || '–'}</td>
+        <td><div class="table-actions">
+            <button class="action-btn edit" title="Editar" data-codigo="${p.id}">
+                <i class="fas fa-pen"></i>
+            </button>
+            <button class="action-btn delete" title="Eliminar" data-codigo="${p.id}">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div></td>
+    </tr>`;
+};
+
+ProfesoresTableManager.prototype.setupRowListeners = function() {
+    const tbody = document.querySelector(`#${this.tableId} tbody`);
+
+    tbody?.querySelectorAll('.action-btn.delete').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const codigo = btn.dataset.codigo;
+            const nombre = btn.closest('tr')?.querySelector('.nombre-cell')?.textContent;
+            if (!confirm(`¿Eliminar al profesor "${nombre}"?`)) return;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            btn.disabled = true;
+            const res = await fetch('/eliminar-profesor', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ codigo })
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+                Utils.showToast(data.message, 'success');
+                this.loadData();
+                window.app?.stats?.refresh();
+            } else {
+                Utils.showToast(data.message, 'error');
+                btn.innerHTML = '<i class="fas fa-trash"></i>';
+                btn.disabled = false;
+            }
+        });
+    });
+
+    tbody?.querySelectorAll('.action-btn.edit').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const codigo = btn.dataset.codigo;
+            const item   = this.originalData.find(p => p.id === codigo);
+            if (item) EditarProfesor.open(item);
+        });
+    });
+};
+
+// ── INICIALIZAR MODALES cuando el DOM esté listo ─────────────
+document.addEventListener('DOMContentLoaded', () => {
+    EditarEstudiante.init();
+    EditarProfesor.init();
+});
+// Si el DOMContentLoaded ya corrió (script cargado tarde), inicializar de todos modos
+if (document.readyState !== 'loading') {
+    EditarEstudiante.init();
+    EditarProfesor.init();
+}
