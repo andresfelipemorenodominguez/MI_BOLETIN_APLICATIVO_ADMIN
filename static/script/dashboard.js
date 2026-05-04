@@ -840,6 +840,16 @@ const EditarEstudiante = {
         document.getElementById('form-editar-estudiante')?.addEventListener('submit', e => this.guardar(e));
         // Cerrar al hacer clic fuera
         this.modal?.addEventListener('click', e => { if (e.target === this.modal) this.close(); });
+        document.querySelectorAll('.toggle-password-btn[data-target="edit-est-nueva-pass"]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const input = document.getElementById('edit-est-nueva-pass');
+                if (!input) return;
+                const isPass = input.type === 'password';
+                input.type = isPass ? 'text' : 'password';
+                const icon = btn.querySelector('i');
+                if (icon) icon.className = isPass ? 'fas fa-eye-slash' : 'fas fa-eye';
+            });
+        });
     },
 
     open(data) {
@@ -849,7 +859,14 @@ const EditarEstudiante = {
         document.getElementById('edit-est-correo').value      = data.email    || '';
         document.getElementById('edit-est-grado').value       = data.grado    || '';
         document.getElementById('edit-est-grupo').value       = data.grupo    || '';
-        document.getElementById('edit-est-nueva-pass').value  = '';
+        const passEl = document.getElementById('edit-est-nueva-pass');
+        if (passEl) {
+            passEl.value = '';
+            passEl.type = 'password';
+        }
+        document.querySelectorAll('.toggle-password-btn[data-target="edit-est-nueva-pass"] i').forEach(icon => {
+            icon.className = 'fas fa-eye';
+        });
         document.getElementById('edit-est-msg').textContent   = '';
         this.modal?.classList.add('active');
     },
@@ -921,6 +938,16 @@ const EditarProfesor = {
         document.getElementById('cancelar-editar-prof')?.addEventListener('click', () => this.close());
         document.getElementById('form-editar-profesor')?.addEventListener('submit', e => this.guardar(e));
         this.modal?.addEventListener('click', e => { if (e.target === this.modal) this.close(); });
+        document.querySelectorAll('.toggle-password-btn[data-target="edit-prof-nueva-pass"]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const input = document.getElementById('edit-prof-nueva-pass');
+                if (!input) return;
+                const isPass = input.type === 'password';
+                input.type = isPass ? 'text' : 'password';
+                const icon = btn.querySelector('i');
+                if (icon) icon.className = isPass ? 'fas fa-eye-slash' : 'fas fa-eye';
+            });
+        });
 
         // Renderizar checkboxes de asignaturas
         const container = document.getElementById('edit-prof-asignaturas');
@@ -939,7 +966,14 @@ const EditarProfesor = {
         document.getElementById('edit-prof-nombre').value     = data.nombre   || '';
         document.getElementById('edit-prof-correo').value     = data.email    || '';
         document.getElementById('edit-prof-telefono').value   = data.telefono || '';
-        document.getElementById('edit-prof-nueva-pass').value = '';
+        const profPass = document.getElementById('edit-prof-nueva-pass');
+        if (profPass) {
+            profPass.value = '';
+            profPass.type = 'password';
+        }
+        document.querySelectorAll('.toggle-password-btn[data-target="edit-prof-nueva-pass"] i').forEach(icon => {
+            icon.className = 'fas fa-eye';
+        });
         document.getElementById('edit-prof-msg').textContent  = '';
 
         // Marcar checkboxes según asignaturas actuales

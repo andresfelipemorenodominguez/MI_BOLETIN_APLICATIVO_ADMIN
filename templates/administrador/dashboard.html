@@ -333,11 +333,9 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
                             <div class="password-container">
                                 <div class="input-with-icon">
                                     <i class="fas fa-lock input-icon"></i>
-                                    <input type="password" id="contrasena" class="form-input password-input" placeholder="Mínimo 8 caracteres" required>
+                                    <input type="password" id="contrasena" class="form-input password-input" placeholder="Mínimo 8 caracteres" required autocomplete="new-password">
+                                    <button type="button" class="toggle-password-btn" data-target="contrasena" aria-label="Mostrar u ocultar contraseña" title="Mostrar u ocultar contraseña"><i class="fas fa-eye" aria-hidden="true"></i></button>
                                 </div>
-                                <!-- Botón para mostrar/ocultar contraseña -->
-                                <button type="button" class="toggle-password-btn" data-target="contrasena"><i class="fas fa-eye"></i></button>
-                                <!-- Botón para generar contraseña automática -->
                                 <button type="button" class="btn-secondary btn-secondary generate-password-btn" id="generate-student-password"><i class="fas fa-random"></i> Generar</button>
                             </div>
                             <!-- Indicador de fuerza de contraseña -->
@@ -1017,8 +1015,17 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
             <label class="form-label">Nueva contraseña
               <span style="color:var(--gray-400,#9ca3af);font-size:12px;">(dejar vacío para no cambiar)</span>
             </label>
-            <input type="password" id="edit-est-nueva-pass" class="form-input"
-                   placeholder="Mínimo 8 caracteres" autocomplete="new-password">
+            <div class="password-container">
+              <div class="input-with-icon">
+                <i class="fas fa-lock input-icon"></i>
+                <input type="password" id="edit-est-nueva-pass" class="form-input password-input"
+                       placeholder="Mínimo 8 caracteres" autocomplete="new-password">
+                <button type="button" class="toggle-password-btn" data-target="edit-est-nueva-pass"
+                        aria-label="Mostrar u ocultar contraseña" title="Mostrar u ocultar contraseña">
+                  <i class="fas fa-eye" aria-hidden="true"></i>
+                </button>
+              </div>
+            </div>
           </div>
   
           <p id="edit-est-msg" style="font-size:13px;min-height:18px;margin:0;"></p>
@@ -1107,8 +1114,17 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
           <!-- Nueva contraseña -->
           <div class="form-group">
             <label class="form-label">Nueva contraseña <span style="color:var(--gray-400,#9ca3af);font-size:12px;">(dejar vacío para no cambiar)</span></label>
-            <input type="password" id="edit-prof-nueva-pass" class="form-input"
-                   placeholder="Mínimo 8 caracteres" autocomplete="new-password">
+            <div class="password-container">
+              <div class="input-with-icon">
+                <i class="fas fa-lock input-icon"></i>
+                <input type="password" id="edit-prof-nueva-pass" class="form-input password-input"
+                       placeholder="Mínimo 8 caracteres" autocomplete="new-password">
+                <button type="button" class="toggle-password-btn" data-target="edit-prof-nueva-pass"
+                        aria-label="Mostrar u ocultar contraseña" title="Mostrar u ocultar contraseña">
+                  <i class="fas fa-eye" aria-hidden="true"></i>
+                </button>
+              </div>
+            </div>
           </div>
   
           <!-- Mensaje resultado -->

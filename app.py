@@ -72,6 +72,22 @@ def get_db_connection():
     return psycopg2.connect(DATABASE_URL, sslmode='require')
 
 
+def _realign_pk_sequence(cur, table: str, id_column: str):
+    """Si la secuencia SERIAL quedó atrás del MAX(id) (importaciones manuales, restores), el INSERT falla con duplicate pkey."""
+    allowed = {("estudiantes", "id_estudiante"), ("profesores", "id_profesor")}
+    if (table, id_column) not in allowed:
+        raise ValueError("unsupported table for PK sequence realignment")
+    q = sql.SQL(
+        "SELECT setval(pg_get_serial_sequence({t}, {c}), "
+        "(SELECT COALESCE(MAX({ic}), 0) + 1 FROM {ti}), false)"
+    ).format(
+        t=sql.Literal(table),
+        c=sql.Literal(id_column),
+        ic=sql.Identifier(id_column),
+        ti=sql.Identifier(table),
+    )
+    cur.execute(q)
+
 
 # FUNCIONES DE EMAIL
 
@@ -1308,6 +1324,7 @@ def registrar_estudiante():
         last = cur.fetchone()
         new_number = int(last[0][3:]) + 1 if last else 1
         codigo_estudiante = f"EST{new_number:03d}"
+        _realign_pk_sequence(cur, "estudiantes", "id_estudiante")
         cur.execute(
             "INSERT INTO estudiantes (codigo_estudiante, nombre_completo, tipo_documento, numero_documento, correo_electronico, grado, grupo, contrasena, id_admin, nombre_completo_admin, correo_electronico_admin) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id_estudiante, codigo_estudiante;",
             (codigo_estudiante, nombre_completo, tipo_documento, numero_documento, correo_electronico, grado, grupo, hashed_password, session.get('user_id'), session.get('user_name'), session.get('user_email'))
@@ -1351,6 +1368,7 @@ def registrar_profesor():
         last = cur.fetchone()
         new_number = int(last[0][4:]) + 1 if last else 1
         codigo_profesor = f"PROF{new_number:03d}"
+        _realign_pk_sequence(cur, "profesores", "id_profesor")
         cur.execute(
             "INSERT INTO profesores (codigo_profesor, nombre_completo, tipo_documento, numero_documento, correo_electronico, telefono, asignaturas, contrasena, id_admin, nombre_completo_admin, correo_electronico_admin) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id_profesor, codigo_profesor;",
             (codigo_profesor, nombre_completo, tipo_documento, numero_documento, correo_electronico, telefono, asignaturas_str, hashed_password, session.get('user_id'), session.get('user_name'), session.get('user_email'))
