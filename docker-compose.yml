@@ -1,0 +1,12 @@
+services:
+  web:
+    build: .
+    container_name: boletin_app
+    restart: always
+    ports:
+      - "5005:5005"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      PORT: ${PORT:-5005}
+    env_file:
+      - .env
