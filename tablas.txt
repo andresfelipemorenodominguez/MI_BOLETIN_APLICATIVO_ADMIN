@@ -3,6 +3,21 @@
 -- 15 tablas
 
 
+-- Tabla para colegios (multicolegio)
+CREATE TABLE IF NOT EXISTS colegios (
+    id_colegio SERIAL PRIMARY KEY,
+    codigo_colegio VARCHAR(20) UNIQUE NOT NULL,
+    nombre_oficial VARCHAR(200) NOT NULL,
+    lema VARCHAR(300),
+    escudo_url VARCHAR(500),
+    encabezado_pdf_url VARCHAR(500),
+    marca_agua_url VARCHAR(500),
+    color_primario VARCHAR(20) DEFAULT '#003366',
+    color_secundario VARCHAR(20) DEFAULT '#3182ce',
+    estado VARCHAR(20) DEFAULT 'activo',
+    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Tabla para administradores
 CREATE TABLE IF NOT EXISTS administradores (
     id_admin SERIAL PRIMARY KEY,
@@ -13,7 +28,9 @@ CREATE TABLE IF NOT EXISTS administradores (
     verification_code_expires TIMESTAMP,
     email_verified BOOLEAN DEFAULT FALSE,
     recovery_token VARCHAR(64),
-    recovery_token_expires TIMESTAMP
+    recovery_token_expires TIMESTAMP,
+    rol VARCHAR(20) DEFAULT 'admin_colegio',
+    id_colegio INTEGER REFERENCES colegios(id_colegio) ON DELETE SET NULL
 );
 
 -- Tabla para estudiantes
@@ -31,7 +48,8 @@ CREATE TABLE IF NOT EXISTS estudiantes (
     estado VARCHAR(20) DEFAULT 'activo',
     id_admin INTEGER,
     nombre_completo_admin VARCHAR(255),
-    correo_electronico_admin VARCHAR(255)
+    correo_electronico_admin VARCHAR(255),
+    id_colegio INTEGER REFERENCES colegios(id_colegio) ON DELETE CASCADE
 );
 
 -- Tabla para profesores
@@ -49,7 +67,8 @@ CREATE TABLE IF NOT EXISTS profesores (
     estado VARCHAR(20) DEFAULT 'activo',
     id_admin INTEGER,
     nombre_completo_admin VARCHAR(255),
-    correo_electronico_admin VARCHAR(255)
+    correo_electronico_admin VARCHAR(255),
+    id_colegio INTEGER REFERENCES colegios(id_colegio) ON DELETE CASCADE
 );
 
 -- Tabla para solicitudes de cambio de contraseña
@@ -183,6 +202,17 @@ CREATE TABLE IF NOT EXISTS agenda (
     fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_agenda_profesor FOREIGN KEY (id_profesor)
         REFERENCES profesores(id_profesor) ON DELETE CASCADE
+);
+
+-- Grupos destino de cada evento de agenda (compartido con estudiantes)
+CREATE TABLE IF NOT EXISTS agenda_grupos (
+    id_agenda INTEGER NOT NULL,
+    id_grupo INTEGER NOT NULL,
+    PRIMARY KEY (id_agenda, id_grupo),
+    CONSTRAINT fk_ag_grupo_agenda FOREIGN KEY (id_agenda)
+        REFERENCES agenda(id_agenda) ON DELETE CASCADE,
+    CONSTRAINT fk_ag_grupo_grupo FOREIGN KEY (id_grupo)
+        REFERENCES grupos(id_grupo) ON DELETE CASCADE
 );
 
 -- =============================================

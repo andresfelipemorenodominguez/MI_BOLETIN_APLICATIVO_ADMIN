@@ -70,6 +70,11 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Función para verificar usuario en la base de datos
     async function verificarUsuarioEnBD(userId, userEmail) {
+        const params = new URLSearchParams(window.location.search);
+        const idColegio = params.get('id_colegio');
+        if (!idColegio) {
+            throw new Error('Debes acceder desde el login después de seleccionar tu colegio.');
+        }
         try {
             const response = await fetch('/verificar_usuario', {
                 method: 'POST',
@@ -78,7 +83,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 body: JSON.stringify({
                     userIdentifier: userId,
-                    userEmail: userEmail
+                    userEmail: userEmail,
+                    id_colegio: parseInt(idColegio, 10),
                 })
             });
             

@@ -1,0 +1,96 @@
+/* Branding institucional en paneles */
+.page-dashboard .sidebar-header .school-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    text-align: left;
+}
+.page-dashboard .school-logo {
+    width: 42px;
+    height: 42px;
+    object-fit: contain;
+    flex-shrink: 0;
+    border-radius: 8px;
+}
+.page-dashboard .school-brand-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+.page-dashboard .school-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--brand-primary, #003366);
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+.page-dashboard .school-lema {
+    font-size: 11px;
+    color: #6b7a8a;
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.page-dashboard .school-role-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--brand-secondary, #3182ce);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.page-dashboard .main-content .panel-colegio-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0 16px;
+    border-bottom: 1px solid rgba(31, 58, 93, 0.08);
+    margin-bottom: 16px;
+}
+.page-dashboard .main-content .panel-colegio-bar img {
+    height: 36px;
+    width: auto;
+    object-fit: contain;
+}
+.page-dashboard .main-content .panel-colegio-bar h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--brand-primary, #1f3a5d);
+}
+.page-dashboard.dark-mode .school-name { color: var(--dm-text); }
+.page-dashboard.dark-mode .school-lema { color: var(--dm-text-muted); }
+.page-dashboard.dark-mode .school-role-label { color: #93c5fd; }
+
+/* Panel identidad admin */
+.branding-preview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 16px;
+    margin-top: 16px;
+}
+.branding-preview-card {
+    background: #f7fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 12px;
+    text-align: center;
+}
+.branding-preview-card img {
+    max-width: 100%;
+    max-height: 80px;
+    object-fit: contain;
+    margin-bottom: 8px;
+}
+.branding-preview-card span {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: #6b7a8a;
+}

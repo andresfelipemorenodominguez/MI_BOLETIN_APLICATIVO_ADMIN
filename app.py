@@ -14,10 +14,26 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
+import re
 from werkzeug.utils import secure_filename
 import json
 from dotenv import load_dotenv
 load_dotenv()
+
+from multicolegio import (
+    ensure_multicolegio_schema,
+    get_admin_from_session,
+    is_superadmin,
+    colegio_filter_sql,
+    crear_colegio_con_admin,
+    branding_static_path,
+    fetch_colegio_branding_row,
+    DEFAULT_ESCUDO,
+    DEFAULT_ENCABEZADO,
+    DEFAULT_MARCA_AGUA,
+    DEFAULT_COLOR_PRIMARIO,
+    DEFAULT_COLOR_SECUNDARIO,
+)
 
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'static', 'uploads_material')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -40,6 +56,18 @@ def _api_error_response(exc, public_message="Error en el servidor. Intenta más 
     """Registra la excepción y devuelve un mensaje seguro al cliente."""
     print(f"Error API: {exc!r}")
     return jsonify({"status": "error", "message": public_message})
+
+
+def _pdf_to_bytesio(pdf):
+    """Convierte la salida de FPDF a BytesIO (compatible con fpdf2 que devuelve bytearray)."""
+    raw = pdf.output()
+    if isinstance(raw, (bytes, bytearray)):
+        pdf_bytes = bytes(raw)
+    else:
+        pdf_bytes = raw.encode('latin-1')
+    buffer = io.BytesIO(pdf_bytes)
+    buffer.seek(0)
+    return buffer
 
 
 def _smtp_config_ok():
@@ -70,6 +98,267 @@ PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "http://127.0.0.1:5005").rst
 def get_db_connection():
     DATABASE_URL = os.environ.get("DATABASE_URL")
     return psycopg2.connect(DATABASE_URL, sslmode='require')
+
+
+def _init_multicolegio():
+    try:
+        ensure_multicolegio_schema(
+            get_db_connection,
+            superadmin_email=os.environ.get('SUPERADMIN_EMAIL'),
+            superadmin_password=os.environ.get('SUPERADMIN_PASSWORD'),
+        )
+    except Exception as exc:
+        print(f'Aviso: migración multicolegio — {exc!r}')
+
+
+_init_multicolegio()
+
+
+def _require_admin_api():
+    admin = get_admin_from_session(session)
+    if not admin:
+        return None, (jsonify({"status": "error", "message": "No autorizado"}), 401)
+    return admin, None
+
+
+def _require_superadmin_api():
+    admin, err = _require_admin_api()
+    if err:
+        return None, err
+    if not is_superadmin(admin):
+        return None, (jsonify({"status": "error", "message": "Solo super administrador."}), 403)
+    return admin, None
+
+
+def _admin_colegio_id(admin):
+    if is_superadmin(admin):
+        return None
+    return admin.get('id_colegio')
+
+
+APP_ROOT = os.path.dirname(__file__)
+BRANDING_UPLOAD_FOLDER = os.path.join(APP_ROOT, 'static', 'uploads_branding')
+os.makedirs(BRANDING_UPLOAD_FOLDER, exist_ok=True)
+ALLOW_PUBLIC_ADMIN_REGISTER = os.environ.get('ALLOW_PUBLIC_ADMIN_REGISTER', 'false').lower() in ('1', 'true', 'yes')
+BRANDING_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
+MAX_BRANDING_UPLOAD_BYTES = 2 * 1024 * 1024
+
+
+def _allowed_branding_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in BRANDING_IMAGE_EXTENSIONS
+
+
+def _pdf_sanitize(text):
+    """Texto seguro para fuentes core de FPDF (latin-1, sin em-dash, etc.)."""
+    if text is None:
+        return ''
+    import unicodedata
+    s = unicodedata.normalize('NFKD', str(text))
+    out = []
+    for c in s:
+        if unicodedata.category(c) == 'Mn':
+            continue
+        if c in ('—', '–'):
+            out.append('-')
+        elif ord(c) < 256:
+            out.append(c)
+    return ''.join(out)
+
+
+def _hex_to_rgb(hex_color, default=(0, 51, 102)):
+    if not hex_color:
+        return default
+    h = str(hex_color).strip().lstrip('#')
+    if len(h) != 6:
+        return default
+    try:
+        return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+    except ValueError:
+        return default
+
+
+def _branding_file_path(url):
+    return branding_static_path(APP_ROOT, url)
+
+
+def _fetch_colegio_branding(id_colegio):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    row = fetch_colegio_branding_row(cur, id_colegio)
+    cur.close()
+    conn.close()
+    return row
+
+
+def _require_colegio_admin_api():
+    admin, err = _require_admin_api()
+    if err:
+        return None, None, err
+    if is_superadmin(admin):
+        return None, None, (jsonify({"status": "error", "message": "Solo admin de colegio."}), 403)
+    id_colegio = admin.get('id_colegio')
+    if not id_colegio:
+        return None, None, (jsonify({"status": "error", "message": "Sin colegio asignado."}), 403)
+    return admin, id_colegio, None
+
+
+def _require_colegio_admin_pdf():
+    if 'user_id' not in session:
+        return None, (jsonify({"status": "error", "message": "Debes iniciar sesión primero."}), 401)
+    admin = get_admin_from_session(session)
+    if is_superadmin(admin):
+        return None, (jsonify({"status": "error", "message": "El super admin no genera reportes de colegio."}), 403)
+    id_colegio = admin.get('id_colegio')
+    if not id_colegio:
+        return None, (jsonify({"status": "error", "message": "Sin colegio en sesión."}), 403)
+    return id_colegio, None
+
+
+def _save_branding_upload(id_colegio, tipo, file_storage):
+    if tipo not in ('escudo', 'encabezado', 'marca_agua'):
+        return None, 'Tipo de archivo no válido.'
+    if not file_storage or not file_storage.filename:
+        return None, 'No se envió archivo.'
+    if not _allowed_branding_file(file_storage.filename):
+        return None, 'Formato no permitido. Use PNG, JPG o WEBP.'
+    file_storage.seek(0, os.SEEK_END)
+    size = file_storage.tell()
+    file_storage.seek(0)
+    if size > MAX_BRANDING_UPLOAD_BYTES:
+        return None, 'El archivo supera 2 MB.'
+    ext = file_storage.filename.rsplit('.', 1)[1].lower()
+    if ext == 'jpeg':
+        ext = 'jpg'
+    folder = os.path.join(BRANDING_UPLOAD_FOLDER, str(id_colegio))
+    os.makedirs(folder, exist_ok=True)
+    filename = f'{tipo}.{ext}'
+    path = os.path.join(folder, filename)
+    file_storage.save(path)
+    return f'/static/uploads_branding/{id_colegio}/{filename}', None
+
+
+_agenda_grupos_ready = False
+
+
+def ensure_agenda_grupos_table():
+    """Crea agenda_grupos si aún no existe (compartir eventos con grupos)."""
+    global _agenda_grupos_ready
+    if _agenda_grupos_ready:
+        return
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS agenda_grupos (
+            id_agenda INTEGER NOT NULL REFERENCES agenda(id_agenda) ON DELETE CASCADE,
+            id_grupo INTEGER NOT NULL REFERENCES grupos(id_grupo) ON DELETE CASCADE,
+            PRIMARY KEY (id_agenda, id_grupo)
+        )
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+    _agenda_grupos_ready = True
+
+
+def _profesor_puede_grupo(cur, id_docente, id_grupo):
+    cur.execute(
+        "SELECT 1 FROM grupo_materias WHERE id_docente = %s AND id_grupo = %s LIMIT 1",
+        (id_docente, id_grupo),
+    )
+    return cur.fetchone() is not None
+
+
+def _pdf_agregar_estudiante(pdf, cur, est, profesor, id_docente):
+    """Añade al PDF una página con notas y observaciones de un estudiante."""
+    pdf.add_page()
+    pdf.set_font('helvetica', 'B', 14)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(0, 10, f"Reporte del Estudiante: {est['nombre_completo']}", 0, 1, 'C')
+    pdf.set_font('helvetica', '', 10)
+    pdf.set_text_color(80, 80, 80)
+    pdf.cell(0, 7, _pdf_sanitize(f"Codigo: {est['codigo_estudiante']}  |  Grado: {est['grado']}  |  Grupo: {est['grupo']}"), 0, 1, 'C')
+    pdf.cell(0, 7, _pdf_sanitize(f"Docente: {profesor['nombre_completo']} ({profesor['codigo_profesor']})"), 0, 1, 'C')
+    pdf.ln(5)
+
+    cur.execute("""
+        SELECT n.valor, n.descripcion, TO_CHAR(n.fecha_registro,'DD/MM/YYYY') as fecha,
+               tn.nombre_tipo, m.nombre as materia
+        FROM notas n
+        JOIN tipos_nota tn ON n.id_tipo = tn.id_tipo
+        JOIN grupo_materias gm ON n.id_grupo_materia = gm.id_grupo_materia
+        JOIN materia m ON gm.id_materia = m.id_materia
+        WHERE n.id_estudiante = %s AND gm.id_docente = %s
+        ORDER BY m.nombre, n.fecha_registro DESC
+    """, (est['id_estudiante'], id_docente))
+    notas = [dict(n) for n in cur.fetchall()]
+
+    pdf.set_font('helvetica', 'B', 11)
+    pdf.set_fill_color(0, 51, 102)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(0, 9, ' Notas Academicas', 1, 1, 'L', fill=True)
+    if notas:
+        pdf.set_font('helvetica', 'B', 9)
+        pdf.set_fill_color(220, 230, 242)
+        pdf.set_text_color(0, 0, 0)
+        pdf.cell(55, 8, 'Materia', 1, 0, 'C', fill=True)
+        pdf.cell(35, 8, 'Tipo', 1, 0, 'C', fill=True)
+        pdf.cell(20, 8, 'Valor', 1, 0, 'C', fill=True)
+        pdf.cell(55, 8, 'Descripción', 1, 0, 'C', fill=True)
+        pdf.cell(25, 8, 'Fecha', 1, 1, 'C', fill=True)
+        pdf.set_font('helvetica', '', 9)
+        fill = False
+        pdf.set_fill_color(240, 248, 255)
+        valores = []
+        for n in notas:
+            v = float(n['valor'])
+            valores.append(v)
+            color = (56, 161, 105) if v >= 3 else (229, 62, 62)
+            pdf.cell(55, 7, _pdf_sanitize(n['materia'])[:28], 1, 0, 'L', fill=fill)
+            pdf.cell(35, 7, _pdf_sanitize(n['nombre_tipo'])[:18], 1, 0, 'C', fill=fill)
+            pdf.set_text_color(*color)
+            pdf.cell(20, 7, str(v), 1, 0, 'C', fill=fill)
+            pdf.set_text_color(0, 0, 0)
+            pdf.cell(55, 7, _pdf_sanitize(n['descripcion'] or '-')[:28], 1, 0, 'L', fill=fill)
+            pdf.cell(25, 7, n['fecha'], 1, 1, 'C', fill=fill)
+            fill = not fill
+        promedio = round(sum(valores) / len(valores), 2)
+        color = (56, 161, 105) if promedio >= 3 else (229, 62, 62)
+        pdf.set_font('helvetica', 'B', 10)
+        pdf.set_text_color(*color)
+        pdf.cell(0, 9, f"  Promedio General: {promedio}", 0, 1, 'R')
+        pdf.set_text_color(0, 0, 0)
+    else:
+        pdf.set_font('helvetica', 'I', 9)
+        pdf.cell(0, 8, '  No hay notas registradas.', 0, 1)
+
+    pdf.ln(4)
+
+    cur.execute("""
+        SELECT tipo, descripcion, TO_CHAR(fecha_registro,'DD/MM/YYYY') as fecha
+        FROM observador WHERE id_estudiante = %s AND id_profesor = %s
+        ORDER BY fecha_registro DESC
+    """, (est['id_estudiante'], id_docente))
+    obs = [dict(o) for o in cur.fetchall()]
+
+    pdf.set_font('helvetica', 'B', 11)
+    pdf.set_fill_color(0, 51, 102)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(0, 9, ' Observaciones del Observador', 1, 1, 'L', fill=True)
+    if obs:
+        pdf.set_font('helvetica', '', 9)
+        pdf.set_text_color(0, 0, 0)
+        fill = False
+        fills = {'positivo': (198, 246, 213), 'negativo': (254, 215, 215), 'neutro': (226, 232, 240)}
+        for o in obs:
+            r, g, b = fills.get(o['tipo'], (226, 232, 240))
+            pdf.set_fill_color(r, g, b)
+            pdf.cell(25, 7, o['tipo'].capitalize(), 1, 0, 'C', fill=True)
+            pdf.cell(140, 7, _pdf_sanitize(o['descripcion'] or '')[:70], 1, 0, 'L', fill=fill)
+            pdf.cell(25, 7, o['fecha'], 1, 1, 'C', fill=fill)
+            fill = not fill
+    else:
+        pdf.set_font('helvetica', 'I', 9)
+        pdf.cell(0, 8, '  No hay observaciones registradas.', 0, 1)
 
 
 def _realign_pk_sequence(cur, table: str, id_column: str):
@@ -276,11 +565,16 @@ def loginuser():
         cur = conn.cursor()
 
         try:
+            id_colegio = request.form.get('id_colegio', type=int)
+            if not id_colegio:
+                return render_template('general/loginuser.html',
+                                       error='Debes seleccionar tu colegio.')
+
             # Buscar como estudiante
             cur.execute(
                 'SELECT id_estudiante, nombre_completo, codigo_estudiante, contrasena '
-                'FROM estudiantes WHERE codigo_estudiante = %s AND correo_electronico = %s;',
-                (user_identifier, user_email)
+                'FROM estudiantes WHERE codigo_estudiante = %s AND correo_electronico = %s AND id_colegio = %s;',
+                (user_identifier, user_email, id_colegio)
             )
             estudiante = cur.fetchone()
 
@@ -290,7 +584,8 @@ def loginuser():
                         'tipo': 'estudiante',
                         'id': estudiante[0],
                         'nombre': estudiante[1],
-                        'codigo': estudiante[2]
+                        'codigo': estudiante[2],
+                        'id_colegio': id_colegio,
                     }
                     return redirect(url_for('estudiante_dashboard'))
                 else:
@@ -299,8 +594,8 @@ def loginuser():
             # Buscar como profesor
             cur.execute(
                 'SELECT id_profesor, nombre_completo, codigo_profesor, contrasena '
-                'FROM profesores WHERE codigo_profesor = %s AND correo_electronico = %s;',
-                (user_identifier, user_email)
+                'FROM profesores WHERE codigo_profesor = %s AND correo_electronico = %s AND id_colegio = %s;',
+                (user_identifier, user_email, id_colegio)
             )
             profesor = cur.fetchone()
 
@@ -310,7 +605,8 @@ def loginuser():
                         'tipo': 'profesor',
                         'id': profesor[0],
                         'nombre': profesor[1],
-                        'codigo': profesor[2]
+                        'codigo': profesor[2],
+                        'id_colegio': id_colegio,
                     }
                     return redirect(url_for('profesor_dashboard'))
                 else:
@@ -352,10 +648,26 @@ def profesor_dashboard():
 #
 @app.route('/solicitud_user')
 def solicitud_user():
+    id_colegio = request.args.get('id_colegio', type=int)
+    user_info = session.get('user_info')
+    if not id_colegio and user_info:
+        id_colegio = user_info.get('id_colegio')
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute('SELECT id_admin, nombre_completo, correo_electronico FROM administradores LIMIT 1;')
-    admin = cur.fetchone()
+    admin = None
+    if id_colegio:
+        cur.execute(
+            """SELECT id_admin, nombre_completo, correo_electronico FROM administradores
+               WHERE id_colegio = %s AND rol = 'admin_colegio' ORDER BY id_admin LIMIT 1""",
+            (id_colegio,),
+        )
+        admin = cur.fetchone()
+    if not admin:
+        cur.execute(
+            """SELECT id_admin, nombre_completo, correo_electronico FROM administradores
+               WHERE rol = 'admin_colegio' AND id_colegio IS NOT NULL ORDER BY id_admin LIMIT 1"""
+        )
+        admin = cur.fetchone()
     cur.close()
     conn.close()
 
@@ -376,14 +688,22 @@ def verificar_usuario():
     data = request.json
     user_identifier = data.get('userIdentifier')
     user_email = data.get('userEmail')
+    id_colegio = data.get('id_colegio')
+    if id_colegio is not None:
+        try:
+            id_colegio = int(id_colegio)
+        except (TypeError, ValueError):
+            id_colegio = None
+    if not id_colegio:
+        return jsonify({'status': 'error', 'message': 'Debes seleccionar tu colegio.'}), 400
 
     conn = get_db_connection()
     cur = conn.cursor()
 
     cur.execute(
         'SELECT id_estudiante, nombre_completo, codigo_estudiante FROM estudiantes '
-        'WHERE codigo_estudiante = %s AND correo_electronico = %s;',
-        (user_identifier, user_email)
+        'WHERE codigo_estudiante = %s AND correo_electronico = %s AND id_colegio = %s;',
+        (user_identifier, user_email, id_colegio)
     )
     estudiante = cur.fetchone()
 
@@ -392,7 +712,8 @@ def verificar_usuario():
             'tipo': 'estudiante',
             'id': estudiante[0],
             'nombre': estudiante[1],
-            'codigo': estudiante[2]
+            'codigo': estudiante[2],
+            'id_colegio': id_colegio,
         }
         cur.close()
         conn.close()
@@ -401,8 +722,8 @@ def verificar_usuario():
 
     cur.execute(
         'SELECT id_profesor, nombre_completo, codigo_profesor FROM profesores '
-        'WHERE codigo_profesor = %s AND correo_electronico = %s;',
-        (user_identifier, user_email)
+        'WHERE codigo_profesor = %s AND correo_electronico = %s AND id_colegio = %s;',
+        (user_identifier, user_email, id_colegio)
     )
     profesor = cur.fetchone()
 
@@ -411,7 +732,8 @@ def verificar_usuario():
             'tipo': 'profesor',
             'id': profesor[0],
             'nombre': profesor[1],
-            'codigo': profesor[2]
+            'codigo': profesor[2],
+            'id_colegio': id_colegio,
         }
         cur.close()
         conn.close()
@@ -534,6 +856,8 @@ def admin_login():                               #Muestra la página de inicio d
 
 @app.route("/register")
 def register():                                                  #Muestra la página para registrar un nuevo administrador.
+    if not ALLOW_PUBLIC_ADMIN_REGISTER:
+        return redirect(url_for('admin_login'))
     return render_template('administrador/registeradmin.html')
 
 
@@ -615,21 +939,44 @@ def dashboard():
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         cur.execute(
-            "SELECT id_admin, nombre_completo, correo_electronico FROM administradores WHERE id_admin = %s",
+            "SELECT id_admin, nombre_completo, correo_electronico, rol, id_colegio FROM administradores WHERE id_admin = %s",
             (session['user_id'],)
         )
         user = cur.fetchone()
         cur.close()
         conn.close()
 
+        admin_rol = user['rol'] if user else session.get('admin_rol', 'admin_colegio')
+        id_colegio = user['id_colegio'] if user else session.get('id_colegio')
+        session['admin_rol'] = admin_rol
+        session['id_colegio'] = id_colegio
+
+        colegio_nombre = ''
+        if id_colegio:
+            conn2 = get_db_connection()
+            cur2 = conn2.cursor()
+            cur2.execute("SELECT nombre_oficial FROM colegios WHERE id_colegio = %s", (id_colegio,))
+            row = cur2.fetchone()
+            colegio_nombre = row[0] if row else ''
+            cur2.close()
+            conn2.close()
+
         if user:
             return render_template('administrador/dashboard.html',
                                    user_name=user['nombre_completo'],
-                                   user_email=user['correo_electronico'])
+                                   user_email=user['correo_electronico'],
+                                   admin_rol=admin_rol,
+                                   id_colegio=id_colegio or '',
+                                   colegio_nombre=colegio_nombre,
+                                   is_superadmin=(admin_rol == 'superadmin'))
         else:
             return render_template('administrador/dashboard.html',
                                    user_name=session.get('user_name', 'Usuario'),
-                                   user_email=session.get('user_email', 'usuario@ejemplo.com'))
+                                   user_email=session.get('user_email', 'usuario@ejemplo.com'),
+                                   admin_rol=admin_rol,
+                                   id_colegio=id_colegio or '',
+                                   colegio_nombre=colegio_nombre,
+                                   is_superadmin=(admin_rol == 'superadmin'))
     except Exception as e:
         print(f"Error al obtener datos del usuario: {e}")
         return render_template('administrador/dashboard.html',
@@ -652,6 +999,8 @@ def logout():
 #
 @app.route("/register", methods=["POST"])
 def register_user():
+    if not ALLOW_PUBLIC_ADMIN_REGISTER:
+        return jsonify({"status": "error", "message": "El registro público de administradores está deshabilitado."}), 403
     data = request.get_json()
     fullname = data.get("fullname")
     email = data.get("email")
@@ -712,7 +1061,7 @@ def login_user():
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         cur.execute(
-            "SELECT id_admin, nombre_completo, correo_electronico, contrasena, email_verified "
+            "SELECT id_admin, nombre_completo, correo_electronico, contrasena, email_verified, rol, id_colegio "
             "FROM administradores WHERE nombre_completo = %s OR correo_electronico = %s",
             (username, username)
         )
@@ -732,10 +1081,13 @@ def login_user():
             session['user_id'] = user['id_admin']
             session['user_name'] = user['nombre_completo']
             session['user_email'] = user['correo_electronico']
+            session['admin_rol'] = user.get('rol') or 'admin_colegio'
+            session['id_colegio'] = user.get('id_colegio')
             return jsonify({"status": "success", "message": "Inicio de sesión exitoso.",
                             "redirect": "/dashboard",
                             "user": {"id": user['id_admin'], "name": user['nombre_completo'],
-                                     "email": user['correo_electronico']}})
+                                     "email": user['correo_electronico'],
+                                     "rol": session['admin_rol']}})
         else:
             return jsonify({"status": "error", "message": "Contraseña incorrecta.", "field": "password"})
 
@@ -953,16 +1305,20 @@ def admin_profesores():
 #
 @app.route("/obtener-estudiante/<codigo>", methods=["GET"])
 def obtener_estudiante(codigo):
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "Debes iniciar sesión primero."})
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    if is_superadmin(admin):
+        return jsonify({"status": "error", "message": "No disponible para super admin."}), 403
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        filt, params = colegio_filter_sql(admin)
         cur.execute(
-            """SELECT codigo_estudiante as id, nombre_completo, tipo_documento,
+            f"""SELECT codigo_estudiante as id, nombre_completo, tipo_documento,
                       numero_documento, correo_electronico as email, grado, grupo
-               FROM estudiantes WHERE codigo_estudiante = %s""",
-            (codigo,)
+               FROM estudiantes WHERE codigo_estudiante = %s {filt}""",
+            (codigo, *params)
         )
         estudiante = cur.fetchone()
         cur.close()
@@ -980,16 +1336,20 @@ def obtener_estudiante(codigo):
 #
 @app.route("/obtener-profesor/<codigo>", methods=["GET"])
 def obtener_profesor(codigo):
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "Debes iniciar sesión primero."})
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    if is_superadmin(admin):
+        return jsonify({"status": "error", "message": "No disponible para super admin."}), 403
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        filt, params = colegio_filter_sql(admin)
         cur.execute(
-            """SELECT codigo_profesor as id, nombre_completo, tipo_documento,
+            f"""SELECT codigo_profesor as id, nombre_completo, tipo_documento,
                       numero_documento, correo_electronico as email, telefono, asignaturas
-               FROM profesores WHERE codigo_profesor = %s""",
-            (codigo,)
+               FROM profesores WHERE codigo_profesor = %s {filt}""",
+            (codigo, *params)
         )
         profesor = cur.fetchone()
         cur.close()
@@ -1010,8 +1370,9 @@ def obtener_profesor(codigo):
 #
 @app.route("/actualizar-estudiante", methods=["POST"])
 def actualizar_estudiante():
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "Debes iniciar sesión primero."})
+    admin, id_colegio, err = _require_colegio_admin_api()
+    if err:
+        return err
 
     data = request.get_json()
     estudiante_id = data.get("id")
@@ -1030,17 +1391,28 @@ def actualizar_estudiante():
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
-        cur.execute("SELECT id_estudiante FROM estudiantes WHERE codigo_estudiante = %s", (estudiante_id,))
+        cur.execute(
+            "SELECT id_estudiante FROM estudiantes WHERE codigo_estudiante = %s AND id_colegio = %s",
+            (estudiante_id, id_colegio),
+        )
         if not cur.fetchone():
             return jsonify({"status": "error", "message": "Estudiante no encontrado."})
 
         if correo_electronico:
             cur.execute(
-                "SELECT id_estudiante FROM estudiantes WHERE correo_electronico = %s AND codigo_estudiante != %s",
-                (correo_electronico, estudiante_id)
+                """SELECT id_estudiante FROM estudiantes
+                   WHERE id_colegio = %s AND correo_electronico = %s AND codigo_estudiante != %s""",
+                (id_colegio, correo_electronico, estudiante_id),
             )
             if cur.fetchone():
-                return jsonify({"status": "error", "message": "Este correo ya está registrado por otro estudiante."})
+                return jsonify({"status": "error", "message": "Este correo ya está registrado en este colegio."})
+        cur.execute(
+            """SELECT id_estudiante FROM estudiantes
+               WHERE id_colegio = %s AND numero_documento = %s AND codigo_estudiante != %s""",
+            (id_colegio, numero_documento, estudiante_id),
+        )
+        if cur.fetchone():
+            return jsonify({"status": "error", "message": "Este documento ya está registrado en este colegio."})
 
         update_fields = ["nombre_completo=%s", "tipo_documento=%s", "numero_documento=%s",
                          "correo_electronico=%s", "grado=%s", "grupo=%s"]
@@ -1053,9 +1425,9 @@ def actualizar_estudiante():
             update_fields.append("contrasena=%s")
             update_values.append(hashed)
 
-        update_values.append(estudiante_id)
+        update_values.extend([estudiante_id, id_colegio])
         cur.execute(
-            f"UPDATE estudiantes SET {', '.join(update_fields)} WHERE codigo_estudiante = %s "
+            f"UPDATE estudiantes SET {', '.join(update_fields)} WHERE codigo_estudiante = %s AND id_colegio = %s "
             f"RETURNING codigo_estudiante, nombre_completo, correo_electronico, grado, grupo",
             tuple(update_values)
         )
@@ -1080,8 +1452,9 @@ def actualizar_estudiante():
 #
 @app.route("/actualizar-profesor", methods=["POST"])
 def actualizar_profesor():
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "Debes iniciar sesión primero."})
+    admin, id_colegio, err = _require_colegio_admin_api()
+    if err:
+        return err
 
     data = request.get_json()
     profesor_id = data.get("id")
@@ -1105,24 +1478,29 @@ def actualizar_profesor():
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
-        cur.execute("SELECT id_profesor FROM profesores WHERE codigo_profesor = %s", (profesor_id,))
+        cur.execute(
+            "SELECT id_profesor FROM profesores WHERE codigo_profesor = %s AND id_colegio = %s",
+            (profesor_id, id_colegio),
+        )
         if not cur.fetchone():
             return jsonify({"status": "error", "message": "Profesor no encontrado."})
 
         if correo_electronico:
             cur.execute(
-                "SELECT id_profesor FROM profesores WHERE correo_electronico = %s AND codigo_profesor != %s",
-                (correo_electronico, profesor_id)
+                """SELECT id_profesor FROM profesores
+                   WHERE id_colegio = %s AND correo_electronico = %s AND codigo_profesor != %s""",
+                (id_colegio, correo_electronico, profesor_id),
             )
             if cur.fetchone():
-                return jsonify({"status": "error", "message": "Este correo ya está registrado por otro profesor."})
+                return jsonify({"status": "error", "message": "Este correo ya está registrado en este colegio."})
 
         cur.execute(
-            "SELECT id_profesor FROM profesores WHERE numero_documento = %s AND codigo_profesor != %s",
-            (numero_documento, profesor_id)
+            """SELECT id_profesor FROM profesores
+               WHERE id_colegio = %s AND numero_documento = %s AND codigo_profesor != %s""",
+            (id_colegio, numero_documento, profesor_id),
         )
         if cur.fetchone():
-            return jsonify({"status": "error", "message": "Este número de documento ya está registrado por otro profesor."})
+            return jsonify({"status": "error", "message": "Este documento ya está registrado en este colegio."})
 
         update_fields = ["nombre_completo=%s", "tipo_documento=%s", "numero_documento=%s",
                          "correo_electronico=%s", "telefono=%s", "asignaturas=%s"]
@@ -1136,9 +1514,9 @@ def actualizar_profesor():
             update_fields.append("contrasena=%s")
             update_values.append(hashed)
 
-        update_values.append(profesor_id)
+        update_values.extend([profesor_id, id_colegio])
         cur.execute(
-            f"UPDATE profesores SET {', '.join(update_fields)} WHERE codigo_profesor = %s "
+            f"UPDATE profesores SET {', '.join(update_fields)} WHERE codigo_profesor = %s AND id_colegio = %s "
             f"RETURNING codigo_profesor, nombre_completo, correo_electronico, telefono, asignaturas",
             tuple(update_values)
         )
@@ -1172,12 +1550,19 @@ def actualizar_profesor():
 @app.route("/obtener-profesores-ids", methods=["GET"])
 def obtener_profesores_ids():
     """Devuelve id_profesor (entero) para los selects de asignaciones"""
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    if is_superadmin(admin):
+        return jsonify({"status": "success", "data": []})
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute("SELECT id_profesor, nombre_completo, codigo_profesor FROM profesores ORDER BY nombre_completo")
+        filt, params = colegio_filter_sql(admin)
+        cur.execute(
+            f"SELECT id_profesor, nombre_completo, codigo_profesor FROM profesores WHERE 1=1 {filt} ORDER BY nombre_completo",
+            params,
+        )
         data = [dict(p) for p in cur.fetchall()]
         cur.close(); conn.close()
         return jsonify({"status": "success", "data": data})
@@ -1189,12 +1574,19 @@ def obtener_profesores_ids():
 @app.route("/obtener-estudiantes-ids", methods=["GET"])
 def obtener_estudiantes_ids():
     """Devuelve id_estudiante (entero) para los selects de asignaciones"""
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    if is_superadmin(admin):
+        return jsonify({"status": "success", "data": []})
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute("SELECT id_estudiante, nombre_completo, codigo_estudiante FROM estudiantes ORDER BY nombre_completo")
+        filt, params = colegio_filter_sql(admin)
+        cur.execute(
+            f"SELECT id_estudiante, nombre_completo, codigo_estudiante FROM estudiantes WHERE 1=1 {filt} ORDER BY nombre_completo",
+            params,
+        )
         data = [dict(e) for e in cur.fetchall()]
         cur.close(); conn.close()
         return jsonify({"status": "success", "data": data})
@@ -1206,12 +1598,16 @@ def obtener_estudiantes_ids():
 @app.route("/obtener-grupos-ids", methods=["GET"])
 def obtener_grupos_ids():
     """Devuelve id_grupo (entero) para los selects de asignaciones"""
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    if is_superadmin(admin):
+        return jsonify({"status": "success", "data": []})
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute("SELECT id_grupo, nombre FROM grupos ORDER BY nombre")
+        filt, params = colegio_filter_sql(admin)
+        cur.execute(f"SELECT id_grupo, nombre FROM grupos WHERE 1=1 {filt} ORDER BY nombre", params)
         data = [dict(g) for g in cur.fetchall()]
         cur.close(); conn.close()
         return jsonify({"status": "success", "data": data})
@@ -1223,12 +1619,16 @@ def obtener_grupos_ids():
 @app.route("/obtener-materias-ids", methods=["GET"])
 def obtener_materias_ids():
     """Devuelve id_materia (entero) para los selects de asignaciones"""
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    if is_superadmin(admin):
+        return jsonify({"status": "success", "data": []})
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute("SELECT id_materia, nombre FROM materia ORDER BY nombre")
+        filt, params = colegio_filter_sql(admin)
+        cur.execute(f"SELECT id_materia, nombre FROM materia WHERE 1=1 {filt} ORDER BY nombre", params)
         data = [dict(m) for m in cur.fetchall()]
         cur.close(); conn.close()
         return jsonify({"status": "success", "data": data})
@@ -1239,14 +1639,16 @@ def obtener_materias_ids():
 #
 @app.route("/dashboard-stats", methods=["GET"])
 def dashboard_stats():
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "Debes iniciar sesión primero."})
+    admin, err = _require_admin_api()
+    if err:
+        return err
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("SELECT COUNT(*) FROM estudiantes WHERE estado = 'activo'")
+        filt, params = colegio_filter_sql(admin)
+        cur.execute(f"SELECT COUNT(*) FROM estudiantes WHERE estado = 'activo' {filt}", params)
         estudiantes_count = cur.fetchone()[0]
-        cur.execute("SELECT COUNT(*) FROM profesores WHERE estado = 'activo'")
+        cur.execute(f"SELECT COUNT(*) FROM profesores WHERE estado = 'activo' {filt}", params)
         profesores_count = cur.fetchone()[0]
         cur.close()
         conn.close()
@@ -1259,12 +1661,21 @@ def dashboard_stats():
 #
 @app.route("/obtener-estudiantes", methods=["GET"])
 def obtener_estudiantes():
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "Debes iniciar sesión primero."})
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    if is_superadmin(admin):
+        return jsonify({"status": "success", "data": []})
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute("SELECT codigo_estudiante as id, nombre_completo as nombre, correo_electronico as email, grado, grupo, TO_CHAR(fecha_registro, 'DD/MM/YYYY') as fecha_registro, estado FROM estudiantes ORDER BY fecha_registro DESC")
+        filt, params = colegio_filter_sql(admin)
+        cur.execute(
+            f"SELECT codigo_estudiante as id, nombre_completo as nombre, correo_electronico as email, grado, grupo, "
+            f"TO_CHAR(fecha_registro, 'DD/MM/YYYY') as fecha_registro, estado FROM estudiantes WHERE 1=1 {filt} "
+            f"ORDER BY fecha_registro DESC",
+            params,
+        )
         estudiantes = [dict(e) for e in cur.fetchall()]
         cur.close()
         conn.close()
@@ -1277,12 +1688,21 @@ def obtener_estudiantes():
 #
 @app.route("/obtener-profesores", methods=["GET"])
 def obtener_profesores():
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "Debes iniciar sesión primero."})
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    if is_superadmin(admin):
+        return jsonify({"status": "success", "data": []})
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute("SELECT codigo_profesor as id, nombre_completo as nombre, correo_electronico as email, telefono, asignaturas, TO_CHAR(fecha_registro, 'DD/MM/YYYY') as fecha_registro, estado FROM profesores ORDER BY fecha_registro DESC")
+        filt, params = colegio_filter_sql(admin)
+        cur.execute(
+            f"SELECT codigo_profesor as id, nombre_completo as nombre, correo_electronico as email, telefono, "
+            f"asignaturas, TO_CHAR(fecha_registro, 'DD/MM/YYYY') as fecha_registro, estado FROM profesores "
+            f"WHERE 1=1 {filt} ORDER BY fecha_registro DESC",
+            params,
+        )
         profesores_list = []
         for p in cur.fetchall():
             p_dict = dict(p)
@@ -1299,8 +1719,12 @@ def obtener_profesores():
 #
 @app.route("/registrar-estudiante", methods=["POST"])
 def registrar_estudiante():
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "Debes iniciar sesión primero."})
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    id_colegio = _admin_colegio_id(admin)
+    if not id_colegio:
+        return jsonify({"status": "error", "message": "El super admin no registra estudiantes. Usa un admin de colegio."})
     data = request.get_json()
     nombre_completo = data.get("nombre_completo")
     tipo_documento = data.get("tipo_documento")
@@ -1317,17 +1741,23 @@ def registrar_estudiante():
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("SELECT id_estudiante FROM estudiantes WHERE correo_electronico = %s OR numero_documento = %s", (correo_electronico, numero_documento))
+        cur.execute(
+            "SELECT id_estudiante FROM estudiantes WHERE id_colegio = %s AND (correo_electronico = %s OR numero_documento = %s)",
+            (id_colegio, correo_electronico, numero_documento),
+        )
         if cur.fetchone():
-            return jsonify({"status": "error", "message": "El correo o número de documento ya están registrados."})
-        cur.execute("SELECT codigo_estudiante FROM estudiantes ORDER BY id_estudiante DESC LIMIT 1")
+            return jsonify({"status": "error", "message": "El correo o número de documento ya están registrados en este colegio."})
+        cur.execute(
+            "SELECT codigo_estudiante FROM estudiantes WHERE id_colegio = %s ORDER BY id_estudiante DESC LIMIT 1",
+            (id_colegio,),
+        )
         last = cur.fetchone()
         new_number = int(last[0][3:]) + 1 if last else 1
         codigo_estudiante = f"EST{new_number:03d}"
         _realign_pk_sequence(cur, "estudiantes", "id_estudiante")
         cur.execute(
-            "INSERT INTO estudiantes (codigo_estudiante, nombre_completo, tipo_documento, numero_documento, correo_electronico, grado, grupo, contrasena, id_admin, nombre_completo_admin, correo_electronico_admin) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id_estudiante, codigo_estudiante;",
-            (codigo_estudiante, nombre_completo, tipo_documento, numero_documento, correo_electronico, grado, grupo, hashed_password, session.get('user_id'), session.get('user_name'), session.get('user_email'))
+            "INSERT INTO estudiantes (codigo_estudiante, nombre_completo, tipo_documento, numero_documento, correo_electronico, grado, grupo, contrasena, id_admin, nombre_completo_admin, correo_electronico_admin, id_colegio) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id_estudiante, codigo_estudiante;",
+            (codigo_estudiante, nombre_completo, tipo_documento, numero_documento, correo_electronico, grado, grupo, hashed_password, session.get('user_id'), session.get('user_name'), session.get('user_email'), id_colegio)
         )
         new_student = cur.fetchone()
         conn.commit()
@@ -1342,8 +1772,12 @@ def registrar_estudiante():
 #
 @app.route("/registrar-profesor", methods=["POST"])
 def registrar_profesor():
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "Debes iniciar sesión primero."})
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    id_colegio = _admin_colegio_id(admin)
+    if not id_colegio:
+        return jsonify({"status": "error", "message": "El super admin no registra profesores. Usa un admin de colegio."})
     data = request.get_json()
     nombre_completo = data.get("nombre_completo")
     tipo_documento = data.get("tipo_documento")
@@ -1361,17 +1795,23 @@ def registrar_profesor():
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("SELECT id_profesor FROM profesores WHERE correo_electronico = %s OR numero_documento = %s", (correo_electronico, numero_documento))
+        cur.execute(
+            "SELECT id_profesor FROM profesores WHERE id_colegio = %s AND (correo_electronico = %s OR numero_documento = %s)",
+            (id_colegio, correo_electronico, numero_documento),
+        )
         if cur.fetchone():
-            return jsonify({"status": "error", "message": "El correo o número de documento ya están registrados."})
-        cur.execute("SELECT codigo_profesor FROM profesores ORDER BY id_profesor DESC LIMIT 1")
+            return jsonify({"status": "error", "message": "El correo o número de documento ya están registrados en este colegio."})
+        cur.execute(
+            "SELECT codigo_profesor FROM profesores WHERE id_colegio = %s ORDER BY id_profesor DESC LIMIT 1",
+            (id_colegio,),
+        )
         last = cur.fetchone()
         new_number = int(last[0][4:]) + 1 if last else 1
         codigo_profesor = f"PROF{new_number:03d}"
         _realign_pk_sequence(cur, "profesores", "id_profesor")
         cur.execute(
-            "INSERT INTO profesores (codigo_profesor, nombre_completo, tipo_documento, numero_documento, correo_electronico, telefono, asignaturas, contrasena, id_admin, nombre_completo_admin, correo_electronico_admin) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id_profesor, codigo_profesor;",
-            (codigo_profesor, nombre_completo, tipo_documento, numero_documento, correo_electronico, telefono, asignaturas_str, hashed_password, session.get('user_id'), session.get('user_name'), session.get('user_email'))
+            "INSERT INTO profesores (codigo_profesor, nombre_completo, tipo_documento, numero_documento, correo_electronico, telefono, asignaturas, contrasena, id_admin, nombre_completo_admin, correo_electronico_admin, id_colegio) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id_profesor, codigo_profesor;",
+            (codigo_profesor, nombre_completo, tipo_documento, numero_documento, correo_electronico, telefono, asignaturas_str, hashed_password, session.get('user_id'), session.get('user_name'), session.get('user_email'), id_colegio)
         )
         new_professor = cur.fetchone()
         conn.commit()
@@ -1386,14 +1826,18 @@ def registrar_profesor():
 #
 @app.route("/eliminar-estudiante", methods=["POST"])
 def eliminar_estudiante():
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "Debes iniciar sesión primero."})
+    admin, id_colegio, err = _require_colegio_admin_api()
+    if err:
+        return err
     data = request.get_json()
     codigo = data.get("codigo")
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("DELETE FROM estudiantes WHERE codigo_estudiante = %s", (codigo,))
+        cur.execute(
+            "DELETE FROM estudiantes WHERE codigo_estudiante = %s AND id_colegio = %s",
+            (codigo, id_colegio),
+        )
         conn.commit()
         cur.close()
         conn.close()
@@ -1406,14 +1850,18 @@ def eliminar_estudiante():
 #
 @app.route("/eliminar-profesor", methods=["POST"])
 def eliminar_profesor():
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "Debes iniciar sesión primero."})
+    admin, id_colegio, err = _require_colegio_admin_api()
+    if err:
+        return err
     data = request.get_json()
     codigo = data.get("codigo")
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("DELETE FROM profesores WHERE codigo_profesor = %s", (codigo,))
+        cur.execute(
+            "DELETE FROM profesores WHERE codigo_profesor = %s AND id_colegio = %s",
+            (codigo, id_colegio),
+        )
         conn.commit()
         cur.close()
         conn.close()
@@ -1422,50 +1870,96 @@ def eliminar_profesor():
         print(f"Error eliminando profesor: {e}")
         return jsonify({"status": "error", "message": "Error al eliminar."})
     
-######Define el diseño del PDF, agregando un encabezado con título y fecha, y un pie de página con la numeración de las páginas.######
+###### PDF con branding del colegio (encabezado, escudo, marca de agua). ######
 #
-class MiBoletinPDF(FPDF):
+class ColegioBrandedPDF(FPDF):
+    def __init__(self, branding=None):
+        super().__init__()
+        branding = branding or {}
+        self._nombre = _pdf_sanitize(branding.get('nombre_oficial') or 'MiBoletin')
+        self._lema = _pdf_sanitize(branding.get('lema') or '')
+        self._primary = _hex_to_rgb(branding.get('color_primario'), (0, 51, 102))
+        self._escudo_path = _branding_file_path(branding.get('escudo_url'))
+        self._encabezado_path = _branding_file_path(branding.get('encabezado_pdf_url'))
+        self._marca_path = _branding_file_path(branding.get('marca_agua_url'))
+
+    def _draw_watermark(self):
+        if not self._marca_path or not os.path.isfile(self._marca_path):
+            return
+        try:
+            if hasattr(self, 'set_alpha'):
+                self.set_alpha(0.08)
+            w, h = 90, 90
+            self.image(self._marca_path, x=(self.w - w) / 2, y=(self.h - h) / 2, w=w)
+            if hasattr(self, 'set_alpha'):
+                self.set_alpha(1)
+        except Exception:
+            pass
+
     def header(self):
-        self.set_font('helvetica', 'B', 16)
-        self.set_text_color(0, 51, 102) # #003366
-        self.cell(0, 10, 'MiBoletín Admin', 0, 1, 'C')
-        self.set_font('helvetica', 'I', 10)
-        self.set_text_color(100, 100, 100)
-        self.cell(0, 10, f'Generado el: {datetime.now().strftime("%d/%m/%Y %H:%M:%S")}', 0, 1, 'C')
-        self.ln(5)
+        self._draw_watermark()
+        y0 = self.get_y()
+        if self._encabezado_path and os.path.isfile(self._encabezado_path):
+            try:
+                self.image(self._encabezado_path, x=10, y=8, w=190)
+                self.ln(28)
+            except Exception:
+                self.set_y(y0)
+        if self._escudo_path and os.path.isfile(self._escudo_path):
+            try:
+                self.image(self._escudo_path, x=12, y=10, h=14)
+            except Exception:
+                pass
+        r, g, b = self._primary
+        self.set_font('helvetica', 'B', 14)
+        self.set_text_color(r, g, b)
+        self.cell(0, 8, _pdf_sanitize(self._nombre[:80]), 0, 1, 'C')
+        if self._lema:
+            self.set_font('helvetica', 'I', 9)
+            self.set_text_color(100, 100, 100)
+            self.cell(0, 6, _pdf_sanitize(self._lema[:120]), 0, 1, 'C')
+        self.set_font('helvetica', 'I', 8)
+        self.set_text_color(130, 130, 130)
+        self.cell(0, 5, f'Generado: {datetime.now().strftime("%d/%m/%Y %H:%M")}', 0, 1, 'C')
+        self.ln(4)
 
     def footer(self):
         self.set_y(-15)
         self.set_font('helvetica', 'I', 8)
         self.set_text_color(128, 128, 128)
-        self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
+        self.cell(0, 10, _pdf_sanitize(f'{self._nombre[:40]} - Pagina {self.page_no()}'), 0, 0, 'C')
+
+
+def _pdf_for_colegio(id_colegio):
+    branding = _fetch_colegio_branding(id_colegio) if id_colegio else None
+    return ColegioBrandedPDF(branding)
+
+
+MiBoletinPDF = ColegioBrandedPDF
         
 #########Genera y descarga un PDF con la lista de estudiantes, permitiendo filtrar por grado y grupo, y mostrando la información en formato de tabla.######
 #
 @app.route("/reporte/estudiantes/pdf", methods=["GET"])
 def reporte_estudiantes_pdf():
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "Debes iniciar sesión primero."})
-    
+    id_colegio, err = _require_colegio_admin_pdf()
+    if err:
+        return err
+
     grado = request.args.get('grado', '')
     grupo = request.args.get('grupo', '')
 
-    query = "SELECT codigo_estudiante, nombre_completo, correo_electronico, grado, grupo, estado FROM estudiantes"
-    conditions = []
-    params = []
-    
+    query = "SELECT codigo_estudiante, nombre_completo, correo_electronico, grado, grupo, estado FROM estudiantes WHERE id_colegio = %s"
+    params = [id_colegio]
+
     if grado:
-        conditions.append("grado = %s")
+        query += " AND grado = %s"
         params.append(grado)
     if grupo:
-        conditions.append("grupo = %s")
+        query += " AND grupo = %s"
         params.append(grupo)
-        
-    if conditions:
-        query += " WHERE " + " AND ".join(conditions)
-        
+
     query += " ORDER BY grado, grupo, nombre_completo"
-    
+
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -1474,7 +1968,7 @@ def reporte_estudiantes_pdf():
         cur.close()
         conn.close()
 
-        pdf = MiBoletinPDF()
+        pdf = _pdf_for_colegio(id_colegio)
         pdf.add_page()
         
         pdf.set_font('helvetica', 'B', 14)
@@ -1517,12 +2011,8 @@ def reporte_estudiantes_pdf():
         pdf.cell(0, 10, f"Total Estudiantes: {len(estudiantes)}", 0, 1, 'R')
 
         # Output to memory
-        pdf_bytes = pdf.output(dest='S').encode('latin-1')
-        buffer = io.BytesIO(pdf_bytes)
-        buffer.seek(0)
-        
         return send_file(
-            buffer,
+            _pdf_to_bytesio(pdf),
             as_attachment=True,
             download_name='reporte_estudiantes.pdf',
             mimetype='application/pdf'
@@ -1536,18 +2026,23 @@ def reporte_estudiantes_pdf():
 #
 @app.route("/reporte/profesores/pdf", methods=["GET"])
 def reporte_profesores_pdf():
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "Debes iniciar sesión primero."})
-    
+    id_colegio, err = _require_colegio_admin_pdf()
+    if err:
+        return err
+
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute("SELECT codigo_profesor, nombre_completo, correo_electronico, telefono, estado FROM profesores ORDER BY nombre_completo")
+        cur.execute(
+            "SELECT codigo_profesor, nombre_completo, correo_electronico, telefono, estado "
+            "FROM profesores WHERE id_colegio = %s ORDER BY nombre_completo",
+            (id_colegio,),
+        )
         profesores = cur.fetchall()
         cur.close()
         conn.close()
 
-        pdf = MiBoletinPDF()
+        pdf = _pdf_for_colegio(id_colegio)
         pdf.add_page()
         
         pdf.set_font('helvetica', 'B', 14)
@@ -1586,12 +2081,8 @@ def reporte_profesores_pdf():
         pdf.set_font('helvetica', 'B', 10)
         pdf.cell(0, 10, f"Total Profesores: {len(profesores)}", 0, 1, 'R')
 
-        pdf_bytes = pdf.output(dest='S').encode('latin-1')
-        buffer = io.BytesIO(pdf_bytes)
-        buffer.seek(0)
-        
         return send_file(
-            buffer,
+            _pdf_to_bytesio(pdf),
             as_attachment=True,
             download_name='directorio_profesores.pdf',
             mimetype='application/pdf'
@@ -1605,31 +2096,47 @@ def reporte_profesores_pdf():
 #
 @app.route("/reporte/resumen/pdf", methods=["GET"])
 def reporte_resumen_pdf():
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "Debes iniciar sesión primero."})
-    
+    id_colegio, err = _require_colegio_admin_pdf()
+    if err:
+        return err
+
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        
-        # Estadistica Estudiantes
-        cur.execute("SELECT COUNT(*) FROM estudiantes WHERE estado = 'activo'")
+
+        cur.execute(
+            "SELECT COUNT(*) FROM estudiantes WHERE estado = 'activo' AND id_colegio = %s",
+            (id_colegio,),
+        )
         estudiantes_activos = cur.fetchone()[0]
-        cur.execute("SELECT COUNT(*) FROM estudiantes WHERE estado != 'activo'")
+        cur.execute(
+            "SELECT COUNT(*) FROM estudiantes WHERE estado != 'activo' AND id_colegio = %s",
+            (id_colegio,),
+        )
         estudiantes_inactivos = cur.fetchone()[0]
-        
-        # Estadistica Profesores
-        cur.execute("SELECT COUNT(*) FROM profesores WHERE estado = 'activo'")
+        cur.execute(
+            "SELECT COUNT(*) FROM profesores WHERE estado = 'activo' AND id_colegio = %s",
+            (id_colegio,),
+        )
         profesores_activos = cur.fetchone()[0]
-        
-        # Solicitudes
-        cur.execute("SELECT COUNT(*) FROM solicitudes_cambio_contrasena")
-        total_solicitudes = cur.fetchone()[0]
-        
+        cur.execute("""
+            SELECT COUNT(*) FROM solicitudes_cambio_contrasena s
+            JOIN estudiantes e ON s.tipo_usuario = 'estudiante' AND s.id_usuario = e.id_estudiante
+            WHERE e.id_colegio = %s
+        """, (id_colegio,))
+        sol_est = cur.fetchone()[0]
+        cur.execute("""
+            SELECT COUNT(*) FROM solicitudes_cambio_contrasena s
+            JOIN profesores p ON s.tipo_usuario = 'profesor' AND s.id_usuario = p.id_profesor
+            WHERE p.id_colegio = %s
+        """, (id_colegio,))
+        sol_prof = cur.fetchone()[0]
+        total_solicitudes = sol_est + sol_prof
+
         cur.close()
         conn.close()
 
-        pdf = MiBoletinPDF()
+        pdf = _pdf_for_colegio(id_colegio)
         pdf.add_page()
         
         pdf.set_font('helvetica', 'B', 16)
@@ -1662,12 +2169,8 @@ def reporte_resumen_pdf():
         pdf.set_font('helvetica', 'I', 10)
         pdf.cell(0, 10, f"Reporte generado por: {session.get('user_name', 'Administrador')}", 0, 1, 'L')
 
-        pdf_bytes = pdf.output(dest='S').encode('latin-1')
-        buffer = io.BytesIO(pdf_bytes)
-        buffer.seek(0)
-        
         return send_file(
-            buffer,
+            _pdf_to_bytesio(pdf),
             as_attachment=True,
             download_name='resumen_sistema.pdf',
             mimetype='application/pdf'
@@ -1681,17 +2184,22 @@ def reporte_resumen_pdf():
 #
 @app.route("/reporte/administradores/pdf", methods=["GET"])
 def reporte_administradores_pdf():
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "Debes iniciar sesión primero."})
+    id_colegio, err = _require_colegio_admin_pdf()
+    if err:
+        return err
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute("SELECT id_admin, nombre_completo, correo_electronico, email_verified FROM administradores ORDER BY id_admin")
+        cur.execute(
+            """SELECT id_admin, nombre_completo, correo_electronico, email_verified, rol
+               FROM administradores WHERE id_colegio = %s ORDER BY id_admin""",
+            (id_colegio,),
+        )
         admins = cur.fetchall()
         cur.close()
         conn.close()
 
-        pdf = MiBoletinPDF()
+        pdf = _pdf_for_colegio(id_colegio)
         pdf.add_page()
 
         pdf.set_font('helvetica', 'B', 14)
@@ -1727,10 +2235,12 @@ def reporte_administradores_pdf():
         pdf.set_font('helvetica', 'I', 9)
         pdf.cell(0, 8, f"Reporte generado por: {session.get('user_name', 'Administrador')}", 0, 1, 'L')
 
-        pdf_bytes = pdf.output(dest='S').encode('latin-1')
-        buffer = io.BytesIO(pdf_bytes)
-        buffer.seek(0)
-        return send_file(buffer, as_attachment=True, download_name='directorio_administradores.pdf', mimetype='application/pdf')
+        return send_file(
+            _pdf_to_bytesio(pdf),
+            as_attachment=True,
+            download_name='directorio_administradores.pdf',
+            mimetype='application/pdf',
+        )
 
     except Exception as e:
         print(f"Error generando PDF de administradores: {e}")
@@ -1741,8 +2251,8 @@ def reporte_administradores_pdf():
 
 #######Obtiene los estudiantes activos asignados al profesor según sus grupos.########
 #
-@app.route('/profesor/estudiantes')
-def profesor_estudiantes():
+@app.route('/profesor/grupos')
+def profesor_grupos():
     user_info = session.get('user_info')
     if not user_info or user_info.get('tipo') != 'profesor':
         return jsonify({"status": "error", "message": "No autorizado"}), 401
@@ -1750,15 +2260,48 @@ def profesor_estudiantes():
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         cur.execute("""
+            SELECT DISTINCT g.id_grupo, g.nombre
+            FROM grupos g
+            JOIN grupo_materias gm ON g.id_grupo = gm.id_grupo
+            WHERE gm.id_docente = %s
+            ORDER BY g.nombre
+        """, (user_info['id'],))
+        grupos = [dict(g) for g in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "data": grupos})
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/profesor/estudiantes')
+def profesor_estudiantes():
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    id_grupo = request.args.get('id_grupo', type=int)
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        query = """
             SELECT DISTINCT e.id_estudiante, e.nombre_completo, e.codigo_estudiante,
-                   e.grado, e.grupo, g.nombre as nombre_grupo
+                   e.grado, e.grupo, g.nombre as nombre_grupo, g.id_grupo
             FROM estudiantes e
             JOIN grupo_estudiantes ge ON e.id_estudiante = ge.id_estudiante
             JOIN grupos g ON ge.id_grupo = g.id_grupo
             JOIN grupo_materias gm ON g.id_grupo = gm.id_grupo
             WHERE gm.id_docente = %s AND e.estado = 'activo'
-            ORDER BY e.nombre_completo
-        """, (user_info['id'],))
+        """
+        params = [user_info['id']]
+        if id_grupo:
+            if not _profesor_puede_grupo(cur, user_info['id'], id_grupo):
+                cur.close()
+                conn.close()
+                return jsonify({"status": "error", "message": "Grupo no asignado."}), 403
+            query += " AND g.id_grupo = %s"
+            params.append(id_grupo)
+        query += " ORDER BY e.nombre_completo"
+        cur.execute(query, tuple(params))
         estudiantes = [dict(e) for e in cur.fetchall()]
         cur.close()
         conn.close()
@@ -1962,20 +2505,36 @@ def ver_agenda():
     if not user_info or user_info.get('tipo') != 'profesor':
         return jsonify({"status": "error", "message": "No autorizado"}), 401
     try:
+        ensure_agenda_grupos_table()
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         cur.execute("""
-            SELECT id_agenda, titulo, descripcion, fecha_evento,
-                   hora_inicio, hora_fin, estado
-            FROM agenda
-            WHERE id_profesor = %s
-            ORDER BY fecha_evento ASC
+            SELECT a.id_agenda, a.titulo, a.descripcion, a.fecha_evento,
+                   a.hora_inicio, a.hora_fin, a.estado,
+                   COALESCE(
+                       array_agg(g.nombre ORDER BY g.nombre)
+                       FILTER (WHERE g.id_grupo IS NOT NULL),
+                       ARRAY[]::varchar[]
+                   ) AS grupos,
+                   COALESCE(
+                       array_agg(g.id_grupo ORDER BY g.nombre)
+                       FILTER (WHERE g.id_grupo IS NOT NULL),
+                       ARRAY[]::integer[]
+                   ) AS id_grupos
+            FROM agenda a
+            LEFT JOIN agenda_grupos ag ON a.id_agenda = ag.id_agenda
+            LEFT JOIN grupos g ON ag.id_grupo = g.id_grupo
+            WHERE a.id_profesor = %s
+            GROUP BY a.id_agenda
+            ORDER BY a.fecha_evento ASC
         """, (user_info['id'],))
         eventos = [dict(e) for e in cur.fetchall()]
         for e in eventos:
             e['fecha_evento'] = str(e['fecha_evento'])
             e['hora_inicio'] = str(e['hora_inicio']) if e['hora_inicio'] else None
             e['hora_fin'] = str(e['hora_fin']) if e['hora_fin'] else None
+            e['grupos'] = list(e.get('grupos') or [])
+            e['id_grupos'] = [int(x) for x in (e.get('id_grupos') or []) if x is not None]
         cur.close()
         conn.close()
         return jsonify({"status": "success", "data": eventos})
@@ -1993,22 +2552,43 @@ def agregar_agenda():
     titulo = data.get('titulo')
     descripcion = data.get('descripcion')
     fecha_evento = data.get('fecha_evento')
-    hora_inicio = data.get('hora_inicio')
-    hora_fin = data.get('hora_fin')
+    hora_inicio = data.get('hora_inicio') or None
+    hora_fin = data.get('hora_fin') or None
+    id_grupos = data.get('id_grupos') or []
     if not all([titulo, fecha_evento]):
         return jsonify({"status": "error", "message": "Título y fecha son requeridos."})
+    if not isinstance(id_grupos, list):
+        id_grupos = []
     try:
+        id_grupos = [int(g) for g in id_grupos]
+    except (TypeError, ValueError):
+        return jsonify({"status": "error", "message": "Lista de grupos inválida."})
+    try:
+        ensure_agenda_grupos_table()
         conn = get_db_connection()
         cur = conn.cursor()
+        for id_grupo in id_grupos:
+            if not _profesor_puede_grupo(cur, user_info['id'], id_grupo):
+                cur.close()
+                conn.close()
+                return jsonify({"status": "error", "message": "Uno o más grupos no están asignados a ti."}), 403
         cur.execute("""
             INSERT INTO agenda (id_profesor, titulo, descripcion, fecha_evento, hora_inicio, hora_fin)
             VALUES (%s, %s, %s, %s, %s, %s) RETURNING id_agenda
         """, (user_info['id'], titulo, descripcion, fecha_evento, hora_inicio, hora_fin))
         id_agenda = cur.fetchone()[0]
+        for id_grupo in id_grupos:
+            cur.execute(
+                "INSERT INTO agenda_grupos (id_agenda, id_grupo) VALUES (%s, %s)",
+                (id_agenda, id_grupo),
+            )
         conn.commit()
         cur.close()
         conn.close()
-        return jsonify({"status": "success", "message": "Evento agregado!", "id_agenda": id_agenda})
+        msg = "Evento agregado!"
+        if id_grupos:
+            msg += f" Compartido con {len(id_grupos)} grupo(s)."
+        return jsonify({"status": "success", "message": msg, "id_agenda": id_agenda})
     except Exception as e:
         return _api_error_response(e)
 
@@ -2089,138 +2669,121 @@ def reporte_estudiante(id_estudiante):
 
 #######genera y descarga un PDF con el reporte completo de todos los estudiantes del profesor, incluyendo datos personales, notas por materia con promedio y observaciones registradas#######
 #
-@app.route('/profesor/reporte/pdf')
-def profesor_reporte_pdf():
-    user_info = session.get('user_info')
-    if not user_info or user_info.get('tipo') != 'profesor':
-        return jsonify({"status": "error", "message": "No autorizado"}), 401
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-
-        # Datos del profesor
-        cur.execute("SELECT nombre_completo, codigo_profesor FROM profesores WHERE id_profesor = %s", (user_info['id'],))
-        profesor = dict(cur.fetchone())
-
-        # Estudiantes asignados
+def _profesor_estudiantes_para_reporte(cur, id_docente, id_grupo=None, id_estudiante=None):
+    """Lista estudiantes del profesor, opcionalmente filtrados por grupo o uno solo."""
+    if id_estudiante:
         cur.execute("""
             SELECT DISTINCT e.id_estudiante, e.nombre_completo, e.codigo_estudiante, e.grado, e.grupo
             FROM estudiantes e
             JOIN grupo_estudiantes ge ON e.id_estudiante = ge.id_estudiante
             JOIN grupos g ON ge.id_grupo = g.id_grupo
             JOIN grupo_materias gm ON g.id_grupo = gm.id_grupo
-            WHERE gm.id_docente = %s AND e.estado = 'activo'
-            ORDER BY e.grado, e.grupo, e.nombre_completo
-        """, (user_info['id'],))
-        estudiantes = [dict(e) for e in cur.fetchall()]
+            WHERE gm.id_docente = %s AND e.id_estudiante = %s AND e.estado = 'activo'
+        """, (id_docente, id_estudiante))
+        return [dict(e) for e in cur.fetchall()]
 
-        pdf = MiBoletinPDF()
+    query = """
+        SELECT DISTINCT e.id_estudiante, e.nombre_completo, e.codigo_estudiante, e.grado, e.grupo
+        FROM estudiantes e
+        JOIN grupo_estudiantes ge ON e.id_estudiante = ge.id_estudiante
+        JOIN grupos g ON ge.id_grupo = g.id_grupo
+        JOIN grupo_materias gm ON g.id_grupo = gm.id_grupo
+        WHERE gm.id_docente = %s AND e.estado = 'activo'
+    """
+    params = [id_docente]
+    if id_grupo:
+        if not _profesor_puede_grupo(cur, id_docente, id_grupo):
+            return None
+        query += " AND g.id_grupo = %s"
+        params.append(id_grupo)
+    query += " ORDER BY e.grado, e.grupo, e.nombre_completo"
+    cur.execute(query, tuple(params))
+    return [dict(e) for e in cur.fetchall()]
 
+
+@app.route('/profesor/reporte/pdf')
+def profesor_reporte_pdf():
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    id_grupo = request.args.get('id_grupo', type=int)
+    id_estudiante = request.args.get('id_estudiante', type=int)
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+        cur.execute("SELECT nombre_completo, codigo_profesor FROM profesores WHERE id_profesor = %s", (user_info['id'],))
+        profesor = dict(cur.fetchone())
+
+        estudiantes = _profesor_estudiantes_para_reporte(
+            cur, user_info['id'], id_grupo=id_grupo, id_estudiante=id_estudiante
+        )
+        if estudiantes is None:
+            cur.close()
+            conn.close()
+            return jsonify({"status": "error", "message": "Grupo no asignado."}), 403
+
+        if not estudiantes:
+            cur.close()
+            conn.close()
+            return jsonify({"status": "error", "message": "No hay estudiantes para el filtro seleccionado."}), 404
+
+        pdf = _pdf_for_colegio(user_info.get('id_colegio'))
         for est in estudiantes:
-            pdf.add_page()
-            pdf.set_font('helvetica', 'B', 14)
-            pdf.set_text_color(0, 0, 0)
-            pdf.cell(0, 10, f"Reporte del Estudiante: {est['nombre_completo']}", 0, 1, 'C')
-            pdf.set_font('helvetica', '', 10)
-            pdf.set_text_color(80, 80, 80)
-            pdf.cell(0, 7, f"Código: {est['codigo_estudiante']}  |  Grado: {est['grado']}  |  Grupo: {est['grupo']}", 0, 1, 'C')
-            pdf.cell(0, 7, f"Docente: {profesor['nombre_completo']} ({profesor['codigo_profesor']})", 0, 1, 'C')
-            pdf.ln(5)
-
-            # Notas
-            cur.execute("""
-                SELECT n.valor, n.descripcion, TO_CHAR(n.fecha_registro,'DD/MM/YYYY') as fecha,
-                       tn.nombre_tipo, m.nombre as materia
-                FROM notas n
-                JOIN tipos_nota tn ON n.id_tipo = tn.id_tipo
-                JOIN grupo_materias gm ON n.id_grupo_materia = gm.id_grupo_materia
-                JOIN materia m ON gm.id_materia = m.id_materia
-                WHERE n.id_estudiante = %s AND gm.id_docente = %s
-                ORDER BY m.nombre, n.fecha_registro DESC
-            """, (est['id_estudiante'], user_info['id']))
-            notas = [dict(n) for n in cur.fetchall()]
-
-            pdf.set_font('helvetica', 'B', 11)
-            pdf.set_fill_color(0, 51, 102)
-            pdf.set_text_color(255, 255, 255)
-            pdf.cell(0, 9, ' Notas Académicas', 1, 1, 'L', fill=True)
-            if notas:
-                pdf.set_font('helvetica', 'B', 9)
-                pdf.set_fill_color(220, 230, 242)
-                pdf.set_text_color(0, 0, 0)
-                pdf.cell(55, 8, 'Materia', 1, 0, 'C', fill=True)
-                pdf.cell(35, 8, 'Tipo', 1, 0, 'C', fill=True)
-                pdf.cell(20, 8, 'Valor', 1, 0, 'C', fill=True)
-                pdf.cell(55, 8, 'Descripción', 1, 0, 'C', fill=True)
-                pdf.cell(25, 8, 'Fecha', 1, 1, 'C', fill=True)
-                pdf.set_font('helvetica', '', 9)
-                fill = False
-                pdf.set_fill_color(240, 248, 255)
-                valores = []
-                for n in notas:
-                    v = float(n['valor'])
-                    valores.append(v)
-                    color = (56, 161, 105) if v >= 3 else (229, 62, 62)
-                    pdf.cell(55, 7, n['materia'][:28], 1, 0, 'L', fill=fill)
-                    pdf.cell(35, 7, n['nombre_tipo'][:18], 1, 0, 'C', fill=fill)
-                    pdf.set_text_color(*color)
-                    pdf.cell(20, 7, str(v), 1, 0, 'C', fill=fill)
-                    pdf.set_text_color(0, 0, 0)
-                    pdf.cell(55, 7, (n['descripcion'] or '-')[:28], 1, 0, 'L', fill=fill)
-                    pdf.cell(25, 7, n['fecha'], 1, 1, 'C', fill=fill)
-                    fill = not fill
-                promedio = round(sum(valores) / len(valores), 2)
-                color = (56, 161, 105) if promedio >= 3 else (229, 62, 62)
-                pdf.set_font('helvetica', 'B', 10)
-                pdf.set_text_color(*color)
-                pdf.cell(0, 9, f"  Promedio General: {promedio}", 0, 1, 'R')
-                pdf.set_text_color(0, 0, 0)
-            else:
-                pdf.set_font('helvetica', 'I', 9)
-                pdf.cell(0, 8, '  No hay notas registradas.', 0, 1)
-
-            pdf.ln(4)
-
-            # Observaciones
-            cur.execute("""
-                SELECT tipo, descripcion, TO_CHAR(fecha_registro,'DD/MM/YYYY') as fecha
-                FROM observador WHERE id_estudiante = %s AND id_profesor = %s
-                ORDER BY fecha_registro DESC
-            """, (est['id_estudiante'], user_info['id']))
-            obs = [dict(o) for o in cur.fetchall()]
-
-            pdf.set_font('helvetica', 'B', 11)
-            pdf.set_fill_color(0, 51, 102)
-            pdf.set_text_color(255, 255, 255)
-            pdf.cell(0, 9, ' Observaciones del Observador', 1, 1, 'L', fill=True)
-            if obs:
-                pdf.set_font('helvetica', '', 9)
-                pdf.set_text_color(0, 0, 0)
-                fill = False
-                fills = {'positivo': (198, 246, 213), 'negativo': (254, 215, 215), 'neutro': (226, 232, 240)}
-                for o in obs:
-                    r, g, b = fills.get(o['tipo'], (226, 232, 240))
-                    pdf.set_fill_color(r, g, b)
-                    pdf.cell(25, 7, o['tipo'].capitalize(), 1, 0, 'C', fill=True)
-                    pdf.cell(140, 7, (o['descripcion'] or '')[:70], 1, 0, 'L', fill=fill)
-                    pdf.cell(25, 7, o['fecha'], 1, 1, 'C', fill=fill)
-                    fill = not fill
-            else:
-                pdf.set_font('helvetica', 'I', 9)
-                pdf.cell(0, 8, '  No hay observaciones registradas.', 0, 1)
+            _pdf_agregar_estudiante(pdf, cur, est, profesor, user_info['id'])
 
         cur.close()
         conn.close()
 
         nombre_prof = profesor['nombre_completo'].replace(' ', '_')
-        pdf_bytes = pdf.output(dest='S').encode('latin-1')
-        buffer = io.BytesIO(pdf_bytes)
-        buffer.seek(0)
-        return send_file(buffer, as_attachment=True,
-                         download_name=f'reporte_completo_{nombre_prof}.pdf',
-                         mimetype='application/pdf')
+        sufijo = ''
+        if id_estudiante and len(estudiantes) == 1:
+            sufijo = f"_{estudiantes[0]['codigo_estudiante']}"
+        elif id_grupo:
+            sufijo = '_grupo'
+        return send_file(
+            _pdf_to_bytesio(pdf),
+            as_attachment=True,
+            download_name=f'reporte{sufijo}_{nombre_prof}.pdf',
+            mimetype='application/pdf',
+        )
     except Exception as e:
         print(f"Error generando PDF profesor: {e}")
+        return _api_error_response(e)
+
+
+@app.route('/profesor/reporte/<int:id_estudiante>/pdf')
+def profesor_reporte_estudiante_pdf(id_estudiante):
+    """PDF del reporte de un solo estudiante asignado al profesor."""
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("SELECT nombre_completo, codigo_profesor FROM profesores WHERE id_profesor = %s", (user_info['id'],))
+        profesor = dict(cur.fetchone())
+        estudiantes = _profesor_estudiantes_para_reporte(
+            cur, user_info['id'], id_estudiante=id_estudiante
+        )
+        if not estudiantes:
+            cur.close()
+            conn.close()
+            return jsonify({"status": "error", "message": "Estudiante no encontrado o no asignado."}), 404
+        est = estudiantes[0]
+        pdf = _pdf_for_colegio(user_info.get('id_colegio'))
+        _pdf_agregar_estudiante(pdf, cur, est, profesor, user_info['id'])
+        cur.close()
+        conn.close()
+        codigo = str(est['codigo_estudiante']).replace(' ', '_')
+        return send_file(
+            _pdf_to_bytesio(pdf),
+            as_attachment=True,
+            download_name=f'reporte_{codigo}.pdf',
+            mimetype='application/pdf',
+        )
+    except Exception as e:
+        print(f"Error generando PDF estudiante profesor: {e}")
         return _api_error_response(e)
 
 #########obtiene el listado de estudiantes activos asociados a una materia y grupo específico del profesor, incluyendo id, código, nombre, grado y grupo#####
@@ -2622,6 +3185,40 @@ def estudiante_observador():
     except Exception as e:
         return _api_error_response(e)
 
+########eventos de agenda compartidos por profesores con los grupos del estudiante#########
+#
+@app.route('/estudiante/agenda')
+def estudiante_agenda():
+    u = get_estudiante_info()
+    if not u:
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        ensure_agenda_grupos_table()
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT DISTINCT a.id_agenda, a.titulo, a.descripcion, a.fecha_evento,
+                   a.hora_inicio, a.hora_fin, a.estado,
+                   p.nombre_completo AS profesor
+            FROM agenda a
+            JOIN agenda_grupos ag ON a.id_agenda = ag.id_agenda
+            JOIN grupo_estudiantes ge ON ag.id_grupo = ge.id_grupo
+            JOIN profesores p ON a.id_profesor = p.id_profesor
+            WHERE ge.id_estudiante = %s
+              AND a.estado IN ('pendiente', 'completado')
+            ORDER BY a.fecha_evento ASC, a.hora_inicio ASC NULLS LAST
+        """, (u['id'],))
+        eventos = [dict(e) for e in cur.fetchall()]
+        for e in eventos:
+            e['fecha_evento'] = str(e['fecha_evento'])
+            e['hora_inicio'] = str(e['hora_inicio']) if e['hora_inicio'] else None
+            e['hora_fin'] = str(e['hora_fin']) if e['hora_fin'] else None
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "data": eventos})
+    except Exception as e:
+        return _api_error_response(e)
+
 ##########permite a estudiantes o profesores cambiar su contraseña validando la actual y guardando la nueva de forma segura en el sistema############
 #
 @app.route('/change-password', methods=['POST'])
@@ -2701,12 +3298,21 @@ def update_profile():
 #
 @app.route('/admin/periodos', methods=['GET'])
 def get_periodos():
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    if is_superadmin(admin):
+        return jsonify({"status": "success", "data": []})
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute("SELECT id_periodo, nombre, TO_CHAR(fecha_inicio,'DD/MM/YYYY') as fecha_inicio, TO_CHAR(fecha_fin,'DD/MM/YYYY') as fecha_fin FROM periodo_academico ORDER BY fecha_inicio DESC")
+        filt, params = colegio_filter_sql(admin)
+        cur.execute(
+            f"SELECT id_periodo, nombre, TO_CHAR(fecha_inicio,'DD/MM/YYYY') as fecha_inicio, "
+            f"TO_CHAR(fecha_fin,'DD/MM/YYYY') as fecha_fin FROM periodo_academico WHERE 1=1 {filt} "
+            f"ORDER BY fecha_inicio DESC",
+            params,
+        )
         data = [dict(r) for r in cur.fetchall()]
         cur.close(); conn.close()
         return jsonify({"status": "success", "data": data})
@@ -2718,8 +3324,12 @@ def get_periodos():
 #
 @app.route('/admin/periodos', methods=['POST'])
 def crear_periodo():
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    id_colegio = _admin_colegio_id(admin)
+    if not id_colegio:
+        return jsonify({"status": "error", "message": "Solo admin de colegio puede crear períodos."})
     data = request.get_json()
     nombre = data.get('nombre')
     fecha_inicio = data.get('fecha_inicio')
@@ -2729,7 +3339,10 @@ def crear_periodo():
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("INSERT INTO periodo_academico (nombre, fecha_inicio, fecha_fin) VALUES (%s,%s,%s) RETURNING id_periodo", (nombre, fecha_inicio, fecha_fin))
+        cur.execute(
+            "INSERT INTO periodo_academico (nombre, fecha_inicio, fecha_fin, id_colegio) VALUES (%s,%s,%s,%s) RETURNING id_periodo",
+            (nombre, fecha_inicio, fecha_fin, id_colegio),
+        )
         id_periodo = cur.fetchone()[0]
         conn.commit(); cur.close(); conn.close()
         return jsonify({"status": "success", "message": "Período creado exitosamente!", "id_periodo": id_periodo})
@@ -2741,17 +3354,22 @@ def crear_periodo():
 #
 @app.route('/admin/grupos', methods=['GET'])
 def get_grupos():
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    if is_superadmin(admin):
+        return jsonify({"status": "success", "data": []})
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute("""
+        filt, params = colegio_filter_sql(admin, alias='g')
+        cur.execute(f"""
             SELECT g.id_grupo, g.nombre, p.nombre as periodo
             FROM grupos g
             LEFT JOIN periodo_academico p ON g.id_periodo = p.id_periodo
+            WHERE 1=1 {filt}
             ORDER BY g.id_grupo DESC
-        """)
+        """, params)
         data = [dict(r) for r in cur.fetchall()]
         cur.close(); conn.close()
         return jsonify({"status": "success", "data": data})
@@ -2762,8 +3380,12 @@ def get_grupos():
 #
 @app.route('/admin/grupos', methods=['POST'])
 def crear_grupo():
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    id_colegio = _admin_colegio_id(admin)
+    if not id_colegio:
+        return jsonify({"status": "error", "message": "Solo admin de colegio puede crear grupos."})
     data = request.get_json()
     nombre = data.get('nombre')
     id_periodo = data.get('id_periodo')
@@ -2772,7 +3394,18 @@ def crear_grupo():
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("INSERT INTO grupos (nombre, id_periodo) VALUES (%s,%s) RETURNING id_grupo", (nombre, id_periodo))
+        cur.execute(
+            "SELECT 1 FROM periodo_academico WHERE id_periodo = %s AND id_colegio = %s",
+            (id_periodo, id_colegio),
+        )
+        if not cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify({"status": "error", "message": "Período no pertenece a tu colegio."})
+        cur.execute(
+            "INSERT INTO grupos (nombre, id_periodo, id_colegio) VALUES (%s,%s,%s) RETURNING id_grupo",
+            (nombre, id_periodo, id_colegio),
+        )
         id_grupo = cur.fetchone()[0]
         conn.commit(); cur.close(); conn.close()
         return jsonify({"status": "success", "message": "Grupo creado exitosamente!", "id_grupo": id_grupo})
@@ -2783,12 +3416,14 @@ def crear_grupo():
 #
 @app.route('/admin/grupos-count', methods=['GET'])
 def grupos_count():
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    admin, err = _require_admin_api()
+    if err:
+        return err
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("SELECT COUNT(*) FROM grupos")
+        filt, params = colegio_filter_sql(admin)
+        cur.execute(f"SELECT COUNT(*) FROM grupos WHERE 1=1 {filt}", params)
         count = cur.fetchone()[0]
         cur.close(); conn.close()
         return jsonify({"status": "success", "data": count})
@@ -2799,12 +3434,16 @@ def grupos_count():
 #
 @app.route('/admin/materias', methods=['GET'])
 def get_materias():
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    if is_superadmin(admin):
+        return jsonify({"status": "success", "data": []})
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute("SELECT id_materia, nombre, codigo FROM materia ORDER BY nombre")
+        filt, params = colegio_filter_sql(admin)
+        cur.execute(f"SELECT id_materia, nombre, codigo FROM materia WHERE 1=1 {filt} ORDER BY nombre", params)
         data = [dict(r) for r in cur.fetchall()]
         cur.close(); conn.close()
         return jsonify({"status": "success", "data": data})
@@ -2815,8 +3454,12 @@ def get_materias():
 #
 @app.route('/admin/materias', methods=['POST'])
 def crear_materia():
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    id_colegio = _admin_colegio_id(admin)
+    if not id_colegio:
+        return jsonify({"status": "error", "message": "Solo admin de colegio puede crear materias."})
     data = request.get_json()
     nombre = data.get('nombre')
     codigo = data.get('codigo') or None
@@ -2825,7 +3468,19 @@ def crear_materia():
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("INSERT INTO materia (nombre, codigo) VALUES (%s,%s) RETURNING id_materia", (nombre, codigo))
+        if codigo:
+            cur.execute(
+                "SELECT 1 FROM materia WHERE id_colegio = %s AND codigo = %s",
+                (id_colegio, codigo),
+            )
+            if cur.fetchone():
+                cur.close()
+                conn.close()
+                return jsonify({"status": "error", "message": "El código ya existe en este colegio."})
+        cur.execute(
+            "INSERT INTO materia (nombre, codigo, id_colegio) VALUES (%s,%s,%s) RETURNING id_materia",
+            (nombre, codigo, id_colegio),
+        )
         id_materia = cur.fetchone()[0]
         conn.commit(); cur.close(); conn.close()
         return jsonify({"status": "success", "message": "Materia creada exitosamente!", "id_materia": id_materia})
@@ -2840,12 +3495,14 @@ def crear_materia():
 #
 @app.route('/admin/materias-count', methods=['GET'])
 def materias_count():
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    admin, err = _require_admin_api()
+    if err:
+        return err
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("SELECT COUNT(*) FROM materia")
+        filt, params = colegio_filter_sql(admin)
+        cur.execute(f"SELECT COUNT(*) FROM materia WHERE 1=1 {filt}", params)
         count = cur.fetchone()[0]
         cur.close(); conn.close()
         return jsonify({"status": "success", "data": count})
@@ -2856,20 +3513,25 @@ def materias_count():
 #
 @app.route('/admin/asignaciones', methods=['GET'])
 def get_asignaciones():
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    if is_superadmin(admin):
+        return jsonify({"status": "success", "data": []})
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute("""
+        filt, params = colegio_filter_sql(admin, alias='g')
+        cur.execute(f"""
             SELECT gm.id_grupo_materia, p.nombre_completo as profesor,
                    g.nombre as grupo, m.nombre as materia
             FROM grupo_materias gm
             JOIN profesores p ON gm.id_docente = p.id_profesor
             JOIN grupos g ON gm.id_grupo = g.id_grupo
             JOIN materia m ON gm.id_materia = m.id_materia
+            WHERE 1=1 {filt}
             ORDER BY g.nombre, m.nombre
-        """)
+        """, params)
         data = [dict(r) for r in cur.fetchall()]
         cur.close(); conn.close()
         return jsonify({"status": "success", "data": data})
@@ -2880,8 +3542,9 @@ def get_asignaciones():
 #
 @app.route('/admin/asignaciones', methods=['POST'])
 def crear_asignacion():
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    admin, id_colegio, err = _require_colegio_admin_api()
+    if err:
+        return err
     data = request.get_json()
     id_docente = data.get('id_docente')
     id_grupo = data.get('id_grupo')
@@ -2891,6 +3554,16 @@ def crear_asignacion():
     try:
         conn = get_db_connection()
         cur = conn.cursor()
+        cur.execute("""
+            SELECT 1 FROM profesores p
+            JOIN grupos g ON g.id_colegio = p.id_colegio
+            JOIN materia m ON m.id_colegio = p.id_colegio
+            WHERE p.id_profesor = %s AND g.id_grupo = %s AND m.id_materia = %s AND p.id_colegio = %s
+        """, (id_docente, id_grupo, id_materia, id_colegio))
+        if not cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify({"status": "error", "message": "Profesor, grupo o materia no pertenecen a tu colegio."})
         cur.execute(
             "INSERT INTO grupo_materias (id_grupo, id_materia, id_docente) VALUES (%s,%s,%s) RETURNING id_grupo_materia",
             (id_grupo, id_materia, id_docente)
@@ -2909,12 +3582,17 @@ def crear_asignacion():
 #
 @app.route('/admin/asignaciones/<int:id_grupo_materia>', methods=['DELETE'])
 def eliminar_asignacion(id_grupo_materia):
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    admin, id_colegio, err = _require_colegio_admin_api()
+    if err:
+        return err
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("DELETE FROM grupo_materias WHERE id_grupo_materia = %s", (id_grupo_materia,))
+        cur.execute("""
+            DELETE FROM grupo_materias gm
+            USING grupos g
+            WHERE gm.id_grupo_materia = %s AND gm.id_grupo = g.id_grupo AND g.id_colegio = %s
+        """, (id_grupo_materia, id_colegio))
         conn.commit(); cur.close(); conn.close()
         return jsonify({"status": "success", "message": "Asignación eliminada."})
     except Exception as e:
@@ -2924,8 +3602,9 @@ def eliminar_asignacion(id_grupo_materia):
 #
 @app.route('/admin/asignar-estudiante', methods=['POST'])
 def asignar_estudiante_grupo():
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    admin, id_colegio, err = _require_colegio_admin_api()
+    if err:
+        return err
     data = request.get_json()
     id_estudiante = data.get('id_estudiante')
     id_grupo = data.get('id_grupo')
@@ -2934,6 +3613,14 @@ def asignar_estudiante_grupo():
     try:
         conn = get_db_connection()
         cur = conn.cursor()
+        cur.execute("""
+            SELECT 1 FROM estudiantes e JOIN grupos g ON g.id_colegio = e.id_colegio
+            WHERE e.id_estudiante = %s AND g.id_grupo = %s AND e.id_colegio = %s
+        """, (id_estudiante, id_grupo, id_colegio))
+        if not cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify({"status": "error", "message": "Estudiante o grupo no pertenecen a tu colegio."})
         cur.execute(
             "INSERT INTO grupo_estudiantes (id_grupo, id_estudiante) VALUES (%s,%s) ON CONFLICT DO NOTHING",
             (id_grupo, id_estudiante)
@@ -2947,15 +3634,22 @@ def asignar_estudiante_grupo():
 #
 @app.route('/admin/quitar-estudiante', methods=['POST'])
 def quitar_estudiante_grupo():
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    admin, id_colegio, err = _require_colegio_admin_api()
+    if err:
+        return err
     data = request.get_json()
     id_estudiante = data.get('id_estudiante')
     id_grupo = data.get('id_grupo')
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("DELETE FROM grupo_estudiantes WHERE id_grupo=%s AND id_estudiante=%s", (id_grupo, id_estudiante))
+        cur.execute("""
+            DELETE FROM grupo_estudiantes ge
+            USING grupos g, estudiantes e
+            WHERE ge.id_grupo = %s AND ge.id_estudiante = %s
+              AND ge.id_grupo = g.id_grupo AND ge.id_estudiante = e.id_estudiante
+              AND g.id_colegio = %s AND e.id_colegio = %s
+        """, (id_grupo, id_estudiante, id_colegio, id_colegio))
         conn.commit(); cur.close(); conn.close()
         return jsonify({"status": "success", "message": "Estudiante quitado del grupo."})
     except Exception as e:
@@ -2965,18 +3659,23 @@ def quitar_estudiante_grupo():
 #
 @app.route('/admin/grupo/<int:id_grupo>/estudiantes', methods=['GET'])
 def get_estudiantes_grupo(id_grupo):
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    if is_superadmin(admin):
+        return jsonify({"status": "success", "data": []})
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute("""
+        filt, params = colegio_filter_sql(admin, alias='e')
+        cur.execute(f"""
             SELECT e.id_estudiante, e.codigo_estudiante, e.nombre_completo
             FROM estudiantes e
             JOIN grupo_estudiantes ge ON e.id_estudiante = ge.id_estudiante
-            WHERE ge.id_grupo = %s
+            JOIN grupos g ON ge.id_grupo = g.id_grupo
+            WHERE ge.id_grupo = %s {filt}
             ORDER BY e.nombre_completo
-        """, (id_grupo,))
+        """, (id_grupo, *params))
         data = [dict(r) for r in cur.fetchall()]
         cur.close(); conn.close()
         return jsonify({"status": "success", "data": data})
@@ -2988,12 +3687,20 @@ def get_estudiantes_grupo(id_grupo):
 
 @app.route('/admin/administradores', methods=['GET'])
 def get_administradores():
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    if is_superadmin(admin):
+        return jsonify({"status": "success", "data": []})
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute("SELECT id_admin, nombre_completo, correo_electronico, email_verified FROM administradores ORDER BY id_admin")
+        filt, params = colegio_filter_sql(admin)
+        cur.execute(
+            f"SELECT id_admin, nombre_completo, correo_electronico, email_verified, rol "
+            f"FROM administradores WHERE 1=1 {filt} ORDER BY id_admin",
+            params,
+        )
         data = [dict(r) for r in cur.fetchall()]
         cur.close(); conn.close()
         return jsonify({"status": "success", "data": data})
@@ -3004,21 +3711,442 @@ def get_administradores():
 #
 @app.route('/admin/administradores/<int:id_admin>', methods=['DELETE'])
 def eliminar_administrador(id_admin):
-    if 'user_id' not in session:
-        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    admin, id_colegio, err = _require_colegio_admin_api()
+    if err:
+        return err
     if id_admin == session['user_id']:
         return jsonify({"status": "error", "message": "No puedes eliminarte a ti mismo."})
     try:
         conn = get_db_connection()
         cur = conn.cursor()
+        cur.execute(
+            "SELECT id_admin FROM administradores WHERE id_admin = %s AND id_colegio = %s",
+            (id_admin, id_colegio),
+        )
+        if not cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify({"status": "error", "message": "Administrador no encontrado en tu colegio."})
         cur.execute("DELETE FROM solicitudes_cambio_contrasena WHERE id_admin = %s", (id_admin,))
-        cur.execute("DELETE FROM administradores WHERE id_admin = %s", (id_admin,))
+        cur.execute("DELETE FROM administradores WHERE id_admin = %s AND id_colegio = %s", (id_admin, id_colegio))
         conn.commit(); cur.close(); conn.close()
         return jsonify({"status": "success", "message": "Administrador eliminado."})
     except Exception as e:
         return _api_error_response(e)
 
 
+# ── MULTICOLEGIO ──
+
+@app.route('/api/colegios', methods=['GET'])
+def api_buscar_colegios():
+    """Búsqueda pública de colegios por nombre o código (login estudiante/profesor)."""
+    q = (request.args.get('q') or '').strip()
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        if q:
+            cur.execute("""
+                SELECT id_colegio, codigo_colegio, nombre_oficial, lema, escudo_url
+                FROM colegios
+                WHERE estado = 'activo'
+                  AND (nombre_oficial ILIKE %s OR codigo_colegio ILIKE %s)
+                ORDER BY nombre_oficial
+                LIMIT 20
+            """, (f'%{q}%', f'%{q}%'))
+        else:
+            cur.execute("""
+                SELECT id_colegio, codigo_colegio, nombre_oficial, lema, escudo_url
+                FROM colegios WHERE estado = 'activo' ORDER BY nombre_oficial LIMIT 50
+            """)
+        data = [dict(r) for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "data": data})
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/api/colegio/branding', methods=['GET'])
+def api_colegio_branding():
+    """Branding del colegio del usuario en sesión."""
+    id_colegio = None
+    user_info = session.get('user_info')
+    if user_info:
+        id_colegio = user_info.get('id_colegio')
+    elif session.get('id_colegio'):
+        id_colegio = session.get('id_colegio')
+    if not id_colegio:
+        return jsonify({"status": "error", "message": "Sin colegio en sesión."}), 400
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT id_colegio, codigo_colegio, nombre_oficial, lema,
+                   escudo_url, encabezado_pdf_url, marca_agua_url,
+                   color_primario, color_secundario
+            FROM colegios WHERE id_colegio = %s AND estado = 'activo'
+        """, (id_colegio,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not row:
+            return jsonify({"status": "error", "message": "Colegio no encontrado."}), 404
+        return jsonify({"status": "success", "data": dict(row)})
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/admin/colegios', methods=['GET'])
+def admin_listar_colegios():
+    admin, err = _require_superadmin_api()
+    if err:
+        return err
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT c.id_colegio, c.codigo_colegio, c.nombre_oficial, c.lema, c.estado,
+                   c.color_primario, c.color_secundario, c.escudo_url,
+                   (SELECT COUNT(*) FROM estudiantes e WHERE e.id_colegio = c.id_colegio) AS total_estudiantes,
+                   (SELECT COUNT(*) FROM profesores p WHERE p.id_colegio = c.id_colegio) AS total_profesores,
+                   (SELECT COUNT(*) FROM administradores a WHERE a.id_colegio = c.id_colegio) AS total_admins
+            FROM colegios c
+            ORDER BY c.id_colegio
+        """)
+        data = [dict(r) for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "data": data})
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/admin/colegios', methods=['POST'])
+def admin_crear_colegio():
+    admin, err = _require_superadmin_api()
+    if err:
+        return err
+    data = request.get_json() or {}
+    nombre = (data.get('nombre_oficial') or '').strip()
+    lema = (data.get('lema') or '').strip()
+    admin_nombre = (data.get('admin_nombre') or '').strip()
+    admin_email = (data.get('admin_email') or '').strip()
+    admin_password = data.get('admin_password') or ''
+    codigo = (data.get('codigo_colegio') or '').strip() or None
+    if not all([nombre, admin_nombre, admin_email, admin_password]):
+        return jsonify({"status": "error", "message": "Nombre del colegio, datos y contraseña del admin son requeridos."})
+    if len(admin_password) < 8:
+        return jsonify({"status": "error", "message": "La contraseña del admin debe tener al menos 8 caracteres."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT id_admin FROM administradores WHERE correo_electronico = %s", (admin_email,))
+        if cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify({"status": "error", "message": "El correo del admin ya está registrado."})
+        result = crear_colegio_con_admin(
+            cur, nombre, lema, admin_nombre, admin_email, admin_password, codigo_colegio=codigo,
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({
+            "status": "success",
+            "message": f"Colegio creado con código {result['codigo_colegio']}.",
+            "data": result,
+        })
+    except psycopg2.Error as e:
+        if 'unique' in str(e).lower():
+            return jsonify({"status": "error", "message": "El código de colegio ya existe."})
+        return _api_error_response(e)
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/admin/superadmins', methods=['POST'])
+def admin_crear_superadmin():
+    admin, err = _require_superadmin_api()
+    if err:
+        return err
+    data = request.get_json() or {}
+    nombre = (data.get('nombre') or '').strip()
+    email = (data.get('email') or '').strip()
+    password = data.get('password') or ''
+    if not all([nombre, email, password]):
+        return jsonify({"status": "error", "message": "Nombre, correo y contraseña son requeridos."})
+    if len(password) < 8:
+        return jsonify({"status": "error", "message": "La contraseña debe tener al menos 8 caracteres."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT id_admin FROM administradores WHERE correo_electronico = %s", (email,))
+        if cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify({"status": "error", "message": "El correo ya está registrado."})
+        hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        cur.execute("""
+            INSERT INTO administradores (nombre_completo, correo_electronico, contrasena, email_verified, rol, id_colegio)
+            VALUES (%s, %s, %s, TRUE, 'superadmin', NULL) RETURNING id_admin
+        """, (nombre, email, hashed))
+        new_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "message": "Super administrador creado.", "id_admin": new_id})
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/admin/colegios/admins', methods=['GET'])
+def admin_listar_admins_colegios():
+    admin, err = _require_superadmin_api()
+    if err:
+        return err
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT a.id_admin, a.nombre_completo, a.correo_electronico, a.rol, a.email_verified,
+                   c.nombre_oficial AS colegio, c.codigo_colegio
+            FROM administradores a
+            LEFT JOIN colegios c ON a.id_colegio = c.id_colegio
+            ORDER BY a.rol, a.nombre_completo
+        """)
+        data = [dict(r) for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "data": data})
+    except Exception as e:
+        return _api_error_response(e)
+
+
+# ── BRANDING COLEGIO (admin de colegio) ──
+
+@app.route('/admin/colegio/branding', methods=['GET'])
+def admin_get_colegio_branding():
+    admin, id_colegio, err = _require_colegio_admin_api()
+    if err:
+        return err
+    row = _fetch_colegio_branding(id_colegio)
+    if not row:
+        return jsonify({"status": "error", "message": "Colegio no encontrado."}), 404
+    return jsonify({"status": "success", "data": row})
+
+
+@app.route('/admin/colegio/branding', methods=['PUT'])
+def admin_update_colegio_branding():
+    admin, id_colegio, err = _require_colegio_admin_api()
+    if err:
+        return err
+    data = request.get_json() or {}
+    nombre = (data.get('nombre_oficial') or '').strip()
+    lema = (data.get('lema') or '').strip()
+    color_primario = (data.get('color_primario') or DEFAULT_COLOR_PRIMARIO).strip()
+    color_secundario = (data.get('color_secundario') or DEFAULT_COLOR_SECUNDARIO).strip()
+    if not nombre:
+        return jsonify({"status": "error", "message": "El nombre oficial es requerido."})
+    if not re.match(r'^#[0-9A-Fa-f]{6}$', color_primario) or not re.match(r'^#[0-9A-Fa-f]{6}$', color_secundario):
+        return jsonify({"status": "error", "message": "Colores inválidos. Use formato #RRGGBB."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            UPDATE colegios SET nombre_oficial = %s, lema = %s, color_primario = %s, color_secundario = %s
+            WHERE id_colegio = %s
+            RETURNING id_colegio, codigo_colegio, nombre_oficial, lema,
+                      escudo_url, encabezado_pdf_url, marca_agua_url, color_primario, color_secundario
+        """, (nombre, lema, color_primario, color_secundario, id_colegio))
+        row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "message": "Identidad actualizada.", "data": dict(row)})
+    except Exception as e:
+        return _api_error_response(e)
+
+
+def _require_superadmin_pdf():
+    admin, err = _require_superadmin_api()
+    if err:
+        return None, err
+    return admin, None
+
+
+@app.route('/admin/reporte/colegios/pdf', methods=['GET'])
+def reporte_superadmin_colegios_pdf():
+    _, err = _require_superadmin_pdf()
+    if err:
+        return err
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT c.codigo_colegio, c.nombre_oficial, c.lema, c.estado,
+                   (SELECT COUNT(*) FROM estudiantes e WHERE e.id_colegio = c.id_colegio) AS estudiantes,
+                   (SELECT COUNT(*) FROM profesores p WHERE p.id_colegio = c.id_colegio) AS profesores,
+                   (SELECT COUNT(*) FROM administradores a WHERE a.id_colegio = c.id_colegio) AS admins
+            FROM colegios c ORDER BY c.id_colegio
+        """)
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        pdf = ColegioBrandedPDF({'nombre_oficial': 'MiBoletin Plataforma'})
+        pdf.add_page()
+        pdf.set_font('helvetica', 'B', 14)
+        pdf.cell(0, 10, 'Reporte de Colegios', 0, 1, 'C')
+        pdf.ln(4)
+        pdf.set_font('helvetica', 'B', 9)
+        pdf.set_fill_color(0, 51, 102)
+        pdf.set_text_color(255, 255, 255)
+        for h, w in [('Codigo', 28), ('Nombre', 55), ('Estudiantes', 22), ('Profesores', 22), ('Admins', 18), ('Estado', 20)]:
+            pdf.cell(w, 8, h, 1, 0, 'C', fill=True)
+        pdf.ln()
+        pdf.set_font('helvetica', '', 8)
+        pdf.set_text_color(0, 0, 0)
+        fill = False
+        pdf.set_fill_color(240, 248, 255)
+        for r in rows:
+            pdf.cell(28, 7, _pdf_sanitize(r['codigo_colegio']), 1, 0, 'L', fill=fill)
+            pdf.cell(55, 7, _pdf_sanitize(r['nombre_oficial'])[:32], 1, 0, 'L', fill=fill)
+            pdf.cell(22, 7, str(r['estudiantes']), 1, 0, 'C', fill=fill)
+            pdf.cell(22, 7, str(r['profesores']), 1, 0, 'C', fill=fill)
+            pdf.cell(18, 7, str(r['admins']), 1, 0, 'C', fill=fill)
+            pdf.cell(20, 7, _pdf_sanitize(r['estado']), 1, 1, 'C', fill=fill)
+            fill = not fill
+        return send_file(_pdf_to_bytesio(pdf), as_attachment=True, download_name='reporte_colegios.pdf', mimetype='application/pdf')
+    except Exception as e:
+        print(f'Error PDF colegios superadmin: {e!r}')
+        return _api_error_response(e)
+
+
+@app.route('/admin/reporte/superadmins/pdf', methods=['GET'])
+def reporte_superadmin_superadmins_pdf():
+    _, err = _require_superadmin_pdf()
+    if err:
+        return err
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT id_admin, nombre_completo, correo_electronico, email_verified
+            FROM administradores WHERE rol = 'superadmin' ORDER BY id_admin
+        """)
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        pdf = ColegioBrandedPDF({'nombre_oficial': 'MiBoletin Plataforma'})
+        pdf.add_page()
+        pdf.set_font('helvetica', 'B', 14)
+        pdf.cell(0, 10, 'Reporte de Super Administradores', 0, 1, 'C')
+        pdf.ln(4)
+        pdf.set_font('helvetica', 'B', 9)
+        pdf.set_fill_color(0, 51, 102)
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(15, 8, 'ID', 1, 0, 'C', fill=True)
+        pdf.cell(70, 8, 'Nombre', 1, 0, 'C', fill=True)
+        pdf.cell(75, 8, 'Correo', 1, 0, 'C', fill=True)
+        pdf.cell(30, 8, 'Verificado', 1, 1, 'C', fill=True)
+        pdf.set_font('helvetica', '', 9)
+        pdf.set_text_color(0, 0, 0)
+        fill = False
+        pdf.set_fill_color(240, 248, 255)
+        for r in rows:
+            pdf.cell(15, 7, str(r['id_admin']), 1, 0, 'C', fill=fill)
+            pdf.cell(70, 7, _pdf_sanitize(r['nombre_completo'])[:38], 1, 0, 'L', fill=fill)
+            pdf.cell(75, 7, _pdf_sanitize(r['correo_electronico'])[:38], 1, 0, 'L', fill=fill)
+            pdf.cell(30, 7, 'Si' if r['email_verified'] else 'No', 1, 1, 'C', fill=fill)
+            fill = not fill
+        return send_file(_pdf_to_bytesio(pdf), as_attachment=True, download_name='reporte_superadmins.pdf', mimetype='application/pdf')
+    except Exception as e:
+        print(f'Error PDF superadmins: {e!r}')
+        return _api_error_response(e)
+
+
+@app.route('/admin/reporte/admins-colegio/pdf', methods=['GET'])
+def reporte_superadmin_admins_colegio_pdf():
+    _, err = _require_superadmin_pdf()
+    if err:
+        return err
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT a.id_admin, a.nombre_completo, a.correo_electronico, a.email_verified,
+                   c.codigo_colegio, c.nombre_oficial AS colegio
+            FROM administradores a
+            LEFT JOIN colegios c ON a.id_colegio = c.id_colegio
+            WHERE a.rol = 'admin_colegio'
+            ORDER BY c.nombre_oficial, a.nombre_completo
+        """)
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        pdf = ColegioBrandedPDF({'nombre_oficial': 'MiBoletin Plataforma'})
+        pdf.add_page()
+        pdf.set_font('helvetica', 'B', 14)
+        pdf.cell(0, 10, 'Reporte de Administradores de Colegio', 0, 1, 'C')
+        pdf.ln(4)
+        pdf.set_font('helvetica', 'B', 8)
+        pdf.set_fill_color(0, 51, 102)
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(15, 8, 'ID', 1, 0, 'C', fill=True)
+        pdf.cell(50, 8, 'Nombre', 1, 0, 'C', fill=True)
+        pdf.cell(55, 8, 'Correo', 1, 0, 'C', fill=True)
+        pdf.cell(25, 8, 'Colegio', 1, 0, 'C', fill=True)
+        pdf.cell(45, 8, 'Institucion', 1, 0, 'C', fill=True)
+        pdf.cell(20, 8, 'Verif.', 1, 1, 'C', fill=True)
+        pdf.set_font('helvetica', '', 8)
+        pdf.set_text_color(0, 0, 0)
+        fill = False
+        pdf.set_fill_color(240, 248, 255)
+        for r in rows:
+            pdf.cell(15, 7, str(r['id_admin']), 1, 0, 'C', fill=fill)
+            pdf.cell(50, 7, _pdf_sanitize(r['nombre_completo'])[:28], 1, 0, 'L', fill=fill)
+            pdf.cell(55, 7, _pdf_sanitize(r['correo_electronico'])[:30], 1, 0, 'L', fill=fill)
+            pdf.cell(25, 7, _pdf_sanitize(r['codigo_colegio'] or '-'), 1, 0, 'C', fill=fill)
+            pdf.cell(45, 7, _pdf_sanitize(r['colegio'] or '-')[:26], 1, 0, 'L', fill=fill)
+            pdf.cell(20, 7, 'Si' if r['email_verified'] else 'No', 1, 1, 'C', fill=fill)
+            fill = not fill
+        return send_file(_pdf_to_bytesio(pdf), as_attachment=True, download_name='reporte_admins_colegio.pdf', mimetype='application/pdf')
+    except Exception as e:
+        print(f'Error PDF admins colegio: {e!r}')
+        return _api_error_response(e)
+
+
+@app.route('/admin/colegio/branding/upload', methods=['POST'])
+def admin_upload_colegio_branding():
+    admin, id_colegio, err = _require_colegio_admin_api()
+    if err:
+        return err
+    tipo = (request.form.get('tipo') or '').strip()
+    file = request.files.get('archivo')
+    url, msg = _save_branding_upload(id_colegio, tipo, file)
+    if msg:
+        return jsonify({"status": "error", "message": msg}), 400
+    col_map = {
+        'escudo': 'escudo_url',
+        'encabezado': 'encabezado_pdf_url',
+        'marca_agua': 'marca_agua_url',
+    }
+    col = col_map[tipo]
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute(
+            f"UPDATE colegios SET {col} = %s WHERE id_colegio = %s "
+            f"RETURNING id_colegio, codigo_colegio, nombre_oficial, lema, "
+            f"escudo_url, encabezado_pdf_url, marca_agua_url, color_primario, color_secundario",
+            (url, id_colegio),
+        )
+        row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "message": "Archivo subido.", "data": dict(row)})
+    except Exception as e:
+        return _api_error_response(e)
 
 
 if __name__ == "__main__":

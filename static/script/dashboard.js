@@ -170,7 +170,10 @@ class NavigationManager {
             'asignaciones-section': () => AdminManager.cargarDatosAsignaciones(),
             'reportes-section': () => AdminManager.cargarReportes(),
             'inicio-section': () => window.app?.stats?.refresh(),
-            'administradores-section': () => AdminManager.cargarAdministradores()
+            'administradores-section': () => AdminManager.cargarAdministradores(),
+            'colegios-section': () => ColegiosAdmin.cargarColegios(),
+            'superadmins-section': () => SuperAdminsAdmin.cargar(),
+            'identidad-section': () => IdentidadAdmin.cargar(),
         };
         loaders[sectionId]?.();
     }
@@ -801,13 +804,15 @@ class App {
             student: new StudentFormHandler(),
             professor: new ProfessorFormHandler()
         };
-        this.tables = {
-            estudiantes: new EstudiantesTableManager(),
-            profesores: new ProfesoresTableManager()
-        };
-        // Cargar inicio DESPUÉS de que window.app esté disponible
+        const isSuper = document.getElementById('current-user-data')?.dataset.isSuperadmin === 'true';
+        if (!isSuper) {
+            this.tables = {
+                estudiantes: new EstudiantesTableManager(),
+                profesores: new ProfesoresTableManager()
+            };
+        }
         setTimeout(() => {
-            this.stats.refresh();
+            if (!isSuper) this.stats.refresh();
         }, 100);
         console.log('✅ App inicializada');
     } catch(e) { console.error('Error iniciando app:', e); }
@@ -1162,13 +1167,272 @@ ProfesoresTableManager.prototype.setupRowListeners = function() {
     });
 };
 
+// IDENTIDAD INSTITUCIONAL (admin colegio)
+const IdentidadAdmin = {
+    showMsg(id, msg, ok = true) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.style.color = ok ? 'var(--success)' : 'var(--error)';
+        el.textContent = msg;
+    },
+
+    _hexFromInput(id) {
+        const el = document.getElementById(id);
+        if (!el || !el.value) return '#003366';
+        return el.value.startsWith('#') ? el.value : `#${el.value}`;
+    },
+
+    _setColorInput(id, hex) {
+        const el = document.getElementById(id);
+        if (el && hex) el.value = hex;
+    },
+
+    renderPreview(data) {
+        const grid = document.getElementById('id-preview-grid');
+        if (!grid) return;
+        const items = [
+            { label: 'Escudo', url: data.escudo_url },
+            { label: 'Encabezado PDF', url: data.encabezado_pdf_url },
+            { label: 'Marca de agua', url: data.marca_agua_url },
+        ];
+        grid.innerHTML = items.map(it => `
+            <div class="branding-preview-card">
+                ${it.url ? `<img src="${it.url}" alt="${it.label}">` : '<p style="color:#a0aec0;font-size:13px;">Sin imagen</p>'}
+                <span>${it.label}</span>
+            </div>`).join('');
+    },
+
+    async cargar() {
+        try {
+            const res = await fetch('/admin/colegio/branding');
+            const data = await res.json();
+            if (data.status !== 'success' || !data.data) {
+                this.showMsg('id-msg-texto', data.message || 'No se pudo cargar', false);
+                return;
+            }
+            const b = data.data;
+            const nombre = document.getElementById('id-nombre');
+            const lema = document.getElementById('id-lema');
+            if (nombre) nombre.value = b.nombre_oficial || '';
+            if (lema) lema.value = b.lema || '';
+            this._setColorInput('id-color-prim', b.color_primario || '#003366');
+            this._setColorInput('id-color-sec', b.color_secundario || '#3182ce');
+            this.renderPreview(b);
+            if (window.PanelBranding) {
+                window.PanelBranding.apply(b);
+                if (b.color_primario) {
+                    document.documentElement.style.setProperty('--brand-primary', b.color_primario);
+                    document.documentElement.style.setProperty('--primary', b.color_primario);
+                }
+            }
+        } catch (e) {
+            this.showMsg('id-msg-texto', 'Error al cargar identidad', false);
+        }
+    },
+
+    async guardarTexto() {
+        const body = {
+            nombre_oficial: document.getElementById('id-nombre')?.value.trim(),
+            lema: document.getElementById('id-lema')?.value.trim(),
+            color_primario: this._hexFromInput('id-color-prim'),
+            color_secundario: this._hexFromInput('id-color-sec'),
+        };
+        const res = await fetch('/admin/colegio/branding', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        this.showMsg('id-msg-texto', data.message, data.status === 'success');
+        if (data.status === 'success' && data.data) {
+            this.renderPreview(data.data);
+            window.PanelBranding?.apply(data.data);
+            window.PanelBranding?.reload?.();
+        }
+    },
+
+    async subir(tipo) {
+        const map = { escudo: 'id-file-escudo', encabezado: 'id-file-encabezado', marca_agua: 'id-file-marca' };
+        const input = document.getElementById(map[tipo]);
+        if (!input?.files?.[0]) {
+            this.showMsg('id-msg-archivo', 'Selecciona un archivo.', false);
+            return;
+        }
+        const fd = new FormData();
+        fd.append('tipo', tipo);
+        fd.append('archivo', input.files[0]);
+        const res = await fetch('/admin/colegio/branding/upload', { method: 'POST', body: fd });
+        const data = await res.json();
+        this.showMsg('id-msg-archivo', data.message, data.status === 'success');
+        if (data.status === 'success' && data.data) {
+            this.renderPreview(data.data);
+            input.value = '';
+            window.PanelBranding?.apply(data.data);
+        }
+    },
+};
+
+// COLEGIOS (super admin)
+const ColegiosAdmin = {
+    showMsg(id, msg, ok = true) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.style.color = ok ? 'var(--success)' : 'var(--error)';
+        el.textContent = msg;
+    },
+
+    async cargarColegios() {
+        const tbody = document.getElementById('tbody-colegios');
+        if (!tbody) return;
+        try {
+            const res = await fetch('/admin/colegios');
+            const data = await res.json();
+            if (data.status !== 'success' || !data.data?.length) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:16px;">No hay colegios</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.data.map(c => `
+                <tr>
+                    <td><span class="table-badge badge-primary">${c.codigo_colegio}</span></td>
+                    <td><strong>${c.nombre_oficial}</strong>${c.lema ? `<br><small style="color:var(--gray-500)">${c.lema}</small>` : ''}</td>
+                    <td>${c.total_estudiantes}</td>
+                    <td>${c.total_profesores}</td>
+                    <td>${c.total_admins}</td>
+                    <td>${c.estado}</td>
+                </tr>`).join('');
+        } catch (e) {
+            tbody.innerHTML = '<tr><td colspan="6">Error al cargar</td></tr>';
+        }
+    },
+
+    async crearColegio() {
+        const body = {
+            nombre_oficial: document.getElementById('col-nombre')?.value.trim(),
+            lema: document.getElementById('col-lema')?.value.trim(),
+            codigo_colegio: document.getElementById('col-codigo')?.value.trim() || null,
+            admin_nombre: document.getElementById('col-admin-nombre')?.value.trim(),
+            admin_email: document.getElementById('col-admin-email')?.value.trim(),
+            admin_password: document.getElementById('col-admin-pass')?.value,
+        };
+        const res = await fetch('/admin/colegios', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const data = await res.json();
+        this.showMsg('col-msg', data.message, data.status === 'success');
+        if (data.status === 'success') {
+            ['col-nombre','col-lema','col-codigo','col-admin-nombre','col-admin-email','col-admin-pass'].forEach(id => {
+                const el = document.getElementById(id); if (el) el.value = '';
+            });
+            this.cargarColegios();
+        }
+    },
+
+};
+
+const SuperAdminsAdmin = {
+    showMsg(id, msg, ok = true) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.style.color = ok ? 'var(--success)' : 'var(--error)';
+        el.textContent = msg;
+    },
+
+    async cargar() {
+        const tbodySa = document.getElementById('tbody-superadmins');
+        const tbodyAc = document.getElementById('tbody-admins-colegio');
+        try {
+            const res = await fetch('/admin/colegios/admins');
+            const data = await res.json();
+            if (data.status !== 'success') return;
+            const supers = (data.data || []).filter(a => a.rol === 'superadmin');
+            const colegio = (data.data || []).filter(a => a.rol === 'admin_colegio');
+            if (tbodySa) {
+                tbodySa.innerHTML = supers.length
+                    ? supers.map(a => `<tr><td>${a.id_admin}</td><td>${a.nombre_completo}</td><td>${a.correo_electronico}</td><td>${a.email_verified ? 'Sí' : 'No'}</td></tr>`).join('')
+                    : '<tr><td colspan="4" style="text-align:center;">No hay super administradores</td></tr>';
+            }
+            if (tbodyAc) {
+                tbodyAc.innerHTML = colegio.length
+                    ? colegio.map(a => `<tr><td>${a.colegio || '-'} <small>(${a.codigo_colegio || ''})</small></td><td>${a.nombre_completo}</td><td>${a.correo_electronico}</td><td>${a.email_verified ? 'Sí' : 'No'}</td></tr>`).join('')
+                    : '<tr><td colspan="4" style="text-align:center;">No hay admins de colegio</td></tr>';
+            }
+        } catch (e) {
+            if (tbodySa) tbodySa.innerHTML = '<tr><td colspan="4">Error al cargar</td></tr>';
+        }
+    },
+
+    async crear() {
+        const body = {
+            nombre: document.getElementById('sa-nombre')?.value.trim(),
+            email: document.getElementById('sa-email')?.value.trim(),
+            password: document.getElementById('sa-pass')?.value,
+        };
+        const res = await fetch('/admin/superadmins', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const data = await res.json();
+        ColegiosAdmin.showMsg('sa-msg', data.message, data.status === 'success');
+        if (data.status === 'success') {
+            ['sa-nombre', 'sa-email', 'sa-pass'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+            this.cargar();
+        }
+    },
+};
+
+function initPasswordToggles() {
+    document.querySelectorAll('.toggle-password-btn[data-target]').forEach(btn => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', () => {
+            const input = document.getElementById(btn.dataset.target);
+            if (!input) return;
+            const show = input.type === 'password';
+            input.type = show ? 'text' : 'password';
+            const icon = btn.querySelector('i');
+            if (icon) {
+                icon.classList.toggle('fa-eye', !show);
+                icon.classList.toggle('fa-eye-slash', show);
+            }
+        });
+    });
+}
+
+function initSuperAdminUI() {
+    const meta = document.getElementById('current-user-data');
+    const isSuper = meta?.dataset.isSuperadmin === 'true';
+    document.querySelectorAll('.superadmin-only').forEach(el => {
+        el.style.display = isSuper ? '' : 'none';
+    });
+    document.querySelectorAll('.admin-colegio-only').forEach(el => {
+        if (el.classList.contains('nav-item') || el.classList.contains('nav-section-label')) {
+            el.style.display = isSuper ? 'none' : '';
+        }
+    });
+    if (isSuper) {
+        document.querySelectorAll('.content-section.admin-colegio-only').forEach(s => s.classList.remove('active'));
+        document.querySelectorAll('#inicio-section .overview-section, #inicio-section .quick-actions-section').forEach(el => el.style.display = 'none');
+        const welcome = document.querySelector('#inicio-section .welcome-text');
+        if (welcome) {
+            welcome.textContent = 'Panel super administrador. Gestiona colegios, super admins y reportes de plataforma.';
+        }
+        const inicioLink = document.querySelector('[data-section="inicio-section"]');
+        const colegiosLink = document.querySelector('[data-section="colegios-section"]');
+        if (inicioLink) inicioLink.classList.remove('active');
+        document.getElementById('inicio-section')?.classList.remove('active');
+        if (colegiosLink) {
+            colegiosLink.classList.add('active');
+            document.getElementById('colegios-section')?.classList.add('active');
+            ColegiosAdmin.cargarColegios();
+        }
+    }
+}
+
 // ── INICIALIZAR MODALES cuando el DOM esté listo ─────────────
 document.addEventListener('DOMContentLoaded', () => {
     EditarEstudiante.init();
     EditarProfesor.init();
+    initPasswordToggles();
+    initSuperAdminUI();
 });
-// Si el DOMContentLoaded ya corrió (script cargado tarde), inicializar de todos modos
 if (document.readyState !== 'loading') {
     EditarEstudiante.init();
     EditarProfesor.init();
+    initPasswordToggles();
+    initSuperAdminUI();
 }

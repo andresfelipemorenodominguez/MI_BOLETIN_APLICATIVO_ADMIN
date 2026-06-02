@@ -34,6 +34,20 @@
             <form action="{{ url_for('loginuser') }}" method="POST" class="login-form">
 
                 <div class="form-group">
+                    <label for="colegioSearch">
+                        <i class="fas fa-school"></i> Tu colegio
+                    </label>
+                    <input type="text" id="colegioSearch" placeholder="Busca por nombre o código (ej. COL-001)" autocomplete="off">
+                    <input type="hidden" id="id_colegio" name="id_colegio" required>
+                    <div id="colegioSeleccionado" class="colegio-seleccionado" style="display:none;margin-top:8px;padding:10px 12px;background:#ebf8ff;border-radius:8px;font-size:14px;">
+                        <strong id="colegioSelNombre"></strong>
+                        <span id="colegioSelCodigo" style="color:#2b6cb0;margin-left:8px;"></span>
+                        <button type="button" id="colegioCambiar" style="float:right;border:none;background:none;color:#3182ce;cursor:pointer;font-size:12px;">Cambiar</button>
+                    </div>
+                    <ul id="colegioResultados" class="colegio-resultados" style="display:none;list-style:none;margin:6px 0 0;padding:0;border:1px solid #e2e8f0;border-radius:8px;max-height:160px;overflow-y:auto;"></ul>
+                </div>
+
+                <div class="form-group">
                     <label for="userIdentifier">
                         <i class="fas fa-user"></i> Identificador de Usuario
                     </label>
@@ -70,7 +84,7 @@
                 {% endif %}
 
                 <div class="form-options">
-                    <a href="{{ url_for('solicitud_user') }}" class="forgot-password">
+                    <a href="{{ url_for('solicitud_user') }}" id="solicitud-link" class="forgot-password">
                         ¿Olvidaste tu contraseña?
                     </a>
                 </div>
@@ -217,6 +231,78 @@
             icon.classList.replace('fa-eye-slash', 'fa-eye');
         }
     }
+
+    (function() {
+        const search = document.getElementById('colegioSearch');
+        const hidden = document.getElementById('id_colegio');
+        const lista = document.getElementById('colegioResultados');
+        const selBox = document.getElementById('colegioSeleccionado');
+        const selNombre = document.getElementById('colegioSelNombre');
+        const selCodigo = document.getElementById('colegioSelCodigo');
+        let timer;
+
+        const solicitudLink = document.getElementById('solicitud-link');
+
+        function seleccionar(c) {
+            hidden.value = c.id_colegio;
+            selNombre.textContent = c.nombre_oficial;
+            selCodigo.textContent = c.codigo_colegio;
+            selBox.style.display = 'block';
+            search.style.display = 'none';
+            lista.style.display = 'none';
+            lista.innerHTML = '';
+            if (solicitudLink) {
+                solicitudLink.href = '{{ url_for("solicitud_user") }}?id_colegio=' + c.id_colegio;
+            }
+        }
+
+        document.getElementById('colegioCambiar')?.addEventListener('click', () => {
+            hidden.value = '';
+            selBox.style.display = 'none';
+            search.style.display = 'block';
+            search.value = '';
+            search.focus();
+            if (solicitudLink) solicitudLink.href = '{{ url_for("solicitud_user") }}';
+        });
+
+        async function buscar(q) {
+            const res = await fetch('/api/colegios?q=' + encodeURIComponent(q || ''));
+            const data = await res.json();
+            const items = data.data || [];
+            if (!items.length) {
+                lista.innerHTML = '<li style="padding:10px;color:#718096;font-size:13px;">No se encontraron colegios</li>';
+                lista.style.display = 'block';
+                return;
+            }
+            lista.innerHTML = items.map(c => `
+                <li style="padding:10px 12px;cursor:pointer;border-bottom:1px solid #edf2f7;"
+                    data-id="${c.id_colegio}" data-nombre="${c.nombre_oficial}" data-codigo="${c.codigo_colegio}">
+                    <strong>${c.nombre_oficial}</strong>
+                    <span style="color:#718096;font-size:12px;margin-left:6px;">${c.codigo_colegio}</span>
+                </li>`).join('');
+            lista.style.display = 'block';
+            lista.querySelectorAll('li[data-id]').forEach(li => {
+                li.addEventListener('click', () => seleccionar({
+                    id_colegio: li.dataset.id,
+                    nombre_oficial: li.dataset.nombre,
+                    codigo_colegio: li.dataset.codigo,
+                }));
+            });
+        }
+
+        search?.addEventListener('input', () => {
+            clearTimeout(timer);
+            timer = setTimeout(() => buscar(search.value.trim()), 250);
+        });
+        search?.addEventListener('focus', () => buscar(search.value.trim()));
+
+        document.querySelector('.login-form')?.addEventListener('submit', e => {
+            if (!hidden.value) {
+                e.preventDefault();
+                alert('Selecciona tu colegio antes de ingresar.');
+            }
+        });
+    })();
 </script>
 
 {% endblock %}

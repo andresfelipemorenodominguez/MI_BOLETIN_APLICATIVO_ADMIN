@@ -1,59 +1,93 @@
-// ── Modales ──
-function toggleModal(id, show) {
-  const m = document.getElementById(id);
-  if (!m) return;
-  m.classList.toggle('active', show);
+const content = document.getElementById('panel-content');
+const navLinks = Array.from(document.querySelectorAll('.nav-link[data-section]'));
+const userName = document.querySelector('.user-name')?.textContent?.trim() || 'Estudiante';
+
+function toggleOverlay(id, show) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.toggle('active', show);
 }
 
-document.getElementById('profileButton') ?.addEventListener('click', () => toggleModal('profileModal', true));
-document.getElementById('closeModal')    ?.addEventListener('click', () => toggleModal('profileModal', false));
-document.getElementById('openEdit')      ?.addEventListener('click', () => { toggleModal('profileModal', false); toggleModal('editModal', true); });
-document.getElementById('closeEdit')     ?.addEventListener('click', () => toggleModal('editModal', false));
-document.getElementById('cancelEdit')    ?.addEventListener('click', () => toggleModal('editModal', false));
-document.getElementById('openPassword')  ?.addEventListener('click', () => { toggleModal('profileModal', false); toggleModal('passwordModal', true); });
-document.getElementById('closePassword') ?.addEventListener('click', () => toggleModal('passwordModal', false));
-document.getElementById('cancelPassword')?.addEventListener('click', () => toggleModal('passwordModal', false));
+function closeAllModals() {
+  ['profile-modal-overlay', 'edit-modal-overlay', 'password-modal-overlay'].forEach(id => toggleOverlay(id, false));
+}
 
-document.querySelectorAll('.modal-overlay').forEach(m => {
-  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('active'); });
+document.getElementById('profile-btn')?.addEventListener('click', () => toggleOverlay('profile-modal-overlay', true));
+document.getElementById('close-profile-modal')?.addEventListener('click', () => toggleOverlay('profile-modal-overlay', false));
+document.getElementById('open-edit-profile')?.addEventListener('click', () => {
+  toggleOverlay('profile-modal-overlay', false);
+  toggleOverlay('edit-modal-overlay', true);
 });
+document.getElementById('open-password-modal')?.addEventListener('click', () => {
+  toggleOverlay('profile-modal-overlay', false);
+  toggleOverlay('password-modal-overlay', true);
+});
+document.getElementById('close-edit-modal')?.addEventListener('click', () => toggleOverlay('edit-modal-overlay', false));
+document.getElementById('cancel-edit-modal')?.addEventListener('click', () => toggleOverlay('edit-modal-overlay', false));
+document.getElementById('close-password-modal')?.addEventListener('click', () => toggleOverlay('password-modal-overlay', false));
+document.getElementById('cancel-password-modal')?.addEventListener('click', () => toggleOverlay('password-modal-overlay', false));
+
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) overlay.classList.remove('active');
+  });
+});
+
 window.addEventListener('keydown', e => {
-  if (e.key === 'Escape') document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active'));
+  if (e.key === 'Escape') closeAllModals();
 });
 
-// ── Cambiar contraseña ──
+document.getElementById('save-profile')?.addEventListener('click', async () => {
+  const fullname = document.getElementById('editName')?.value;
+  const email = document.getElementById('editEmail')?.value;
+  const res = await fetch('/update-profile', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fullname, email }),
+  });
+  const data = await res.json();
+  alert(data.message);
+  if (data.status === 'success') toggleOverlay('edit-modal-overlay', false);
+});
+
 document.getElementById('savePassword')?.addEventListener('click', async () => {
   const current = document.getElementById('currentPassword').value;
   const nueva   = document.getElementById('newPassword').value;
   const conf    = document.getElementById('confirmPassword').value;
   const msg     = document.getElementById('pw-msg');
-  if (!current || !nueva || !conf) { msg.innerHTML = '<span style="color:#e53e3e">Completa todos los campos.</span>'; return; }
-  if (nueva !== conf) { msg.innerHTML = '<span style="color:#e53e3e">Las contraseñas no coinciden.</span>'; return; }
-  const res  = await fetch('/change-password', { method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ current_password: current, new_password: nueva }) });
+  if (!current || !nueva || !conf) {
+    msg.innerHTML = '<span class="msg-err">Completa todos los campos.</span>';
+    return;
+  }
+  if (nueva !== conf) {
+    msg.innerHTML = '<span class="msg-err">Las contraseñas no coinciden.</span>';
+    return;
+  }
+  const res = await fetch('/change-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ current_password: current, new_password: nueva }),
+  });
   const data = await res.json();
-  msg.innerHTML = `<span style="color:${data.status==='success'?'#38a169':'#e53e3e'}">${data.message}</span>`;
-  if (data.status === 'success') { setTimeout(() => { toggleModal('passwordModal', false); msg.innerHTML=''; }, 1500); }
+  msg.innerHTML = `<span class="${data.status === 'success' ? 'msg-ok' : 'msg-err'}">${data.message}</span>`;
+  if (data.status === 'success') {
+    setTimeout(() => {
+      toggleOverlay('password-modal-overlay', false);
+      msg.innerHTML = '';
+    }, 1500);
+  }
 });
 
-// ── Guardar perfil ──
-window.guardarPerfil = async function() {
-  const fullname = document.getElementById('editName').value;
-  const email    = document.getElementById('editEmail').value;
-  const res  = await fetch('/update-profile', { method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ fullname, email }) });
-  const data = await res.json();
-  alert(data.message);
-  if (data.status === 'success') toggleModal('editModal', false);
-};
+function setActiveNav(section) {
+  navLinks.forEach(link => link.classList.toggle('active', link.dataset.section === section));
+}
 
-// ── Navegación ──
-const menuItems = Array.from(document.querySelectorAll('.menu-item'));
-menuItems.forEach(item => {
-  item.addEventListener('click', () => {
-    menuItems.forEach(i => i.classList.remove('active'));
-    item.classList.add('active');
-    renderSection(item.dataset.section);
+navLinks.forEach(link => {
+  link.addEventListener('click', e => {
+    e.preventDefault();
+    setActiveNav(link.dataset.section);
+    renderSection(link.dataset.section);
+    if (typeof window.closePanelSidebar === 'function') window.closePanelSidebar();
   });
 });
 
@@ -65,44 +99,51 @@ async function renderSection(sec) {
     case 'asistencia': await renderAsistencia();break;
     case 'material':   await renderMaterial();  break;
     case 'observador': await renderObservador();break;
+    case 'agenda':     await renderAgenda();     break;
     default:           renderInicio();
   }
 }
 
-const content = document.getElementById('content');
-
-// ══════════════════════════════════════════════════════
-//  INICIO
-// ══════════════════════════════════════════════════════
 function renderInicio() {
   content.innerHTML = `
-  <div class="welcome-card">
-    <div class="welcome-icon"><i class="fas fa-graduation-cap"></i></div>
-    <h2>¡Bienvenido a MiBoletín!</h2>
-    <p>Aquí puedes consultar tus notas, ver tu asistencia, acceder al material de clase y revisar tu desempeño académico.</p>
-    <div class="quick-grid">
-      <button class="quick-card" onclick="navTo('notas')">
-        <i class="fas fa-graduation-cap"></i>
-        <span>Mis Notas</span>
-      </button>
-      <button class="quick-card" onclick="navTo('desempeno')">
-        <i class="fas fa-chart-bar"></i>
-        <span>Desempeño</span>
-      </button>
-      <button class="quick-card" onclick="navTo('asistencia')">
-        <i class="fas fa-calendar-check"></i>
-        <span>Asistencia</span>
-      </button>
-      <button class="quick-card" onclick="navTo('material')">
-        <i class="fas fa-folder-open"></i>
-        <span>Material</span>
-      </button>
+    <div class="welcome-section">
+      <h1>Bienvenido, ${userName}</h1>
+      <p class="welcome-text">Consulta tus notas, asistencia, material de clase y tu desempeño académico.</p>
+      <p class="welcome-date">Hoy es <span id="current-date"></span></p>
     </div>
-  </div>`;
+    <div class="quick-actions-section">
+      <h2 class="section-title">Accesos Rápidos</h2>
+      <div class="quick-actions-grid">
+        <button type="button" class="quick-action-btn" onclick="navTo('notas')">
+          <i class="fas fa-graduation-cap"></i><span>Mis Notas</span>
+        </button>
+        <button type="button" class="quick-action-btn" onclick="navTo('desempeno')">
+          <i class="fas fa-chart-bar"></i><span>Desempeño</span>
+        </button>
+        <button type="button" class="quick-action-btn" onclick="navTo('asistencia')">
+          <i class="fas fa-calendar-check"></i><span>Asistencia</span>
+        </button>
+        <button type="button" class="quick-action-btn" onclick="navTo('material')">
+          <i class="fas fa-folder-open"></i><span>Material</span>
+        </button>
+        <button type="button" class="quick-action-btn" onclick="navTo('observador')">
+          <i class="fas fa-eye"></i><span>Observador</span>
+        </button>
+        <button type="button" class="quick-action-btn" onclick="navTo('agenda')">
+          <i class="fas fa-calendar-alt"></i><span>Agenda</span>
+        </button>
+      </div>
+    </div>`;
+  const dateEl = document.getElementById('current-date');
+  if (dateEl) {
+    dateEl.textContent = new Date().toLocaleDateString('es-ES', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    });
+  }
 }
 
-window.navTo = function(sec) {
-  menuItems.forEach(i => i.classList.toggle('active', i.dataset.section === sec));
+window.navTo = function (sec) {
+  setActiveNav(sec);
   renderSection(sec);
 };
 
@@ -110,7 +151,7 @@ window.navTo = function(sec) {
 //  MIS NOTAS — tabla agrupada por materia
 // ══════════════════════════════════════════════════════
 async function renderNotas() {
-  content.innerHTML = `<div class="loading"><i class="fas fa-spinner fa-spin"></i> Cargando notas...</div>`;
+  content.innerHTML = `<div class="loading-state"><i class="fas fa-spinner fa-spin"></i> Cargando notas...</div>`;
   const res  = await fetch('/estudiante/notas');
   const data = await res.json();
   const notas = data.data || [];
@@ -128,7 +169,7 @@ async function renderNotas() {
   const colorPG = promGeneral >= 3 ? '#38a169' : '#e53e3e';
 
   content.innerHTML = `
-  <div class="section-top">
+  <div class="section-header-bar">
     <h2 class="section-title"><i class="fas fa-graduation-cap"></i> Mis Notas</h2>
     <div class="prom-general-badge" style="background:${promGeneral>=3?'#c6f6d5':'#fed7d7'};color:${colorPG};">
       <span>Promedio General</span>
@@ -167,7 +208,7 @@ async function renderNotas() {
 //  DESEMPEÑO — Barras gráficas por materia
 // ══════════════════════════════════════════════════════
 async function renderDesempeno() {
-  content.innerHTML = `<div class="loading"><i class="fas fa-spinner fa-spin"></i> Cargando desempeño...</div>`;
+  content.innerHTML = `<div class="loading-state"><i class="fas fa-spinner fa-spin"></i> Cargando desempeño...</div>`;
   const res  = await fetch('/estudiante/desempeno');
   const data = await res.json();
   const items = data.data || [];
@@ -180,7 +221,7 @@ async function renderDesempeno() {
   const promGeneral = (items.reduce((s,i)=>s+i.promedio,0)/items.length).toFixed(2);
 
   content.innerHTML = `
-  <div class="section-top">
+  <div class="section-header-bar">
     <h2 class="section-title"><i class="fas fa-chart-bar"></i> Mi Desempeño</h2>
   </div>
 
@@ -241,7 +282,7 @@ async function renderDesempeno() {
 //  ASISTENCIA
 // ══════════════════════════════════════════════════════
 async function renderAsistencia() {
-  content.innerHTML = `<div class="loading"><i class="fas fa-spinner fa-spin"></i> Cargando asistencia...</div>`;
+  content.innerHTML = `<div class="loading-state"><i class="fas fa-spinner fa-spin"></i> Cargando asistencia...</div>`;
   const res  = await fetch('/estudiante/asistencia');
   const data = await res.json();
   const registros = data.data    || [];
@@ -257,7 +298,7 @@ async function renderAsistencia() {
   const textCol = { presente:'#276749', ausente:'#9b2c2c', tardanza:'#744210', justificado:'#2b4c7e' };
 
   content.innerHTML = `
-  <div class="section-top">
+  <div class="section-header-bar">
     <h2 class="section-title"><i class="fas fa-calendar-check"></i> Mi Asistencia</h2>
   </div>
 
@@ -306,7 +347,7 @@ async function renderAsistencia() {
 //  MATERIAL DE CLASE
 // ══════════════════════════════════════════════════════
 async function renderMaterial() {
-  content.innerHTML = `<div class="loading"><i class="fas fa-spinner fa-spin"></i> Cargando material...</div>`;
+  content.innerHTML = `<div class="loading-state"><i class="fas fa-spinner fa-spin"></i> Cargando material...</div>`;
   const res  = await fetch('/estudiante/material');
   const data = await res.json();
   const mats = data.data || [];
@@ -325,7 +366,7 @@ async function renderMaterial() {
   mats.forEach(m => { (porMateria[m.materia] = porMateria[m.materia] || []).push(m); });
 
   content.innerHTML = `
-  <div class="section-top">
+  <div class="section-header-bar">
     <h2 class="section-title"><i class="fas fa-folder-open"></i> Material de Clase</h2>
   </div>
   ${Object.entries(porMateria).map(([materia, ms]) => `
@@ -358,7 +399,7 @@ async function renderMaterial() {
 //  OBSERVADOR
 // ══════════════════════════════════════════════════════
 async function renderObservador() {
-  content.innerHTML = `<div class="loading"><i class="fas fa-spinner fa-spin"></i> Cargando observador...</div>`;
+  content.innerHTML = `<div class="loading-state"><i class="fas fa-spinner fa-spin"></i> Cargando observador...</div>`;
   const res  = await fetch('/estudiante/observador');
   const data = await res.json();
   const obs  = data.data || [];
@@ -373,7 +414,7 @@ async function renderObservador() {
   const textCol = { positivo:'#276749', negativo:'#9b2c2c', neutro:'#4a5568' };
 
   content.innerHTML = `
-  <div class="section-top">
+  <div class="section-header-bar">
     <h2 class="section-title"><i class="fas fa-eye"></i> Observador</h2>
   </div>
   <div class="obs-lista">
@@ -389,6 +430,52 @@ async function renderObservador() {
       <div class="obs-profesor"><i class="fas fa-user-tie"></i> ${o.profesor}</div>
     </div>`).join('')}
   </div>`;
+}
+
+// ══════════════════════════════════════════════════════
+//  AGENDA (eventos compartidos por profesores)
+// ══════════════════════════════════════════════════════
+async function renderAgenda() {
+  content.innerHTML = `<div class="loading-state"><i class="fas fa-spinner fa-spin"></i> Cargando agenda...</div>`;
+  const res = await fetch('/estudiante/agenda');
+  const data = await res.json();
+  const eventos = data.data || [];
+
+  if (!eventos.length) {
+    content.innerHTML = emptyState('fas fa-calendar-alt', 'No hay tareas ni eventos compartidos con tu grupo.');
+    return;
+  }
+
+  const hoy = new Date().toISOString().slice(0, 10);
+  const pendientes = eventos.filter(e => e.estado === 'pendiente' && e.fecha_evento >= hoy);
+  const otros = eventos.filter(e => !(e.estado === 'pendiente' && e.fecha_evento >= hoy));
+
+  const renderLista = (lista, titulo) => {
+    if (!lista.length) return '';
+    return `
+      <h3 class="section-subtitle">${titulo}</h3>
+      <div class="obs-lista">
+        ${lista.map(e => `
+          <div class="obs-item agenda-evento-card" style="border-left:4px solid ${e.estado === 'completado' ? '#38a169' : e.estado === 'cancelado' ? '#a0aec0' : '#3182ce'};">
+            <div class="obs-top">
+              <strong>${e.titulo}</strong>
+              <span class="cell-muted">${e.fecha_evento}</span>
+            </div>
+            ${e.descripcion ? `<p class="obs-desc">${e.descripcion}</p>` : ''}
+            ${e.hora_inicio ? `<p class="cell-muted agenda-hora">⏰ ${e.hora_inicio}${e.hora_fin ? ' – ' + e.hora_fin : ''}</p>` : ''}
+            <div class="obs-profesor"><i class="fas fa-user-tie"></i> ${e.profesor}</div>
+            <span class="agenda-estado-badge ${e.estado}">${e.estado}</span>
+          </div>`).join('')}
+      </div>`;
+  };
+
+  content.innerHTML = `
+    <div class="section-header-bar">
+      <h2 class="section-title"><i class="fas fa-calendar-alt"></i> Mi Agenda</h2>
+      <p class="welcome-text card-section-desc" style="margin-top:8px;">Tareas y actividades que tus profesores comparten con tu grupo.</p>
+    </div>
+    ${renderLista(pendientes, 'Próximos')}
+    ${renderLista(otros, 'Anteriores o completados')}`;
 }
 
 // ── Utilidades ──

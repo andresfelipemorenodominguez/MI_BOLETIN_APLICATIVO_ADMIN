@@ -1,41 +1,58 @@
 // ── Elementos del DOM ──
-const profileButton  = document.getElementById('profileButton');
-const profileModal   = document.getElementById('profileModal');
-const closeModal     = document.getElementById('closeModal');
-const openEdit       = document.getElementById('openEdit');
-const openPassword   = document.getElementById('openPassword');
-const editModal      = document.getElementById('editModal');
-const closeEdit      = document.getElementById('closeEdit');
-const cancelEdit     = document.getElementById('cancelEdit');
-const passwordModal  = document.getElementById('passwordModal');
-const closePassword  = document.getElementById('closePassword');
-const cancelPassword = document.getElementById('cancelPassword');
-const savePassword   = document.getElementById('savePassword');
-const menuItems      = Array.from(document.querySelectorAll('.menu-item'));
-const content        = document.getElementById('content');
+const content = document.getElementById('panel-content');
+const navLinks = Array.from(document.querySelectorAll('.nav-link[data-section]'));
+const userName = document.querySelector('.user-name')?.textContent?.trim() || 'Profesor';
 
-// ── Modales ──
-function toggleModal(modal, show) {
-  if (!modal) return;
-  modal.classList.toggle('active', show);
-  modal.setAttribute('aria-hidden', String(!show));
+function toggleOverlay(id, show) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.toggle('active', show);
 }
-profileButton .addEventListener('click', () => toggleModal(profileModal, true));
-closeModal    .addEventListener('click', () => toggleModal(profileModal, false));
-openEdit      .addEventListener('click', () => { toggleModal(profileModal,false); toggleModal(editModal,true); });
-closeEdit     .addEventListener('click', () => toggleModal(editModal, false));
-cancelEdit    .addEventListener('click', () => toggleModal(editModal, false));
-openPassword  .addEventListener('click', () => { toggleModal(profileModal,false); toggleModal(passwordModal,true); });
-closePassword .addEventListener('click', () => toggleModal(passwordModal, false));
-cancelPassword.addEventListener('click', () => toggleModal(passwordModal, false));
+
+function closeAllModals() {
+  ['profile-modal-overlay', 'edit-modal-overlay', 'password-modal-overlay'].forEach(id => toggleOverlay(id, false));
+}
+
+document.getElementById('profile-btn')?.addEventListener('click', () => toggleOverlay('profile-modal-overlay', true));
+document.getElementById('close-profile-modal')?.addEventListener('click', () => toggleOverlay('profile-modal-overlay', false));
+document.getElementById('open-edit-profile')?.addEventListener('click', () => {
+  toggleOverlay('profile-modal-overlay', false);
+  toggleOverlay('edit-modal-overlay', true);
+});
+document.getElementById('open-password-modal')?.addEventListener('click', () => {
+  toggleOverlay('profile-modal-overlay', false);
+  toggleOverlay('password-modal-overlay', true);
+});
+document.getElementById('close-edit-modal')?.addEventListener('click', () => toggleOverlay('edit-modal-overlay', false));
+document.getElementById('cancel-edit-modal')?.addEventListener('click', () => toggleOverlay('edit-modal-overlay', false));
+document.getElementById('close-password-modal')?.addEventListener('click', () => toggleOverlay('password-modal-overlay', false));
+document.getElementById('cancel-password-modal')?.addEventListener('click', () => toggleOverlay('password-modal-overlay', false));
+
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) overlay.classList.remove('active');
+  });
+});
+
 window.addEventListener('keydown', e => {
-  if (e.key === 'Escape') {
-    toggleModal(profileModal,false); toggleModal(editModal,false); toggleModal(passwordModal,false);
-  }
+  if (e.key === 'Escape') closeAllModals();
+});
+
+document.getElementById('save-profile')?.addEventListener('click', async () => {
+  const fullname = document.getElementById('editName')?.value;
+  const email = document.getElementById('editEmail')?.value;
+  const res = await fetch('/update-profile', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fullname, email }),
+  });
+  const data = await res.json();
+  alert(data.message);
+  if (data.status === 'success') toggleOverlay('edit-modal-overlay', false);
 });
 
 // ── Cambiar contraseña ──
-savePassword.addEventListener('click', async () => {
+document.getElementById('savePassword')?.addEventListener('click', async () => {
   const current   = document.getElementById('currentPassword').value;
   const nueva     = document.getElementById('newPassword').value;
   const confirmar = document.getElementById('confirmPassword').value;
@@ -46,15 +63,22 @@ savePassword.addEventListener('click', async () => {
     body: JSON.stringify({ current_password:current, new_password:nueva, confirm_password:confirmar }) });
   const data = await res.json();
   alert(data.message);
-  if (data.status === 'success') toggleModal(passwordModal, false);
+  const msg = document.getElementById('pw-msg');
+  if (msg) msg.innerHTML = `<span class="${data.status === 'success' ? 'msg-ok' : 'msg-err'}">${data.message}</span>`;
+  if (data.status === 'success') setTimeout(() => toggleOverlay('password-modal-overlay', false), 1200);
 });
 
+function setActiveNav(section) {
+  navLinks.forEach(link => link.classList.toggle('active', link.dataset.section === section));
+}
+
 // ── Navegación ──
-menuItems.forEach(item => {
-  item.addEventListener('click', () => {
-    menuItems.forEach(i => i.classList.remove('active'));
-    item.classList.add('active');
-    renderSection(item.dataset.section);
+navLinks.forEach(link => {
+  link.addEventListener('click', e => {
+    e.preventDefault();
+    setActiveNav(link.dataset.section);
+    renderSection(link.dataset.section);
+    if (typeof window.closePanelSidebar === 'function') window.closePanelSidebar();
   });
 });
 
@@ -73,79 +97,44 @@ async function renderSection(section) {
 
 function renderInicio() {
   content.innerHTML = `
-  <div class="prof-welcome">
-
-    <div class="prof-hero-card">
-      <div class="prof-hero-icon"><i class="fas fa-chalkboard-teacher"></i></div>
-      <div class="prof-hero-text">
-        <h2>¡Bienvenido a MiBoletín!</h2>
-        <p>Gestiona tus clases, registra notas, pasa asistencia, comparte material y sigue el progreso de tus estudiantes.</p>
+    <div class="welcome-section">
+      <h1>Bienvenido, ${userName}</h1>
+      <p class="welcome-text">Gestiona tus clases, registra notas, pasa asistencia y comparte material con tus estudiantes.</p>
+      <p class="welcome-date">Hoy es <span id="current-date"></span></p>
+    </div>
+    <div class="quick-actions-section">
+      <h2 class="section-title">Accesos Rápidos</h2>
+      <div class="quick-actions-grid">
+        <button type="button" class="quick-action-btn" onclick="navToProf('notas')">
+          <i class="fas fa-graduation-cap"></i><span>Subir Notas</span>
+        </button>
+        <button type="button" class="quick-action-btn" onclick="navToProf('asistencia')">
+          <i class="fas fa-calendar-check"></i><span>Asistencia</span>
+        </button>
+        <button type="button" class="quick-action-btn" onclick="navToProf('material')">
+          <i class="fas fa-folder-open"></i><span>Material</span>
+        </button>
+        <button type="button" class="quick-action-btn" onclick="navToProf('observador')">
+          <i class="fas fa-eye"></i><span>Observador</span>
+        </button>
+        <button type="button" class="quick-action-btn" onclick="navToProf('reporte')">
+          <i class="fas fa-chart-bar"></i><span>Reporte General</span>
+        </button>
+        <button type="button" class="quick-action-btn" onclick="navToProf('agenda')">
+          <i class="fas fa-calendar-alt"></i><span>Agenda</span>
+        </button>
       </div>
-    </div>
-
-    <div class="prof-quick-title">Accesos Rápidos</div>
-    <div class="prof-quick-grid">
-      <button class="prof-quick-card" onclick="navToProf('notas')">
-        <div class="pqc-icon" style="background:#ebf8ff;color:#3182ce;"><i class="fas fa-graduation-cap"></i></div>
-        <div class="pqc-info">
-          <strong>Subir Notas</strong>
-          <span>Registra notas por materia</span>
-        </div>
-        <i class="fas fa-chevron-right pqc-arrow"></i>
-      </button>
-
-      <button class="prof-quick-card" onclick="navToProf('asistencia')">
-        <div class="pqc-icon" style="background:#f0fff4;color:#38a169;"><i class="fas fa-calendar-check"></i></div>
-        <div class="pqc-info">
-          <strong>Asistencia</strong>
-          <span>Pasa lista a tus grupos</span>
-        </div>
-        <i class="fas fa-chevron-right pqc-arrow"></i>
-      </button>
-
-      <button class="prof-quick-card" onclick="navToProf('material')">
-        <div class="pqc-icon" style="background:#faf5ff;color:#805ad5;"><i class="fas fa-folder-open"></i></div>
-        <div class="pqc-info">
-          <strong>Material</strong>
-          <span>Publica recursos de clase</span>
-        </div>
-        <i class="fas fa-chevron-right pqc-arrow"></i>
-      </button>
-
-      <button class="prof-quick-card" onclick="navToProf('observador')">
-        <div class="pqc-icon" style="background:#fffbeb;color:#d69e2e;"><i class="fas fa-eye"></i></div>
-        <div class="pqc-info">
-          <strong>Observador</strong>
-          <span>Registra comportamientos</span>
-        </div>
-        <i class="fas fa-chevron-right pqc-arrow"></i>
-      </button>
-
-      <button class="prof-quick-card" onclick="navToProf('reporte')">
-        <div class="pqc-icon" style="background:#fff5f5;color:#e53e3e;"><i class="fas fa-chart-bar"></i></div>
-        <div class="pqc-info">
-          <strong>Reporte General</strong>
-          <span>Descarga PDF de estudiantes</span>
-        </div>
-        <i class="fas fa-chevron-right pqc-arrow"></i>
-      </button>
-
-      <button class="prof-quick-card" onclick="navToProf('agenda')">
-        <div class="pqc-icon" style="background:#ebf8ff;color:#2b6cb0;"><i class="fas fa-calendar-alt"></i></div>
-        <div class="pqc-info">
-          <strong>Agenda</strong>
-          <span>Organiza tus eventos</span>
-        </div>
-        <i class="fas fa-chevron-right pqc-arrow"></i>
-      </button>
-    </div>
-
-  </div>`;
+    </div>`;
+  const dateEl = document.getElementById('current-date');
+  if (dateEl) {
+    dateEl.textContent = new Date().toLocaleDateString('es-ES', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    });
+  }
 }
 
-window.navToProf = function(sec) {
-  const items = Array.from(document.querySelectorAll('.menu-item'));
-  items.forEach(i => i.classList.toggle('active', i.dataset.section === sec));
+window.navToProf = function (sec) {
+  setActiveNav(sec);
   renderSection(sec);
 };
 
@@ -166,7 +155,7 @@ async function renderNotas() {
   content.innerHTML = `
   <div class="section-header-bar">
     <div>
-      <h2 class="section-title">📝 Subir Notas</h2>
+      <h2 class="section-title"><i class="fas fa-graduation-cap"></i> Subir Notas</h2>
       <p class="section-sub">Selecciona materia y tipo de nota para ver la tabla de estudiantes.</p>
     </div>
   </div>
@@ -399,7 +388,7 @@ async function renderAsistencia() {
   content.innerHTML = `
   <div class="section-header-bar">
     <div>
-      <h2 class="section-title">✅ Asistencia</h2>
+      <h2 class="section-title"><i class="fas fa-calendar-check"></i> Asistencia</h2>
       <p class="section-sub">Pasa lista fácilmente. Selecciona materia y fecha.</p>
     </div>
   </div>
@@ -593,7 +582,7 @@ async function renderMaterial() {
   content.innerHTML = `
   <div class="section-header-bar">
     <div>
-      <h2 class="section-title">📁 Material de Clase</h2>
+      <h2 class="section-title"><i class="fas fa-folder-open"></i> Material de Clase</h2>
       <p class="section-sub">Comparte enlaces, documentos y recursos con tus estudiantes.</p>
     </div>
   </div>
@@ -763,7 +752,7 @@ async function renderObservador() {
 
   content.innerHTML = `
     <div class="card">
-      <h2>👁 Observador de Estudiantes</h2>
+      <h2 class="card-title"><i class="fas fa-eye"></i> Observador de Estudiantes</h2>
       <div class="form-group">
         <label>Estudiante</label>
         <select id="selEstObs" onchange="cargarObservaciones(this.value)">
@@ -783,11 +772,11 @@ async function renderObservador() {
         <label>Descripción</label>
         <textarea id="inputObs" placeholder="Describe el comportamiento o situación..."></textarea>
       </div>
-      <button class="save" onclick="guardarObservacion()">💾 Guardar Observación</button>
+      <button type="button" class="btn-primary" onclick="guardarObservacion()"><i class="fas fa-save"></i> Guardar Observación</button>
       <div id="obsMsg" style="margin-top:12px;"></div>
     </div>
     <div class="card" style="margin-top:24px;">
-      <h2>📋 Historial de Observaciones</h2>
+      <h2 class="card-title"><i class="fas fa-list"></i> Historial de Observaciones</h2>
       <div id="listaObs"><p>Selecciona un estudiante para ver su historial.</p></div>
     </div>`;
 }
@@ -826,35 +815,82 @@ window.cargarObservaciones = async function(id_estudiante) {
 // ══════════════════════════════════════════════════════
 //  REPORTE GENERAL
 // ══════════════════════════════════════════════════════
+let gruposProfesor = [];
+
 async function renderReporte() {
-  const res  = await fetch('/profesor/estudiantes');
-  const data = await res.json();
+  const [resEst, resGr] = await Promise.all([
+    fetch('/profesor/estudiantes'),
+    fetch('/profesor/grupos'),
+  ]);
+  const data = await resEst.json();
+  const dataGr = await resGr.json();
   const estudiantes = data.data || [];
+  gruposProfesor = dataGr.data || [];
 
   content.innerHTML = `
-    <div class="card" style="margin-bottom:20px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
-        <div>
-          <h2 style="margin:0;">📊 Reporte General</h2>
-          <p style="margin:4px 0 0;color:#6b7a8a;">Consulta el reporte individual o descarga el PDF completo de todos tus estudiantes.</p>
-        </div>
-        <button class="btn-pdf" onclick="window.location.href='/profesor/reporte/pdf'">
-          <span>📄</span> Descargar PDF Completo
+    <div class="card panel-card">
+      <h2 class="card-section-title">📊 Reporte General</h2>
+      <p class="card-section-desc">Filtra por grupo o estudiante y descarga el PDF correspondiente.</p>
+      <div class="form-group">
+        <label>Grupo</label>
+        <select id="filtroGrupoReporte" class="form-select" onchange="filtrarEstudiantesReporte()">
+          <option value="">Todos mis grupos</option>
+          ${gruposProfesor.map(g => `<option value="${g.id_grupo}">${g.nombre}</option>`).join('')}
+        </select>
+      </div>
+      <div class="reporte-actions">
+        <button type="button" class="btn-pdf" onclick="descargarReportePdf()">
+          <span>📄</span> Descargar PDF (filtro actual)
+        </button>
+        <button type="button" class="btn-reporte-sec" onclick="descargarReporteIndividualPdf()">
+          <span>📑</span> PDF del estudiante seleccionado
         </button>
       </div>
     </div>
-    <div class="card">
-      <h2>🔍 Reporte por Estudiante</h2>
+    <div class="card panel-card">
+      <h2 class="card-section-title">🔍 Reporte por Estudiante</h2>
       <div class="form-group">
         <label>Selecciona un estudiante</label>
         <select id="selEstReporte" onchange="cargarReporte(this.value)">
           <option value="">Selecciona un estudiante</option>
-          ${estudiantes.map(e=>`<option value="${e.id_estudiante}">${e.nombre_completo} — ${e.codigo_estudiante}</option>`).join('')}
+          ${estudiantes.map(e => `<option value="${e.id_estudiante}">${e.nombre_completo} — ${e.codigo_estudiante}${e.nombre_grupo ? ' (' + e.nombre_grupo + ')' : ''}</option>`).join('')}
         </select>
       </div>
       <div id="reporteContenido"></div>
     </div>`;
 }
+
+window.filtrarEstudiantesReporte = async function() {
+  const idGrupo = document.getElementById('filtroGrupoReporte')?.value || '';
+  const url = idGrupo ? `/profesor/estudiantes?id_grupo=${idGrupo}` : '/profesor/estudiantes';
+  const res = await fetch(url);
+  const data = await res.json();
+  const estudiantes = data.data || [];
+  const sel = document.getElementById('selEstReporte');
+  if (!sel) return;
+  sel.innerHTML = `<option value="">Selecciona un estudiante</option>` +
+    estudiantes.map(e => `<option value="${e.id_estudiante}">${e.nombre_completo} — ${e.codigo_estudiante}${e.nombre_grupo ? ' (' + e.nombre_grupo + ')' : ''}</option>`).join('');
+  document.getElementById('reporteContenido').innerHTML = '';
+};
+
+window.descargarReportePdf = function() {
+  const idGrupo = document.getElementById('filtroGrupoReporte')?.value || '';
+  const idEst = document.getElementById('selEstReporte')?.value || '';
+  const params = [];
+  if (idEst) params.push('id_estudiante=' + encodeURIComponent(idEst));
+  else if (idGrupo) params.push('id_grupo=' + encodeURIComponent(idGrupo));
+  const qs = params.length ? '?' + params.join('&') : '';
+  window.location.href = '/profesor/reporte/pdf' + qs;
+};
+
+window.descargarReporteIndividualPdf = function() {
+  const idEst = document.getElementById('selEstReporte')?.value;
+  if (!idEst) {
+    alert('Selecciona un estudiante para descargar su reporte en PDF.');
+    return;
+  }
+  window.location.href = `/profesor/reporte/${idEst}/pdf`;
+};
 
 window.cargarReporte = async function(id_estudiante) {
   if (!id_estudiante) return;
@@ -906,27 +942,48 @@ window.cargarReporte = async function(id_estudiante) {
 //  AGENDA
 // ══════════════════════════════════════════════════════
 let calYear, calMonth, todosEventos = [];
+let gruposAgenda = [];
 
 async function renderAgenda() {
   const now = new Date();
   calYear  = now.getFullYear(); calMonth = now.getMonth();
-  const res  = await fetch('/profesor/agenda');
-  const data = await res.json();
+  const [resAg, resGr] = await Promise.all([
+    fetch('/profesor/agenda'),
+    fetch('/profesor/grupos'),
+  ]);
+  const data = await resAg.json();
+  const dataGr = await resGr.json();
   todosEventos = data.data || [];
+  gruposAgenda = dataGr.data || [];
+
+  const gruposHtml = gruposAgenda.length
+    ? gruposAgenda.map(g => `
+        <label class="check-asig" style="display:flex;align-items:center;gap:8px;margin:4px 0;">
+          <input type="checkbox" class="ag-grupo-chk" value="${g.id_grupo}">
+          <span>${g.nombre}</span>
+        </label>`).join('')
+    : '<p style="color:#6b7a8a;font-size:13px;">No tienes grupos asignados.</p>';
 
   content.innerHTML = `
   <div class="agenda-layout">
     <div class="agenda-form-panel">
       <div class="panel-header"><span class="panel-icon">📅</span><h2>Nuevo Evento</h2></div>
       <div class="form-group"><label>Título <span style="color:#e53e3e">*</span></label>
-        <input type="text" id="agTitulo" placeholder="Ej: Examen parcial"></div>
+        <input type="text" id="agTitulo" placeholder="Ej: Examen parcial, Tarea cap. 3"></div>
       <div class="form-group"><label>Descripción</label>
-        <textarea id="agDesc" placeholder="Detalles..."></textarea></div>
+        <textarea id="agDesc" placeholder="Detalles de la tarea o actividad..."></textarea></div>
       <div class="form-group"><label>Fecha <span style="color:#e53e3e">*</span></label>
         <input type="date" id="agFecha"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="form-group"><label>Hora inicio</label><input type="time" id="agHoraInicio"></div>
         <div class="form-group"><label>Hora fin</label><input type="time" id="agHoraFin"></div>
+      </div>
+      <div class="form-group">
+        <label>Compartir con grupos</label>
+        <div id="agGruposLista" style="max-height:140px;overflow-y:auto;padding:8px;border:1px solid #e2e8f0;border-radius:10px;">
+          ${gruposHtml}
+        </div>
+        <small style="color:#6b7a8a;font-size:12px;">Los estudiantes de los grupos marcados verán este evento en su agenda.</small>
       </div>
       <button class="btn-guardar" onclick="agregarEvento()"><span>➕</span> Agregar Evento</button>
       <div id="agMsg" class="nota-msg"></div>
@@ -950,6 +1007,7 @@ function renderPendientes(eventos) {
         <strong>${e.titulo}</strong>
         ${e.descripcion?`<p>${e.descripcion}</p>`:''}
         ${e.hora_inicio?`<small>⏰ ${e.hora_inicio}${e.hora_fin?' – '+e.hora_fin:''}</small>`:''}
+        ${(e.grupos && e.grupos.length) ? `<small style="display:block;margin-top:4px;color:#3182ce;">👥 ${e.grupos.join(', ')}</small>` : '<small style="display:block;margin-top:4px;color:#a0aec0;">Solo visible para ti</small>'}
       </div>
       <div class="evento-acciones">
         <button class="btn-accion btn-ok"  onclick="cambiarEstado(${e.id_agenda},'completado')">✓</button>
@@ -1004,21 +1062,27 @@ window.mostrarEventosDia=function(dia){
   const meses=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   det.innerHTML=`<h4 style="margin:0 0 10px;color:#1f3a5d;">${dia} de ${meses[calMonth]}</h4>`+evs.map(e=>`<div style="background:${e.estado==='completado'?'#f0fff4':e.estado==='cancelado'?'#f7fafc':'#ebf8ff'};padding:12px;border-radius:10px;margin-bottom:8px;border-left:4px solid ${e.estado==='completado'?'#38a169':e.estado==='cancelado'?'#a0aec0':'#3182ce'}"><strong>${e.titulo}</strong>${e.descripcion?`<p style="margin:4px 0;color:#6b7a8a;font-size:13px;">${e.descripcion}</p>`:''}${e.hora_inicio?`<small>⏰ ${e.hora_inicio}${e.hora_fin?' – '+e.hora_fin:''}</small>`:''}  <span style="float:right;font-size:12px;color:#6b7a8a;text-transform:capitalize;">${e.estado}</span></div>`).join('');
 };
+function obtenerGruposAgendaSeleccionados() {
+  return Array.from(document.querySelectorAll('.ag-grupo-chk:checked')).map(el => parseInt(el.value, 10));
+}
+
 window.agregarEvento=async function(){
   const titulo=document.getElementById('agTitulo').value;
   const descripcion=document.getElementById('agDesc').value;
   const fecha_evento=document.getElementById('agFecha').value;
   const hora_inicio=document.getElementById('agHoraInicio').value;
   const hora_fin=document.getElementById('agHoraFin').value;
+  const id_grupos=obtenerGruposAgendaSeleccionados();
   const msg=document.getElementById('agMsg');
   if(!titulo||!fecha_evento){msg.innerHTML=`<span class="msg-err">⚠️ Título y fecha son requeridos.</span>`;return;}
-  const res=await fetch('/profesor/agenda',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({titulo,descripcion,fecha_evento,hora_inicio,hora_fin})});
+  const res=await fetch('/profesor/agenda',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({titulo,descripcion,fecha_evento,hora_inicio,hora_fin,id_grupos})});
   const data=await res.json();
   msg.innerHTML=`<span class="${data.status==='success'?'msg-ok':'msg-err'}">${data.message}</span>`;
   if(data.status==='success'){
     const r2=await fetch('/profesor/agenda');const d2=await r2.json();todosEventos=d2.data||[];
     document.getElementById('agTitulo').value='';document.getElementById('agDesc').value='';
     document.getElementById('agFecha').value='';document.getElementById('agHoraInicio').value='';document.getElementById('agHoraFin').value='';
+    document.querySelectorAll('.ag-grupo-chk').forEach(c => { c.checked = false; });
     document.getElementById('listaPendientes').innerHTML=renderPendientes(todosEventos);
     renderCalendario();
   }

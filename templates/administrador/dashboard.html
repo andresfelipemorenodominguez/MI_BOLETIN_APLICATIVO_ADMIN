@@ -12,6 +12,7 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
     <title>MiBoletín Admin</title>
     
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/branding-panel.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
 </head>
@@ -36,10 +37,15 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
     <aside class="sidebar" id="sidebar">
         <!-- Header del sidebar con logo -->
         <div class="sidebar-header">
-            <button id="logo-btn" class="logo-btn">
-                <i class="fas fa-newspaper logo-icon"></i>
-                <span class="logo-text">MiBoletín<span class="org"> Admin</span></span>
-            </button>
+            <div class="school-brand logo-btn" id="logo-btn" aria-label="Institución">
+                <img id="school-logo" class="school-logo" src="" alt="" style="display:none">
+                <i id="school-logo-fallback" class="fas fa-school logo-icon school-logo-fallback"></i>
+                <div class="school-brand-text">
+                    <span class="school-name" id="school-name">{{ colegio_nombre or 'MiBoletín' }}</span>
+                    <span class="school-lema" id="school-lema"></span>
+                    <span class="school-role-label" data-role="admin">Admin</span>
+                </div>
+            </div>
         </div>
 
         <!-- LISTA DE ENLACES DE NAVEGACIÓN -->
@@ -56,70 +62,98 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
                     </a>
                 </li>
 
-                <li class="nav-item nav-section-label">
+                <li class="nav-item nav-section-label admin-colegio-only">
                     <span class="text-sm text-gray-500">Gestión</span>
                 </li>
-                <li class="nav-item">
+                <li class="nav-item admin-colegio-only">
                     <a href="#" class="nav-link" data-section="agregar-estudiante-section">
                         <i class="fa-solid fa-user nav-icon"></i>
                         <span class="nav-text">Estudiantes</span>
                     </a>
                 </li>
-                <li class="nav-item">
+                <li class="nav-item admin-colegio-only">
                     <a href="#" class="nav-link" data-section="agregar-profesor-section">
                         <i class="fa-solid fa-chalkboard-user nav-icon"></i>
                         <span class="nav-text">Profesores</span>
                     </a>
                 </li>
-                <li class="nav-item">
+                <li class="nav-item admin-colegio-only">
                     <a href="#" class="nav-link" data-section="grupos-section">
                         <i class="fas fa-users nav-icon"></i>
                         <span class="nav-text">Grupos</span>
                     </a>
                 </li>
-                <li class="nav-item">
+                <li class="nav-item admin-colegio-only">
                     <a href="#" class="nav-link" data-section="materias-section">
                         <i class="fas fa-book nav-icon"></i>
                         <span class="nav-text">Materias</span>
                     </a>
                 </li>
-                <li class="nav-item">
+                <li class="nav-item admin-colegio-only">
                     <a href="#" class="nav-link" data-section="asignaciones-section">
                         <i class="fas fa-link nav-icon"></i>
                         <span class="nav-text">Asignaciones</span>
                     </a>
                 </li>
 
-                <li class="nav-item nav-section-label">
+                <li class="nav-item nav-section-label superadmin-only" style="display:none;">
+                    <span class="text-sm text-gray-500">Plataforma</span>
+                </li>
+                <li class="nav-item superadmin-only" style="display:none;">
+                    <a href="#" class="nav-link" data-section="colegios-section">
+                        <i class="fas fa-school nav-icon"></i>
+                        <span class="nav-text">Colegios</span>
+                    </a>
+                </li>
+                <li class="nav-item superadmin-only" style="display:none;">
+                    <a href="#" class="nav-link" data-section="superadmins-section">
+                        <i class="fas fa-user-shield nav-icon"></i>
+                        <span class="nav-text">Super admins</span>
+                    </a>
+                </li>
+                <li class="nav-item superadmin-only" style="display:none;">
+                    <a href="#" class="nav-link" data-section="plataforma-reportes-section">
+                        <i class="fas fa-chart-bar nav-icon"></i>
+                        <span class="nav-text">Reportes plataforma</span>
+                    </a>
+                </li>
+
+                <li class="nav-item nav-section-label colegio-admin-only admin-colegio-only">
                     <span class="text-sm text-gray-500">Configuración</span>
                 </li>
-                <li class="nav-item">
+                <li class="nav-item colegio-admin-only">
+                    <a href="#" class="nav-link" data-section="identidad-section">
+                        <i class="fas fa-palette nav-icon"></i>
+                        <span class="nav-text">Identidad institucional</span>
+                    </a>
+                </li>
+                <li class="nav-item admin-colegio-only">
                     <a href="#" class="nav-link" data-section="periodos-section">
                         <i class="fas fa-calendar-alt nav-icon"></i>
                         <span class="nav-text">Períodos</span>
                     </a>
                 </li>
-                <li class="nav-item">
+                <li class="nav-item admin-colegio-only">
                     <a href="#" class="nav-link" data-section="administradores-section">
                         <i class="fas fa-user-shield nav-icon"></i>
                         <span class="nav-text">Administradores</span>
                     </a>
                 </li>
 
-                <li class="nav-item nav-section-label">
+                <li class="nav-item nav-section-label admin-colegio-only">
                     <span class="text-sm text-gray-500">Comunicación</span>
                 </li>
-                <li class="nav-item">
+                <li class="nav-item admin-colegio-only">
                     <a href="#" class="nav-link" data-section="chat-section">
                         <i class="fas fa-comments nav-icon"></i>
                         <span class="nav-text">Chat</span>
                     </a>
                 </li>
 
-                <li class="nav-item nav-section-label">
+                <li class="nav-item nav-section-label admin-colegio-only">
                     <span class="text-sm text-gray-500">Reportes</span>
                 </li>
-                <li class="nav-item">
+                <li class="nav-item admin-colegio-only">
                     <a href="#" class="nav-link" data-section="reportes-section">
                         <i class="fa-solid fa-chart-bar nav-icon"></i>
                         <span class="nav-text">Reportes</span>
@@ -248,7 +282,7 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
 
         <!-- ── SECCIÓN 4.2: ESTUDIANTES ── -->
         <!-- Formulario para registrar estudiantes y tabla de estudiantes existentes -->
-        <section id="agregar-estudiante-section" class="content-section">
+        <section id="agregar-estudiante-section" class="content-section admin-colegio-only">
             <div class="content-wrapper">
                 <!-- Header de la sección -->
                 <div class="form-header">
@@ -410,7 +444,7 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
         <!-- ── PROFESORES ── -->
         <!-- ── SECCIÓN 4.3: PROFESORES ── -->
         <!-- Formulario para registrar profesores y tabla de profesores existentes -->
-        <section id="agregar-profesor-section" class="content-section">
+        <section id="agregar-profesor-section" class="content-section admin-colegio-only">
             <div class="content-wrapper">
                 <div class="form-header">
                     <h1>Profesores</h1>
@@ -547,7 +581,7 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
         <!-- ── PERÍODOS ── -->
         <!-- ── SECCIÓN 4.4: PERÍODOS ACADÉMICOS ── -->
         <!-- Gestión de períodos académicos del año escolar -->
-        <section id="periodos-section" class="content-section">
+        <section id="periodos-section" class="content-section admin-colegio-only">
             <div class="content-wrapper">
                 <div class="form-header">
                     <h1>Períodos Académicos</h1>
@@ -593,7 +627,7 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
         <!-- ── GRUPOS ── -->
         <!-- ── SECCIÓN 4.5: GRUPOS ── -->
         <!-- Creación y gestión de grupos asignados a períodos académicos -->
-        <section id="grupos-section" class="content-section">
+        <section id="grupos-section" class="content-section admin-colegio-only">
             <div class="content-wrapper">
                 <div class="form-header">
                     <h1>Grupos</h1>
@@ -636,7 +670,7 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
         <!-- ── MATERIAS ── -->
         <!-- ── SECCIÓN 4.6: MATERIAS ── -->
         <!-- Gestión del catálogo de materias del sistema educativo -->
-        <section id="materias-section" class="content-section">
+        <section id="materias-section" class="content-section admin-colegio-only">
             <div class="content-wrapper">
                 <div class="form-header">
                     <h1>Materias</h1>
@@ -677,7 +711,7 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
         <!-- ── ASIGNACIONES ── -->
         <!-- ── SECCIÓN 4.7: ASIGNACIONES ── -->
         <!-- Asignación de profesores a grupos/materias y estudiantes a grupos -->
-        <section id="asignaciones-section" class="content-section">
+        <section id="asignaciones-section" class="content-section admin-colegio-only">
             <div class="content-wrapper">
                 <div class="form-header">
                     <h1>Asignaciones</h1>
@@ -772,7 +806,7 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
         <!-- ── REPORTES ── -->
         <!-- ── SECCIÓN 4.8: REPORTES ── -->
         <!-- Estadísticas del sistema y descarga de reportes en PDF -->
-        <section id="reportes-section" class="content-section">
+        <section id="reportes-section" class="content-section admin-colegio-only">
             <div class="content-wrapper">
                 <div class="form-header">
                     <h1>Reportes</h1>
@@ -856,10 +890,175 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
             </div>
         </section>
 
+        <!-- ── IDENTIDAD INSTITUCIONAL (admin colegio) ── -->
+        <section id="identidad-section" class="content-section colegio-admin-only admin-colegio-only">
+            <div class="content-wrapper">
+                <div class="form-header">
+                    <h1><i class="fas fa-palette"></i> Identidad institucional</h1>
+                    <p class="form-subtitle">Personaliza el nombre, colores e imágenes de tu colegio en la plataforma y en los PDF.</p>
+                </div>
+                <div class="mgmt-card">
+                    <h3><i class="fas fa-edit"></i> Datos y colores</h3>
+                    <div class="form-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px;">
+                        <div class="form-group"><label>Nombre oficial</label><input type="text" id="id-nombre" class="form-input"></div>
+                        <div class="form-group"><label>Lema</label><input type="text" id="id-lema" class="form-input" placeholder="Opcional"></div>
+                        <div class="form-group"><label>Color primario</label><input type="color" id="id-color-prim" class="form-input" style="height:42px;padding:4px;"></div>
+                        <div class="form-group"><label>Color secundario</label><input type="color" id="id-color-sec" class="form-input" style="height:42px;padding:4px;"></div>
+                    </div>
+                    <button type="button" class="btn-primary" style="margin-top:12px;" onclick="IdentidadAdmin.guardarTexto()">
+                        <i class="fas fa-save"></i> Guardar datos
+                    </button>
+                    <p id="id-msg-texto" style="margin-top:10px;font-size:14px;"></p>
+                </div>
+                <div class="mgmt-card">
+                    <h3><i class="fas fa-images"></i> Imágenes</h3>
+                    <p style="color:var(--gray-600);margin:8px 0 16px;">Escudo PNG transparente (máx. 2 MB). Encabezado y marca de agua para reportes PDF.</p>
+                    <div class="form-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;">
+                        <div class="form-group">
+                            <label>Escudo</label>
+                            <input type="file" id="id-file-escudo" accept="image/png,image/jpeg,image/webp" class="form-input">
+                            <button type="button" class="btn-secondary" style="margin-top:8px;" onclick="IdentidadAdmin.subir('escudo')">Subir escudo</button>
+                        </div>
+                        <div class="form-group">
+                            <label>Encabezado PDF</label>
+                            <input type="file" id="id-file-encabezado" accept="image/png,image/jpeg,image/webp" class="form-input">
+                            <button type="button" class="btn-secondary" style="margin-top:8px;" onclick="IdentidadAdmin.subir('encabezado')">Subir encabezado</button>
+                        </div>
+                        <div class="form-group">
+                            <label>Marca de agua PDF</label>
+                            <input type="file" id="id-file-marca" accept="image/png,image/jpeg,image/webp" class="form-input">
+                            <button type="button" class="btn-secondary" style="margin-top:8px;" onclick="IdentidadAdmin.subir('marca_agua')">Subir marca de agua</button>
+                        </div>
+                    </div>
+                    <p id="id-msg-archivo" style="margin-top:10px;font-size:14px;"></p>
+                    <div class="branding-preview-grid" id="id-preview-grid"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── COLEGIOS (super admin) ── -->
+        <section id="colegios-section" class="content-section">
+            <div class="content-wrapper">
+                <div class="form-header">
+                    <h1><i class="fas fa-school"></i> Colegios</h1>
+                    <p class="form-subtitle">Crea un colegio y asigna su administrador de institución.</p>
+                </div>
+
+                <div class="mgmt-card">
+                    <h3><i class="fas fa-plus-circle"></i> Nuevo colegio + admin de colegio</h3>
+                    <div class="form-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px;">
+                        <div class="form-group"><label>Nombre del colegio</label><input type="text" id="col-nombre" class="form-input" placeholder="Instituto San José"></div>
+                        <div class="form-group"><label>Lema (opcional)</label><input type="text" id="col-lema" class="form-input" placeholder="Educación con excelencia"></div>
+                        <div class="form-group"><label>Código (opcional, auto si vacío)</label><input type="text" id="col-codigo" class="form-input" placeholder="COL-002"></div>
+                        <div class="form-group"><label>Nombre del admin</label><input type="text" id="col-admin-nombre" class="form-input"></div>
+                        <div class="form-group"><label>Correo del admin</label><input type="email" id="col-admin-email" class="form-input"></div>
+                        <div class="form-group">
+                            <label>Contraseña del admin</label>
+                            <div style="position:relative;">
+                                <input type="password" id="col-admin-pass" class="form-input" style="padding-right:42px;">
+                                <button type="button" class="toggle-password-btn" data-target="col-admin-pass" title="Mostrar u ocultar contraseña" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);"><i class="fas fa-eye"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-primary" style="margin-top:12px;" onclick="ColegiosAdmin.crearColegio()">
+                        <i class="fas fa-save"></i> Crear colegio
+                    </button>
+                    <p id="col-msg" style="margin-top:10px;font-size:14px;"></p>
+                </div>
+
+                <div class="mgmt-card">
+                    <h3><i class="fas fa-list"></i> Colegios registrados</h3>
+                    <div style="overflow-x:auto;">
+                        <table class="mgmt-table">
+                            <thead>
+                                <tr>
+                                    <th>Código</th><th>Nombre</th><th>Estudiantes</th><th>Profesores</th><th>Admins</th><th>Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-colegios"><tr><td colspan="6">Cargando...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── SUPER ADMINISTRADORES (super admin) ── -->
+        <section id="superadmins-section" class="content-section">
+            <div class="content-wrapper">
+                <div class="form-header">
+                    <h1><i class="fas fa-user-shield"></i> Super administradores</h1>
+                    <p class="form-subtitle">Cuentas con acceso total a la plataforma multicolegio.</p>
+                </div>
+                <div class="mgmt-card">
+                    <h3><i class="fas fa-user-plus"></i> Nuevo super administrador</h3>
+                    <div class="form-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px;">
+                        <div class="form-group"><label>Nombre</label><input type="text" id="sa-nombre" class="form-input"></div>
+                        <div class="form-group"><label>Correo</label><input type="email" id="sa-email" class="form-input"></div>
+                        <div class="form-group">
+                            <label>Contraseña</label>
+                            <div style="position:relative;">
+                                <input type="password" id="sa-pass" class="form-input" style="padding-right:42px;">
+                                <button type="button" class="toggle-password-btn" data-target="sa-pass" title="Mostrar u ocultar contraseña" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);"><i class="fas fa-eye"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-primary" style="margin-top:12px;" onclick="SuperAdminsAdmin.crear()">
+                        <i class="fas fa-user-plus"></i> Crear super admin
+                    </button>
+                    <p id="sa-msg" style="margin-top:10px;font-size:14px;"></p>
+                </div>
+                <div class="mgmt-card">
+                    <h3><i class="fas fa-list"></i> Super administradores registrados</h3>
+                    <div style="overflow-x:auto;">
+                        <table class="mgmt-table">
+                            <thead><tr><th>ID</th><th>Nombre</th><th>Correo</th><th>Verificado</th></tr></thead>
+                            <tbody id="tbody-superadmins"><tr><td colspan="4">Cargando...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="mgmt-card">
+                    <h3><i class="fas fa-users-cog"></i> Administradores de colegio</h3>
+                    <div style="overflow-x:auto;">
+                        <table class="mgmt-table">
+                            <thead><tr><th>Colegio</th><th>Nombre</th><th>Correo</th><th>Verificado</th></tr></thead>
+                            <tbody id="tbody-admins-colegio"><tr><td colspan="4">Cargando...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── REPORTES PLATAFORMA (super admin) ── -->
+        <section id="plataforma-reportes-section" class="content-section">
+            <div class="content-wrapper">
+                <div class="form-header">
+                    <h1><i class="fas fa-chart-bar"></i> Reportes de plataforma</h1>
+                    <p class="form-subtitle">Descarga listados en PDF de colegios y administradores.</p>
+                </div>
+                <div class="mgmt-card">
+                    <h3><i class="fas fa-school"></i> Colegios</h3>
+                    <p style="color:var(--gray-600);margin-bottom:12px;">Listado de colegios con totales de estudiantes, profesores y admins.</p>
+                    <a href="/admin/reporte/colegios/pdf" class="btn-primary" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px;">
+                        <i class="fas fa-file-pdf"></i> Descargar PDF Colegios
+                    </a>
+                </div>
+                <div class="mgmt-card">
+                    <h3><i class="fas fa-user-shield"></i> Super administradores</h3>
+                    <a href="/admin/reporte/superadmins/pdf" class="btn-primary" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px;margin-top:8px;">
+                        <i class="fas fa-file-pdf"></i> Descargar PDF Super Admins
+                    </a>
+                </div>
+                <div class="mgmt-card">
+                    <h3><i class="fas fa-user-tie"></i> Administradores de colegio</h3>
+                    <a href="/admin/reporte/admins-colegio/pdf" class="btn-primary" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px;margin-top:8px;">
+                        <i class="fas fa-file-pdf"></i> Descargar PDF Admins de Colegio
+                    </a>
+                </div>
+            </div>
+        </section>
+
         <!-- ── ADMINISTRADORES ── -->
-        <!-- ── SECCIÓN 4.9: ADMINISTRADORES ── -->
-        <!-- Gestión de usuarios administradores del sistema -->
-        <section id="administradores-section" class="content-section">
+        <section id="administradores-section" class="content-section admin-colegio-only">
             <div class="content-wrapper">
                 <div class="form-header">
                     <h1>Administradores</h1>
@@ -899,7 +1098,7 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
         </section>
 
         <!-- ── CHAT ── -->
-        <section id="chat-section" class="content-section">
+        <section id="chat-section" class="content-section admin-colegio-only">
             <div class="chat-app">
                 <!-- PANEL IZQUIERDO: Lista de contactos -->
                 <div class="chat-sidebar">
@@ -1005,7 +1204,12 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
 
 
 
-<div id="current-user-data" data-user-id="{{ session['user_id'] }}" style="display:none;"></div>
+<div id="current-user-data"
+     data-user-id="{{ session['user_id'] }}"
+     data-admin-rol="{{ admin_rol|default('admin_colegio') }}"
+     data-is-superadmin="{{ 'true' if is_superadmin else 'false' }}"
+     data-colegio-nombre="{{ colegio_nombre|default('') }}"
+     style="display:none;"></div>
 
 
 <!--
@@ -1242,6 +1446,7 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
 
 <!-- SECCIÓN 6: SCRIPTS JAVASCRIPT -->
 <!-- Scripts para la funcionalidad del dashboard administrativo -->
+<script src="{{ url_for('static', filename='script/panel-branding.js') }}"></script>
 <script src="{{ url_for('static', filename='script/dashboard.js') }}"></script>
 <script>
 // Función para descargar reportes de estudiantes con filtros aplicados
