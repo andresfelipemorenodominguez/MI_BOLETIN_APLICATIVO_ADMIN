@@ -121,7 +121,7 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
                 <li class="nav-item nav-section-label colegio-admin-only admin-colegio-only">
                     <span class="text-sm text-gray-500">Configuración</span>
                 </li>
-                <li class="nav-item colegio-admin-only">
+                <li class="nav-item colegio-admin-only admin-colegio-only">
                     <a href="#" class="nav-link" data-section="identidad-section">
                         <i class="fas fa-palette nav-icon"></i>
                         <span class="nav-text">Identidad institucional</span>
@@ -277,6 +277,64 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
                         </button>
                     </div>
                 </div>
+
+                <!-- Resumen super administrador -->
+                <div class="overview-section superadmin-only" style="display:none;">
+                    <h2 class="section-title">Resumen de Plataforma</h2>
+                    <div class="overview-cards">
+                        <div class="overview-card">
+                            <div class="card-icon"><i class="fas fa-school"></i></div>
+                            <div class="card-content">
+                                <h3 class="card-title">Colegios</h3>
+                                <p class="card-value" id="stat-super-colegios">–</p>
+                                <p class="card-subtitle">Activos</p>
+                            </div>
+                        </div>
+                        <div class="overview-card">
+                            <div class="card-icon"><i class="fas fa-user-shield"></i></div>
+                            <div class="card-content">
+                                <h3 class="card-title">Super admins</h3>
+                                <p class="card-value" id="stat-super-superadmins">–</p>
+                                <p class="card-subtitle">Registrados</p>
+                            </div>
+                        </div>
+                        <div class="overview-card">
+                            <div class="card-icon"><i class="fas fa-user-tie"></i></div>
+                            <div class="card-content">
+                                <h3 class="card-title">Admins colegio</h3>
+                                <p class="card-value" id="stat-super-admins">–</p>
+                                <p class="card-subtitle">Registrados</p>
+                            </div>
+                        </div>
+                        <div class="overview-card">
+                            <div class="card-icon"><i class="fas fa-users"></i></div>
+                            <div class="card-content">
+                                <h3 class="card-title">Estudiantes</h3>
+                                <p class="card-value" id="stat-super-estudiantes">–</p>
+                                <p class="card-subtitle">En plataforma</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Accesos rápidos super administrador -->
+                <div class="quick-actions-section superadmin-only" style="display:none;">
+                    <h2 class="section-title">Accesos Rápidos</h2>
+                    <div class="quick-actions-grid">
+                        <button class="quick-action-btn" data-section="colegios-section">
+                            <i class="fas fa-school"></i><span>Gestionar Colegios</span>
+                        </button>
+                        <button class="quick-action-btn" data-section="superadmins-section">
+                            <i class="fas fa-user-shield"></i><span>Super Administradores</span>
+                        </button>
+                        <button class="quick-action-btn" data-section="plataforma-reportes-section">
+                            <i class="fas fa-chart-bar"></i><span>Reportes Plataforma</span>
+                        </button>
+                        <a href="/admin/reporte/colegios/pdf" class="quick-action-btn" style="text-decoration:none;">
+                            <i class="fas fa-file-pdf"></i><span>PDF Colegios</span>
+                        </a>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -288,6 +346,23 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
                 <div class="form-header">
                     <h1>Estudiantes</h1>
                     <p class="form-subtitle">Registra y gestiona los estudiantes del sistema.</p>
+                </div>
+
+                <div class="mgmt-card" style="margin-bottom:24px;">
+                    <h3><i class="fas fa-file-upload"></i> Importación masiva (CSV)</h3>
+                    <p style="color:var(--gray-600);margin:8px 0 0;">
+                        Ideal para registrar muchos estudiantes a la vez. Descarga la plantilla, complétala en Excel o Google Sheets y súbela aquí (máx. 300 por archivo).
+                    </p>
+                    <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:16px;">
+                        <a href="/admin/plantilla/estudiantes.csv" class="btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px;">
+                            <i class="fas fa-download"></i> Descargar plantilla
+                        </a>
+                        <input type="file" id="import-estudiantes-file" accept=".csv,text/csv" class="form-input" style="max-width:280px;padding:8px;">
+                        <button type="button" id="import-estudiantes-btn" class="btn-primary">
+                            <i class="fas fa-upload"></i> Importar estudiantes
+                        </button>
+                    </div>
+                    <div id="import-estudiantes-result" style="margin-top:14px;font-size:14px;"></div>
                 </div>
                 
                 <!-- Formulario de registro de estudiantes -->
@@ -341,6 +416,122 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
                                     <input type="email" id="correo-electronico" class="form-input" placeholder="correo@ejemplo.com" required>
                                 </div>
                                 <div class="error-message" id="correo-electronico-error"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-section">
+                        <h3 class="form-section-title"><i class="fas fa-id-badge"></i> Datos del Estudiante</h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Fecha de nacimiento</label>
+                                <input type="date" id="est-fecha-nacimiento" class="form-input">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Lugar de nacimiento</label>
+                                <input type="text" id="est-lugar-nacimiento" class="form-input" placeholder="Ciudad, departamento">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Género</label>
+                                <select id="est-genero" class="form-select">
+                                    <option value="">Selecciona</option>
+                                    <option value="Masculino">Masculino</option>
+                                    <option value="Femenino">Femenino</option>
+                                    <option value="Otro">Otro</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Grupo sanguíneo (RH)</label>
+                                <input type="text" id="est-grupo-sanguineo" class="form-input" placeholder="Ej: O+">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group full-width">
+                                <label class="form-label">Dirección de residencia</label>
+                                <input type="text" id="est-direccion" class="form-input" placeholder="Dirección completa">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">EPS / seguro de salud</label>
+                                <input type="text" id="est-eps" class="form-input" placeholder="Entidad de salud">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Último grado cursado</label>
+                                <input type="text" id="est-ultimo-grado" class="form-input" placeholder="Ej: 5° Primaria">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group full-width">
+                                <label class="form-label">Colegio de procedencia</label>
+                                <input type="text" id="est-colegio-procedencia" class="form-input" placeholder="Institución anterior">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group full-width">
+                                <label class="form-label">Alergias o condiciones médicas</label>
+                                <textarea id="est-alergias" class="form-input" rows="2" placeholder="Indica alergias o condiciones relevantes"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-section">
+                        <h3 class="form-section-title"><i class="fas fa-user-shield"></i> Acudiente Encargado</h3>
+                        <div class="form-row">
+                            <div class="form-group full-width">
+                                <label class="form-label">Nombre completo</label>
+                                <input type="text" id="acu-nombre" class="form-input" placeholder="Nombre del acudiente">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Tipo de documento</label>
+                                <select id="acu-tipo-doc" class="form-select">
+                                    <option value="">Selecciona</option>
+                                    <option value="cc">Cédula de Ciudadanía</option>
+                                    <option value="ce">Cédula Extranjería</option>
+                                    <option value="pasaporte">Pasaporte</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Número de documento</label>
+                                <input type="text" id="acu-num-doc" class="form-input" placeholder="Documento del acudiente">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Parentesco</label>
+                                <input type="text" id="acu-parentesco" class="form-input" placeholder="Ej: Madre, Padre, Tío">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Teléfono móvil</label>
+                                <input type="text" id="acu-telefono" class="form-input" placeholder="Ej: 3101234567">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Correo electrónico</label>
+                                <input type="email" id="acu-correo" class="form-input" placeholder="correo@ejemplo.com">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Estrato (1-6)</label>
+                                <select id="acu-estrato" class="form-select">
+                                    <option value="">Selecciona</option>
+                                    <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+                                    <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group full-width">
+                                <label class="form-label">Dirección de residencia</label>
+                                <input type="text" id="acu-direccion" class="form-input" placeholder="Dirección del acudiente">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group full-width">
+                                <label class="form-label">Ocupación o profesión</label>
+                                <input type="text" id="acu-ocupacion" class="form-input" placeholder="Ocupación del acudiente">
                             </div>
                         </div>
                     </div>
@@ -450,6 +641,24 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
                     <h1>Profesores</h1>
                     <p class="form-subtitle">Registra y gestiona los profesores del sistema.</p>
                 </div>
+
+                <div class="mgmt-card" style="margin-bottom:24px;">
+                    <h3><i class="fas fa-file-upload"></i> Importación masiva (CSV)</h3>
+                    <p style="color:var(--gray-600);margin:8px 0 0;">
+                        Registra varios profesores de una sola vez. Las asignaturas van separadas por coma (ej: Matemáticas,Lenguaje).
+                    </p>
+                    <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:16px;">
+                        <a href="/admin/plantilla/profesores.csv" class="btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px;">
+                            <i class="fas fa-download"></i> Descargar plantilla
+                        </a>
+                        <input type="file" id="import-profesores-file" accept=".csv,text/csv" class="form-input" style="max-width:280px;padding:8px;">
+                        <button type="button" id="import-profesores-btn" class="btn-primary">
+                            <i class="fas fa-upload"></i> Importar profesores
+                        </button>
+                    </div>
+                    <div id="import-profesores-result" style="margin-top:14px;font-size:14px;"></div>
+                </div>
+
                 <form id="profesor-form" class="student-form">
                     <!-- Sección de información personal del profesor -->
                     <div class="form-section">
@@ -503,6 +712,41 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
                                     <i class="fas fa-phone input-icon"></i>
                                     <input type="text" id="prof-telefono" class="form-input" placeholder="Ej: 3101234567" required>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-section">
+                        <h3 class="form-section-title"><i class="fas fa-briefcase"></i> Datos Profesionales</h3>
+                        <div class="form-row">
+                            <div class="form-group full-width">
+                                <label class="form-label">Títulos académicos (Pregrado/Posgrado)</label>
+                                <textarea id="prof-titulos" class="form-input" rows="2" placeholder="Ej: Lic. Matemáticas, Esp. Pedagogía"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Área de especialidad</label>
+                                <input type="text" id="prof-area" class="form-input" placeholder="Área o asignaturas principales">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Años de experiencia</label>
+                                <input type="number" id="prof-experiencia" class="form-input" min="0" max="60" placeholder="Ej: 5">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Registro / escalafón docente</label>
+                                <input type="text" id="prof-escalafon" class="form-input" placeholder="Número de registro">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Entidad de salud (EPS)</label>
+                                <input type="text" id="prof-entidad-salud" class="form-input" placeholder="EPS afiliación">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group full-width">
+                                <label class="form-label">Entidad de pensión</label>
+                                <input type="text" id="prof-entidad-pension" class="form-input" placeholder="Fondo de pensiones">
                             </div>
                         </div>
                     </div>
@@ -1222,7 +1466,7 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
 
 <!-- MODAL: EDITAR ESTUDIANTE (corregido) -->
 <div class="modal-overlay" id="modal-editar-estudiante">
-    <div class="modal" style="max-width:520px;width:95%;">
+    <div class="modal" style="max-width:680px;width:95%;">
   
       <div class="modal-header">
         <h2 class="modal-title"><i class="fas fa-user-edit"></i> Editar Estudiante</h2>
@@ -1283,6 +1527,38 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
                 <option value="C">C</option><option value="D">D</option>
               </select>
             </div>
+          </div>
+
+          <p style="font-weight:600;color:var(--primary,#003366);margin:8px 0 0;">Datos del estudiante</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="form-group"><label class="form-label">Fecha nacimiento</label><input type="date" id="edit-est-fecha-nac" class="form-input"></div>
+            <div class="form-group"><label class="form-label">Lugar nacimiento</label><input type="text" id="edit-est-lugar-nac" class="form-input"></div>
+            <div class="form-group"><label class="form-label">Género</label>
+              <select id="edit-est-genero" class="form-input"><option value="">—</option><option>Masculino</option><option>Femenino</option><option>Otro</option></select>
+            </div>
+            <div class="form-group"><label class="form-label">Grupo sanguíneo</label><input type="text" id="edit-est-rh" class="form-input"></div>
+            <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Dirección</label><input type="text" id="edit-est-direccion" class="form-input"></div>
+            <div class="form-group"><label class="form-label">EPS</label><input type="text" id="edit-est-eps" class="form-input"></div>
+            <div class="form-group"><label class="form-label">Último grado</label><input type="text" id="edit-est-ultimo-grado" class="form-input"></div>
+            <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Colegio procedencia</label><input type="text" id="edit-est-procedencia" class="form-input"></div>
+            <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Alergias / condiciones</label><textarea id="edit-est-alergias" class="form-input" rows="2"></textarea></div>
+          </div>
+
+          <p style="font-weight:600;color:var(--primary,#003366);margin:8px 0 0;">Acudiente encargado</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Nombre completo</label><input type="text" id="edit-acu-nombre" class="form-input"></div>
+            <div class="form-group"><label class="form-label">Tipo doc.</label>
+              <select id="edit-acu-tipo-doc" class="form-input"><option value="cc">CC</option><option value="ce">CE</option><option value="pasaporte">Pasaporte</option></select>
+            </div>
+            <div class="form-group"><label class="form-label">Nº documento</label><input type="text" id="edit-acu-num-doc" class="form-input"></div>
+            <div class="form-group"><label class="form-label">Parentesco</label><input type="text" id="edit-acu-parentesco" class="form-input"></div>
+            <div class="form-group"><label class="form-label">Teléfono</label><input type="text" id="edit-acu-telefono" class="form-input"></div>
+            <div class="form-group"><label class="form-label">Correo</label><input type="email" id="edit-acu-correo" class="form-input"></div>
+            <div class="form-group"><label class="form-label">Estrato</label>
+              <select id="edit-acu-estrato" class="form-input"><option value="">—</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select>
+            </div>
+            <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Dirección</label><input type="text" id="edit-acu-direccion" class="form-input"></div>
+            <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Ocupación</label><input type="text" id="edit-acu-ocupacion" class="form-input"></div>
           </div>
   
           <div class="form-group">
@@ -1373,6 +1649,16 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
             <label class="form-label">Teléfono <span class="required">*</span></label>
             <input type="text" id="edit-prof-telefono" class="form-input" required
                    placeholder="Ej: 3101234567">
+          </div>
+
+          <p style="font-weight:600;color:var(--primary,#003366);margin:8px 0 0;">Datos profesionales</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Títulos académicos</label><textarea id="edit-prof-titulos" class="form-input" rows="2"></textarea></div>
+            <div class="form-group"><label class="form-label">Área especialidad</label><input type="text" id="edit-prof-area" class="form-input"></div>
+            <div class="form-group"><label class="form-label">Años experiencia</label><input type="number" id="edit-prof-experiencia" class="form-input" min="0"></div>
+            <div class="form-group"><label class="form-label">Registro / escalafón</label><input type="text" id="edit-prof-escalafon" class="form-input"></div>
+            <div class="form-group"><label class="form-label">Entidad salud</label><input type="text" id="edit-prof-entidad-salud" class="form-input"></div>
+            <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Entidad pensión</label><input type="text" id="edit-prof-entidad-pension" class="form-input"></div>
           </div>
   
           <!-- Asignaturas (checkboxes) -->

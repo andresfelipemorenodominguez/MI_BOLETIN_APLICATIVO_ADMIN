@@ -135,6 +135,63 @@ def ensure_multicolegio_schema(get_db_connection, superadmin_email=None, superad
     _multicolegio_ready = True
 
 
+def ensure_profile_schema(get_db_connection):
+    """Columnas extendidas de perfiles y tabla acudientes."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    estudiante_cols = {
+        'fecha_nacimiento': 'DATE',
+        'lugar_nacimiento': 'VARCHAR(150)',
+        'genero': 'VARCHAR(20)',
+        'direccion_residencia': 'TEXT',
+        'eps': 'VARCHAR(100)',
+        'grupo_sanguineo': 'VARCHAR(10)',
+        'alergias': 'TEXT',
+        'ultimo_grado': 'VARCHAR(50)',
+        'colegio_procedencia': 'VARCHAR(200)',
+    }
+    for col, col_type in estudiante_cols.items():
+        if not _column_exists(cur, 'estudiantes', col):
+            cur.execute(f'ALTER TABLE estudiantes ADD COLUMN {col} {col_type}')
+
+    profesor_cols = {
+        'titulos_academicos': 'TEXT',
+        'area_especialidad': 'VARCHAR(200)',
+        'anios_experiencia': 'INTEGER',
+        'registro_escalafon': 'VARCHAR(100)',
+        'entidad_salud': 'VARCHAR(100)',
+        'entidad_pension': 'VARCHAR(100)',
+    }
+    for col, col_type in profesor_cols.items():
+        if not _column_exists(cur, 'profesores', col):
+            cur.execute(f'ALTER TABLE profesores ADD COLUMN {col} {col_type}')
+
+    if not _table_exists(cur, 'acudientes'):
+        cur.execute("""
+            CREATE TABLE acudientes (
+                id_acudiente SERIAL PRIMARY KEY,
+                id_estudiante INTEGER NOT NULL REFERENCES estudiantes(id_estudiante) ON DELETE CASCADE,
+                id_colegio INTEGER NOT NULL REFERENCES colegios(id_colegio) ON DELETE CASCADE,
+                nombre_completo VARCHAR(100) NOT NULL,
+                tipo_documento VARCHAR(20) NOT NULL,
+                numero_documento VARCHAR(50) NOT NULL,
+                parentesco VARCHAR(50) NOT NULL,
+                telefono VARCHAR(20),
+                correo_electronico VARCHAR(100),
+                direccion TEXT,
+                ocupacion VARCHAR(100),
+                estrato_socioeconomico SMALLINT,
+                es_principal BOOLEAN DEFAULT TRUE,
+                fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
 def get_admin_from_session(session):
     if 'user_id' not in session:
         return None

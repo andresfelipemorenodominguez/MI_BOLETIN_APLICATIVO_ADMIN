@@ -184,7 +184,14 @@ class NavigationManager {
 
 
 class StatsManager {
+    _isSuper() {
+        return document.getElementById('current-user-data')?.dataset.isSuperadmin === 'true';
+    }
+
     async refresh() {
+        if (this._isSuper()) {
+            return this.refreshSuper();
+        }
         try {
             const res = await fetch('/dashboard-stats');
             const data = await res.json();
@@ -207,6 +214,26 @@ class StatsManager {
             const el = document.getElementById('stat-materias');
             if (el && md.status === 'success') el.textContent = md.data ?? '–';
         } catch(e) {}
+    }
+
+    async refreshSuper() {
+        try {
+            const res = await fetch('/dashboard-stats');
+            const data = await res.json();
+            if (data.status === 'success') {
+                const d = data.data;
+                const map = {
+                    'stat-super-colegios': d.colegios,
+                    'stat-super-superadmins': d.superadmins,
+                    'stat-super-admins': d.admins_colegio,
+                    'stat-super-estudiantes': d.estudiantes,
+                };
+                Object.entries(map).forEach(([id, val]) => {
+                    const el = document.getElementById(id);
+                    if (el) el.textContent = val ?? '–';
+                });
+            }
+        } catch (e) {}
     }
 }
 
@@ -352,6 +379,39 @@ class ProfesoresTableManager extends TableManager {
 
 
 class StudentFormHandler {
+    static collectProfile(prefix) {
+        const v = id => document.getElementById(id)?.value?.trim() || '';
+        return {
+            fecha_nacimiento: v(`${prefix}fecha-nacimiento`) || v('edit-est-fecha-nac') || null,
+            lugar_nacimiento: v(`${prefix}lugar-nacimiento`) || v('edit-est-lugar-nac'),
+            genero: v(`${prefix}genero`) || v('edit-est-genero'),
+            direccion_residencia: v(`${prefix}direccion`) || v('edit-est-direccion'),
+            eps: v(`${prefix}eps`) || v('edit-est-eps'),
+            grupo_sanguineo: v(`${prefix}grupo-sanguineo`) || v('edit-est-rh'),
+            alergias: v(`${prefix}alergias`) || v('edit-est-alergias'),
+            ultimo_grado: v(`${prefix}ultimo-grado`) || v('edit-est-ultimo-grado'),
+            colegio_procedencia: v(`${prefix}colegio-procedencia`) || v('edit-est-procedencia'),
+        };
+    }
+
+    static collectAcudiente(prefix) {
+        const v = id => document.getElementById(id)?.value?.trim() || '';
+        const nombre = v(`${prefix}nombre`) || v('edit-acu-nombre');
+        if (!nombre) return null;
+        const estrato = v(`${prefix}estrato`) || v('edit-acu-estrato');
+        return {
+            nombre_completo: nombre,
+            tipo_documento: v(`${prefix}tipo-doc`) || v('edit-acu-tipo-doc') || 'cc',
+            numero_documento: v(`${prefix}num-doc`) || v('edit-acu-num-doc'),
+            parentesco: v(`${prefix}parentesco`) || v('edit-acu-parentesco'),
+            telefono: v(`${prefix}telefono`) || v('edit-acu-telefono'),
+            correo_electronico: v(`${prefix}correo`) || v('edit-acu-correo'),
+            direccion: v(`${prefix}direccion`) || v('edit-acu-direccion'),
+            ocupacion: v(`${prefix}ocupacion`) || v('edit-acu-ocupacion'),
+            estrato_socioeconomico: estrato || null,
+        };
+    }
+
     constructor() {
         this.form = document.getElementById('estudiante-form');
         if (!this.form) return;
@@ -420,7 +480,9 @@ class StudentFormHandler {
             correo_electronico: document.getElementById('correo-electronico').value,
             grado: document.getElementById('grado').value,
             grupo: document.getElementById('grupo').value,
-            contrasena: document.getElementById('contrasena').value
+            contrasena: document.getElementById('contrasena').value,
+            ...StudentFormHandler.collectProfile('est-'),
+            acudiente: StudentFormHandler.collectAcudiente('acu-'),
         };
 
         const btn = this.form.querySelector('[type="submit"]');
@@ -452,6 +514,18 @@ class StudentFormHandler {
 
 
 class ProfessorFormHandler {
+    static collectProfile(prefix) {
+        const v = id => document.getElementById(id)?.value?.trim() || '';
+        return {
+            titulos_academicos: v(`${prefix}titulos`) || v('edit-prof-titulos'),
+            area_especialidad: v(`${prefix}area`) || v('edit-prof-area'),
+            anios_experiencia: v(`${prefix}experiencia`) || v('edit-prof-experiencia') || null,
+            registro_escalafon: v(`${prefix}escalafon`) || v('edit-prof-escalafon'),
+            entidad_salud: v(`${prefix}entidad-salud`) || v('edit-prof-entidad-salud'),
+            entidad_pension: v(`${prefix}entidad-pension`) || v('edit-prof-entidad-pension'),
+        };
+    }
+
     constructor() {
         this.form = document.getElementById('profesor-form');
         if (!this.form) return;
@@ -519,7 +593,8 @@ class ProfessorFormHandler {
             correo_electronico: document.getElementById('prof-correo').value,
             telefono: document.getElementById('prof-telefono').value,
             asignaturas,
-            contrasena: document.getElementById('prof-contrasena').value
+            contrasena: document.getElementById('prof-contrasena').value,
+            ...ProfessorFormHandler.collectProfile('prof-'),
         };
 
         const btn = this.form.querySelector('[type="submit"]');
@@ -811,9 +886,7 @@ class App {
                 profesores: new ProfesoresTableManager()
             };
         }
-        setTimeout(() => {
-            if (!isSuper) this.stats.refresh();
-        }, 100);
+        setTimeout(() => this.stats.refresh(), 100);
         console.log('✅ App inicializada');
     } catch(e) { console.error('Error iniciando app:', e); }
 }
@@ -857,13 +930,40 @@ const EditarEstudiante = {
         });
     },
 
-    open(data) {
+    async open(data) {
         this.currentCodigo = data.id;
+        try {
+            const res = await fetch(`/obtener-estudiante/${encodeURIComponent(data.id)}`);
+            const json = await res.json();
+            if (json.status === 'success') data = json.data;
+        } catch (_) { /* usar datos de la tabla */ }
+
         document.getElementById('edit-est-codigo').value      = data.id       || '';
-        document.getElementById('edit-est-nombre').value      = data.nombre   || '';
-        document.getElementById('edit-est-correo').value      = data.email    || '';
+        document.getElementById('edit-est-nombre').value      = data.nombre_completo || data.nombre   || '';
+        document.getElementById('edit-est-correo').value      = data.email || data.correo_electronico    || '';
         document.getElementById('edit-est-grado').value       = data.grado    || '';
         document.getElementById('edit-est-grupo').value       = data.grupo    || '';
+        document.getElementById('edit-est-tipo-doc').value    = (data.tipo_documento || 'ti').toLowerCase();
+        document.getElementById('edit-est-num-doc').value     = data.numero_documento || '';
+        document.getElementById('edit-est-fecha-nac').value   = data.fecha_nacimiento || '';
+        document.getElementById('edit-est-lugar-nac').value   = data.lugar_nacimiento || '';
+        document.getElementById('edit-est-genero').value      = data.genero || '';
+        document.getElementById('edit-est-rh').value          = data.grupo_sanguineo || '';
+        document.getElementById('edit-est-direccion').value   = data.direccion_residencia || '';
+        document.getElementById('edit-est-eps').value         = data.eps || '';
+        document.getElementById('edit-est-ultimo-grado').value = data.ultimo_grado || '';
+        document.getElementById('edit-est-procedencia').value = data.colegio_procedencia || '';
+        document.getElementById('edit-est-alergias').value    = data.alergias || '';
+        const ac = data.acudiente || {};
+        document.getElementById('edit-acu-nombre').value      = ac.nombre_completo || '';
+        document.getElementById('edit-acu-tipo-doc').value    = (ac.tipo_documento || 'cc').toLowerCase();
+        document.getElementById('edit-acu-num-doc').value      = ac.numero_documento || '';
+        document.getElementById('edit-acu-parentesco').value  = ac.parentesco || '';
+        document.getElementById('edit-acu-telefono').value    = ac.telefono || '';
+        document.getElementById('edit-acu-correo').value      = ac.correo_electronico || '';
+        document.getElementById('edit-acu-estrato').value     = ac.estrato_socioeconomico ? String(ac.estrato_socioeconomico) : '';
+        document.getElementById('edit-acu-direccion').value    = ac.direccion || '';
+        document.getElementById('edit-acu-ocupacion').value   = ac.ocupacion || '';
         const passEl = document.getElementById('edit-est-nueva-pass');
         if (passEl) {
             passEl.value = '';
@@ -895,7 +995,9 @@ const EditarEstudiante = {
             correo_electronico:  document.getElementById('edit-est-correo').value,
             grado:               document.getElementById('edit-est-grado').value,
             grupo:               document.getElementById('edit-est-grupo').value,
-            nueva_contrasena:    document.getElementById('edit-est-nueva-pass').value || null
+            nueva_contrasena:    document.getElementById('edit-est-nueva-pass').value || null,
+            ...StudentFormHandler.collectProfile('edit-est-'),
+            acudiente: StudentFormHandler.collectAcudiente('edit-acu-'),
         };
 
         try {
@@ -965,12 +1067,26 @@ const EditarProfesor = {
         }
     },
 
-    open(data) {
+    async open(data) {
         this.currentCodigo = data.id;
+        try {
+            const res = await fetch(`/obtener-profesor/${encodeURIComponent(data.id)}`);
+            const json = await res.json();
+            if (json.status === 'success') data = json.data;
+        } catch (_) { /* usar datos de la tabla */ }
+
         document.getElementById('edit-prof-codigo').value     = data.id       || '';
-        document.getElementById('edit-prof-nombre').value     = data.nombre   || '';
-        document.getElementById('edit-prof-correo').value     = data.email    || '';
+        document.getElementById('edit-prof-nombre').value     = data.nombre_completo || data.nombre   || '';
+        document.getElementById('edit-prof-correo').value     = data.email || data.correo_electronico    || '';
         document.getElementById('edit-prof-telefono').value   = data.telefono || '';
+        document.getElementById('edit-prof-tipo-doc').value   = (data.tipo_documento || 'cc').toUpperCase();
+        document.getElementById('edit-prof-num-doc').value    = data.numero_documento || '';
+        document.getElementById('edit-prof-titulos').value    = data.titulos_academicos || '';
+        document.getElementById('edit-prof-area').value       = data.area_especialidad || '';
+        document.getElementById('edit-prof-experiencia').value = data.anios_experiencia ?? '';
+        document.getElementById('edit-prof-escalafon').value  = data.registro_escalafon || '';
+        document.getElementById('edit-prof-entidad-salud').value = data.entidad_salud || '';
+        document.getElementById('edit-prof-entidad-pension').value = data.entidad_pension || '';
         const profPass = document.getElementById('edit-prof-nueva-pass');
         if (profPass) {
             profPass.value = '';
@@ -1015,7 +1131,8 @@ const EditarProfesor = {
             correo_electronico: document.getElementById('edit-prof-correo').value,
             telefono:           document.getElementById('edit-prof-telefono').value,
             asignaturas:        asignaturas,
-            nueva_contrasena:   document.getElementById('edit-prof-nueva-pass').value || null
+            nueva_contrasena:   document.getElementById('edit-prof-nueva-pass').value || null,
+            ...ProfessorFormHandler.collectProfile('edit-prof-'),
         };
 
         try {
@@ -1393,6 +1510,59 @@ function initPasswordToggles() {
     });
 }
 
+const BulkImport = {
+    async importar(tipo) {
+        const fileInput = document.getElementById(`import-${tipo}-file`);
+        const resultEl = document.getElementById(`import-${tipo}-result`);
+        const btn = document.getElementById(`import-${tipo}-btn`);
+        const file = fileInput?.files?.[0];
+        if (!file) {
+            Utils.showToast('Selecciona un archivo CSV.', 'error');
+            return;
+        }
+        const formData = new FormData();
+        formData.append('archivo', file);
+        const orig = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
+        resultEl.innerHTML = '';
+        try {
+            const res = await fetch(`/admin/importar/${tipo}`, { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data.status === 'success') {
+                Utils.showToast(data.message, 'success');
+                let html = `<p style="color:var(--success,#16a34a);"><strong>${data.message}</strong></p>`;
+                const errs = data.data?.errores || [];
+                if (errs.length) {
+                    html += '<ul style="margin:8px 0 0;padding-left:20px;color:var(--error,#dc2626);">';
+                    errs.slice(0, 15).forEach(e => {
+                        html += `<li>Fila ${e.fila}: ${e.mensaje}</li>`;
+                    });
+                    if (errs.length > 15) html += `<li>… y ${errs.length - 15} error(es) más</li>`;
+                    html += '</ul>';
+                }
+                resultEl.innerHTML = html;
+                fileInput.value = '';
+                if (tipo === 'estudiantes') window.app?.tables?.estudiantes?.loadData();
+                else window.app?.tables?.profesores?.loadData();
+                window.app?.stats?.refresh();
+            } else {
+                Utils.showToast(data.message || 'Error al importar.', 'error');
+                resultEl.innerHTML = `<p style="color:var(--error,#dc2626);">${data.message}</p>`;
+            }
+        } catch (_) {
+            Utils.showToast('Error de conexión al importar.', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = orig;
+        }
+    },
+    init() {
+        document.getElementById('import-estudiantes-btn')?.addEventListener('click', () => this.importar('estudiantes'));
+        document.getElementById('import-profesores-btn')?.addEventListener('click', () => this.importar('profesores'));
+    },
+};
+
 function initSuperAdminUI() {
     const meta = document.getElementById('current-user-data');
     const isSuper = meta?.dataset.isSuperadmin === 'true';
@@ -1406,20 +1576,20 @@ function initSuperAdminUI() {
     });
     if (isSuper) {
         document.querySelectorAll('.content-section.admin-colegio-only').forEach(s => s.classList.remove('active'));
-        document.querySelectorAll('#inicio-section .overview-section, #inicio-section .quick-actions-section').forEach(el => el.style.display = 'none');
+        document.querySelectorAll(
+            '#inicio-section .overview-section:not(.superadmin-only), ' +
+            '#inicio-section .quick-actions-section:not(.superadmin-only)'
+        ).forEach(el => { el.style.display = 'none'; });
+        document.querySelectorAll('#inicio-section .superadmin-only').forEach(el => { el.style.display = ''; });
         const welcome = document.querySelector('#inicio-section .welcome-text');
         if (welcome) {
             welcome.textContent = 'Panel super administrador. Gestiona colegios, super admins y reportes de plataforma.';
         }
-        const inicioLink = document.querySelector('[data-section="inicio-section"]');
-        const colegiosLink = document.querySelector('[data-section="colegios-section"]');
-        if (inicioLink) inicioLink.classList.remove('active');
-        document.getElementById('inicio-section')?.classList.remove('active');
-        if (colegiosLink) {
-            colegiosLink.classList.add('active');
-            document.getElementById('colegios-section')?.classList.add('active');
-            ColegiosAdmin.cargarColegios();
-        }
+        document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+        document.getElementById('inicio-section')?.classList.add('active');
+        document.querySelector('[data-section="inicio-section"]')?.classList.add('active');
+        window.app?.stats?.refresh();
     }
 }
 
@@ -1428,11 +1598,13 @@ document.addEventListener('DOMContentLoaded', () => {
     EditarEstudiante.init();
     EditarProfesor.init();
     initPasswordToggles();
+    BulkImport.init();
     initSuperAdminUI();
 });
 if (document.readyState !== 'loading') {
     EditarEstudiante.init();
     EditarProfesor.init();
     initPasswordToggles();
+    BulkImport.init();
     initSuperAdminUI();
 }

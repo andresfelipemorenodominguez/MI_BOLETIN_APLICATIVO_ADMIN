@@ -16,6 +16,8 @@ from email.mime.multipart import MIMEMultipart
 import os
 import re
 import json
+import csv
+import secrets
 import urllib.request
 import urllib.error
 from dotenv import load_dotenv
@@ -23,6 +25,7 @@ load_dotenv()
 
 from multicolegio import (
     ensure_multicolegio_schema,
+    ensure_profile_schema,
     get_admin_from_session,
     is_superadmin,
     colegio_filter_sql,
@@ -110,6 +113,7 @@ def _init_multicolegio():
             superadmin_email=os.environ.get('SUPERADMIN_EMAIL'),
             superadmin_password=os.environ.get('SUPERADMIN_PASSWORD'),
         )
+        ensure_profile_schema(get_db_connection)
     except Exception as exc:
         print(f'Aviso: migración multicolegio — {exc!r}')
 
@@ -379,6 +383,364 @@ def _realign_pk_sequence(cur, table: str, id_column: str):
         ti=sql.Identifier(table),
     )
     cur.execute(q)
+
+
+ESTUDIANTE_EXTRA_COLS = (
+    'fecha_nacimiento', 'lugar_nacimiento', 'genero', 'direccion_residencia',
+    'eps', 'grupo_sanguineo', 'alergias', 'ultimo_grado', 'colegio_procedencia',
+)
+PROFESOR_EXTRA_COLS = (
+    'titulos_academicos', 'area_especialidad', 'anios_experiencia',
+    'registro_escalafon', 'entidad_salud', 'entidad_pension',
+)
+
+
+def _clean_str(value):
+    if value is None:
+        return None
+    s = str(value).strip()
+    return s if s else None
+
+
+def _estudiante_extra_from_request(data):
+    extra = {}
+    fn = data.get('fecha_nacimiento')
+    extra['fecha_nacimiento'] = fn if fn else None
+    for key in ESTUDIANTE_EXTRA_COLS:
+        if key == 'fecha_nacimiento':
+            continue
+        extra[key] = _clean_str(data.get(key))
+    return extra
+
+
+def _profesor_extra_from_request(data):
+    extra = {}
+    for key in PROFESOR_EXTRA_COLS:
+        if key == 'anios_experiencia':
+            raw = data.get(key)
+            if raw in (None, ''):
+                extra[key] = None
+            else:
+                try:
+                    extra[key] = int(raw)
+                except (TypeError, ValueError):
+                    extra[key] = None
+        else:
+            extra[key] = _clean_str(data.get(key))
+    return extra
+
+
+def _acudiente_from_request(data):
+    ac = data.get('acudiente') or {}
+    nombre = _clean_str(ac.get('nombre_completo'))
+    if not nombre:
+        return None
+    estrato = ac.get('estrato_socioeconomico')
+    if estrato not in (None, ''):
+        try:
+            estrato = int(estrato)
+            if estrato < 1 or estrato > 6:
+                estrato = None
+        except (TypeError, ValueError):
+            estrato = None
+    else:
+        estrato = None
+    return {
+        'nombre_completo': nombre,
+        'tipo_documento': _clean_str(ac.get('tipo_documento')) or 'cc',
+        'numero_documento': _clean_str(ac.get('numero_documento')) or '',
+        'parentesco': _clean_str(ac.get('parentesco')) or '',
+        'telefono': _clean_str(ac.get('telefono')),
+        'correo_electronico': _clean_str(ac.get('correo_electronico')),
+        'direccion': _clean_str(ac.get('direccion')),
+        'ocupacion': _clean_str(ac.get('ocupacion')),
+        'estrato_socioeconomico': estrato,
+    }
+
+
+def _upsert_acudiente_principal(cur, id_estudiante, id_colegio, acudiente):
+    if not acudiente or not acudiente.get('numero_documento') or not acudiente.get('parentesco'):
+        return
+    cur.execute(
+        "SELECT id_acudiente FROM acudientes WHERE id_estudiante = %s AND es_principal = TRUE",
+        (id_estudiante,),
+    )
+    row = cur.fetchone()
+    values = (
+        acudiente['nombre_completo'], acudiente['tipo_documento'], acudiente['numero_documento'],
+        acudiente['parentesco'], acudiente['telefono'], acudiente['correo_electronico'],
+        acudiente['direccion'], acudiente['ocupacion'], acudiente['estrato_socioeconomico'],
+    )
+    if row:
+        cur.execute(
+            """UPDATE acudientes SET nombre_completo=%s, tipo_documento=%s, numero_documento=%s,
+               parentesco=%s, telefono=%s, correo_electronico=%s, direccion=%s, ocupacion=%s,
+               estrato_socioeconomico=%s WHERE id_acudiente=%s""",
+            (*values, row[0]),
+        )
+    else:
+        cur.execute(
+            """INSERT INTO acudientes (
+                   id_estudiante, id_colegio, nombre_completo, tipo_documento, numero_documento,
+                   parentesco, telefono, correo_electronico, direccion, ocupacion,
+                   estrato_socioeconomico, es_principal
+               ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,TRUE)""",
+            (id_estudiante, id_colegio, *values),
+        )
+
+
+def _fetch_acudiente_principal(cur, id_estudiante):
+    cur.execute(
+        """SELECT nombre_completo, tipo_documento, numero_documento, parentesco, telefono,
+                  correo_electronico, direccion, ocupacion, estrato_socioeconomico
+           FROM acudientes WHERE id_estudiante = %s AND es_principal = TRUE LIMIT 1""",
+        (id_estudiante,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+    return {
+        'nombre_completo': row[0],
+        'tipo_documento': row[1],
+        'numero_documento': row[2],
+        'parentesco': row[3],
+        'telefono': row[4],
+        'correo_electronico': row[5],
+        'direccion': row[6],
+        'ocupacion': row[7],
+        'estrato_socioeconomico': row[8],
+    }
+
+
+MAX_IMPORT_ROWS = 300
+
+ESTUDIANTES_CSV_HEADERS = [
+    'nombre_completo', 'tipo_documento', 'numero_documento', 'correo_electronico',
+    'grado', 'grupo', 'contrasena', 'fecha_nacimiento', 'lugar_nacimiento', 'genero',
+    'direccion_residencia', 'eps', 'grupo_sanguineo', 'alergias', 'ultimo_grado',
+    'colegio_procedencia', 'acudiente_nombre', 'acudiente_tipo_documento',
+    'acudiente_numero_documento', 'acudiente_parentesco', 'acudiente_telefono',
+    'acudiente_correo', 'acudiente_direccion', 'acudiente_ocupacion', 'acudiente_estrato',
+]
+
+PROFESORES_CSV_HEADERS = [
+    'nombre_completo', 'tipo_documento', 'numero_documento', 'correo_electronico',
+    'telefono', 'asignaturas', 'contrasena', 'titulos_academicos', 'area_especialidad',
+    'anios_experiencia', 'registro_escalafon', 'entidad_salud', 'entidad_pension',
+]
+
+ESTUDIANTES_CSV_EJEMPLO = [
+    'Juan Pérez', 'ti', '1234567890', 'juan.perez@est.edu.co', '8° Secundaria', 'A',
+    'MiBoletin123', '2010-05-15', 'Bogotá', 'Masculino', 'Calle 10 #5-20', 'Sanitas',
+    'O+', 'Ninguna', '7° Secundaria', 'Colegio ABC', 'María Pérez', 'cc', '9876543210',
+    'Madre', '3101234567', 'maria.perez@email.com', 'Calle 10 #5-20', 'Comerciante', '3',
+]
+
+PROFESORES_CSV_EJEMPLO = [
+    'Ana García', 'cc', '52123456', 'ana.garcia@colegio.edu.co', '3109876543',
+    'Matemáticas,Lenguaje', 'MiBoletin123', 'Lic. Matemáticas', 'Matemáticas', '5',
+    'REG-001', 'Sanitas', 'Porvenir',
+]
+
+
+def _default_import_password(numero_documento):
+    base = f"MiBoletin{numero_documento or ''}"
+    if len(base) >= 8:
+        return base[:50]
+    return (base + secrets.token_hex(4))[:12]
+
+
+def _normalize_csv_row(row):
+    return {
+        (k or '').strip().lower(): (v or '').strip()
+        for k, v in row.items()
+        if k is not None
+    }
+
+
+def _read_csv_rows(file_storage):
+    raw = file_storage.read()
+    text = None
+    for enc in ('utf-8-sig', 'utf-8', 'latin-1'):
+        try:
+            text = raw.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
+    if not text:
+        raise ValueError('No se pudo leer el archivo. Guárdalo como CSV UTF-8.')
+    lines = [ln for ln in text.splitlines() if ln.strip()]
+    if len(lines) < 2:
+        raise ValueError('El archivo debe tener encabezados y al menos una fila de datos.')
+    delimiter = ';' if lines[0].count(';') > lines[0].count(',') else ','
+    reader = csv.DictReader(lines, delimiter=delimiter)
+    rows = []
+    for row in reader:
+        normalized = _normalize_csv_row(row)
+        if any(normalized.values()):
+            rows.append(normalized)
+    if not rows:
+        raise ValueError('No se encontraron filas de datos en el CSV.')
+    if len(rows) > MAX_IMPORT_ROWS:
+        raise ValueError(f'Máximo {MAX_IMPORT_ROWS} filas por importación.')
+    return rows
+
+
+def _estudiante_payload_from_row(row):
+    data = {
+        'nombre_completo': row.get('nombre_completo'),
+        'tipo_documento': row.get('tipo_documento'),
+        'numero_documento': row.get('numero_documento'),
+        'correo_electronico': row.get('correo_electronico'),
+        'grado': row.get('grado'),
+        'grupo': row.get('grupo'),
+        'contrasena': row.get('contrasena') or _default_import_password(row.get('numero_documento')),
+    }
+    for key in ESTUDIANTE_EXTRA_COLS:
+        if key in row and row[key]:
+            data[key] = row[key]
+    ac_nombre = row.get('acudiente_nombre')
+    if ac_nombre:
+        estrato = row.get('acudiente_estrato')
+        data['acudiente'] = {
+            'nombre_completo': ac_nombre,
+            'tipo_documento': row.get('acudiente_tipo_documento') or 'cc',
+            'numero_documento': row.get('acudiente_numero_documento', ''),
+            'parentesco': row.get('acudiente_parentesco', ''),
+            'telefono': row.get('acudiente_telefono'),
+            'correo_electronico': row.get('acudiente_correo'),
+            'direccion': row.get('acudiente_direccion'),
+            'ocupacion': row.get('acudiente_ocupacion'),
+            'estrato_socioeconomico': estrato or None,
+        }
+    return data
+
+
+def _profesor_payload_from_row(row):
+    asignaturas = row.get('asignaturas', '')
+    return {
+        'nombre_completo': row.get('nombre_completo'),
+        'tipo_documento': row.get('tipo_documento'),
+        'numero_documento': row.get('numero_documento'),
+        'correo_electronico': row.get('correo_electronico'),
+        'telefono': row.get('telefono'),
+        'asignaturas': [a.strip() for a in asignaturas.split(',') if a.strip()] if asignaturas else [],
+        'contrasena': row.get('contrasena') or _default_import_password(row.get('numero_documento')),
+        'titulos_academicos': row.get('titulos_academicos'),
+        'area_especialidad': row.get('area_especialidad'),
+        'anios_experiencia': row.get('anios_experiencia'),
+        'registro_escalafon': row.get('registro_escalafon'),
+        'entidad_salud': row.get('entidad_salud'),
+        'entidad_pension': row.get('entidad_pension'),
+    }
+
+
+def _insert_estudiante_db(cur, id_colegio, data, codigo_estudiante):
+    nombre_completo = _clean_str(data.get('nombre_completo'))
+    tipo_documento = _clean_str(data.get('tipo_documento'))
+    numero_documento = _clean_str(data.get('numero_documento'))
+    correo_electronico = _clean_str(data.get('correo_electronico'))
+    grado = _clean_str(data.get('grado'))
+    grupo = _clean_str(data.get('grupo'))
+    contrasena = _clean_str(data.get('contrasena'))
+
+    if not all([nombre_completo, tipo_documento, numero_documento, correo_electronico, grado, grupo]):
+        return False, 'Faltan campos obligatorios.', None, None
+    if not contrasena:
+        contrasena = _default_import_password(numero_documento)
+    if len(contrasena) < 8:
+        return False, 'La contraseña debe tener al menos 8 caracteres.', None, None
+
+    cur.execute(
+        "SELECT id_estudiante FROM estudiantes WHERE id_colegio = %s AND (correo_electronico = %s OR numero_documento = %s)",
+        (id_colegio, correo_electronico, numero_documento),
+    )
+    if cur.fetchone():
+        return False, 'Correo o documento ya registrado en este colegio.', None, None
+
+    hashed_password = bcrypt.hashpw(contrasena.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    extra = _estudiante_extra_from_request(data)
+    cols = [
+        'codigo_estudiante', 'nombre_completo', 'tipo_documento', 'numero_documento',
+        'correo_electronico', 'grado', 'grupo', 'contrasena', 'id_admin',
+        'nombre_completo_admin', 'correo_electronico_admin', 'id_colegio',
+    ] + list(ESTUDIANTE_EXTRA_COLS)
+    vals = [
+        codigo_estudiante, nombre_completo, tipo_documento, numero_documento,
+        correo_electronico, grado, grupo, hashed_password, session.get('user_id'),
+        session.get('user_name'), session.get('user_email'), id_colegio,
+    ] + [extra[k] for k in ESTUDIANTE_EXTRA_COLS]
+    placeholders = ', '.join(['%s'] * len(cols))
+    cur.execute(
+        f"INSERT INTO estudiantes ({', '.join(cols)}) VALUES ({placeholders}) RETURNING id_estudiante, codigo_estudiante;",
+        tuple(vals),
+    )
+    new_student = cur.fetchone()
+    acudiente = _acudiente_from_request(data)
+    if acudiente and acudiente.get('numero_documento') and acudiente.get('parentesco'):
+        _upsert_acudiente_principal(cur, new_student[0], id_colegio, acudiente)
+    return True, None, new_student[0], new_student[1]
+
+
+def _insert_profesor_db(cur, id_colegio, data, codigo_profesor):
+    nombre_completo = _clean_str(data.get('nombre_completo'))
+    tipo_documento = _clean_str(data.get('tipo_documento'))
+    numero_documento = _clean_str(data.get('numero_documento'))
+    correo_electronico = _clean_str(data.get('correo_electronico'))
+    telefono = _clean_str(data.get('telefono'))
+    asignaturas = data.get('asignaturas')
+    contrasena = _clean_str(data.get('contrasena'))
+
+    if not all([nombre_completo, tipo_documento, numero_documento, correo_electronico, telefono]):
+        return False, 'Faltan campos obligatorios.', None, None
+    asignaturas_str = ','.join(asignaturas) if isinstance(asignaturas, list) else (_clean_str(asignaturas) or '')
+    if not asignaturas_str:
+        return False, 'Debes indicar al menos una asignatura.', None, None
+    if not contrasena:
+        contrasena = _default_import_password(numero_documento)
+    if len(contrasena) < 8:
+        return False, 'La contraseña debe tener al menos 8 caracteres.', None, None
+
+    cur.execute(
+        "SELECT id_profesor FROM profesores WHERE id_colegio = %s AND (correo_electronico = %s OR numero_documento = %s)",
+        (id_colegio, correo_electronico, numero_documento),
+    )
+    if cur.fetchone():
+        return False, 'Correo o documento ya registrado en este colegio.', None, None
+
+    hashed_password = bcrypt.hashpw(contrasena.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    extra = _profesor_extra_from_request(data)
+    cols = [
+        'codigo_profesor', 'nombre_completo', 'tipo_documento', 'numero_documento',
+        'correo_electronico', 'telefono', 'asignaturas', 'contrasena', 'id_admin',
+        'nombre_completo_admin', 'correo_electronico_admin', 'id_colegio',
+    ] + list(PROFESOR_EXTRA_COLS)
+    vals = [
+        codigo_profesor, nombre_completo, tipo_documento, numero_documento,
+        correo_electronico, telefono, asignaturas_str, hashed_password,
+        session.get('user_id'), session.get('user_name'), session.get('user_email'), id_colegio,
+    ] + [extra[k] for k in PROFESOR_EXTRA_COLS]
+    placeholders = ', '.join(['%s'] * len(cols))
+    cur.execute(
+        f"INSERT INTO profesores ({', '.join(cols)}) VALUES ({placeholders}) RETURNING id_profesor, codigo_profesor;",
+        tuple(vals),
+    )
+    new_prof = cur.fetchone()
+    return True, None, new_prof[0], new_prof[1]
+
+
+def _make_csv_response(headers, example_row, filename):
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(headers)
+    writer.writerow(example_row)
+    payload = buf.getvalue().encode('utf-8-sig')
+    return send_file(
+        io.BytesIO(payload),
+        mimetype='text/csv',
+        as_attachment=True,
+        download_name=filename,
+    )
 
 
 # FUNCIONES DE EMAIL
@@ -1384,19 +1746,25 @@ def obtener_estudiante(codigo):
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         filt, params = colegio_filter_sql(admin)
         cur.execute(
-            f"""SELECT codigo_estudiante as id, nombre_completo, tipo_documento,
-                      numero_documento, correo_electronico as email, grado, grupo
+            f"""SELECT id_estudiante, codigo_estudiante as id, nombre_completo, tipo_documento,
+                      numero_documento, correo_electronico as email, grado, grupo,
+                      fecha_nacimiento, lugar_nacimiento, genero, direccion_residencia,
+                      eps, grupo_sanguineo, alergias, ultimo_grado, colegio_procedencia
                FROM estudiantes WHERE codigo_estudiante = %s {filt}""",
             (codigo, *params)
         )
         estudiante = cur.fetchone()
+        if estudiante:
+            data = dict(estudiante)
+            if data.get('fecha_nacimiento'):
+                data['fecha_nacimiento'] = data['fecha_nacimiento'].isoformat()
+            data['acudiente'] = _fetch_acudiente_principal(cur, data.pop('id_estudiante'))
+            cur.close()
+            conn.close()
+            return jsonify({"status": "success", "data": data})
         cur.close()
         conn.close()
-
-        if estudiante:
-            return jsonify({"status": "success", "data": dict(estudiante)})
-        else:
-            return jsonify({"status": "error", "message": "Estudiante no encontrado."})
+        return jsonify({"status": "error", "message": "Estudiante no encontrado."})
     except Exception as e:
         print(f"Error obteniendo estudiante: {e}")
         return jsonify({"status": "error", "message": "Error al obtener los datos."})
@@ -1416,7 +1784,9 @@ def obtener_profesor(codigo):
         filt, params = colegio_filter_sql(admin)
         cur.execute(
             f"""SELECT codigo_profesor as id, nombre_completo, tipo_documento,
-                      numero_documento, correo_electronico as email, telefono, asignaturas
+                      numero_documento, correo_electronico as email, telefono, asignaturas,
+                      titulos_academicos, area_especialidad, anios_experiencia,
+                      registro_escalafon, entidad_salud, entidad_pension
                FROM profesores WHERE codigo_profesor = %s {filt}""",
             (codigo, *params)
         )
@@ -1464,8 +1834,10 @@ def actualizar_estudiante():
             "SELECT id_estudiante FROM estudiantes WHERE codigo_estudiante = %s AND id_colegio = %s",
             (estudiante_id, id_colegio),
         )
-        if not cur.fetchone():
+        est_row = cur.fetchone()
+        if not est_row:
             return jsonify({"status": "error", "message": "Estudiante no encontrado."})
+        id_est_db = est_row['id_estudiante'] if hasattr(est_row, 'keys') else est_row[0]
 
         if correo_electronico:
             cur.execute(
@@ -1486,6 +1858,10 @@ def actualizar_estudiante():
         update_fields = ["nombre_completo=%s", "tipo_documento=%s", "numero_documento=%s",
                          "correo_electronico=%s", "grado=%s", "grupo=%s"]
         update_values = [nombre_completo, tipo_documento, numero_documento, correo_electronico, grado, grupo]
+        extra = _estudiante_extra_from_request(data)
+        for key in ESTUDIANTE_EXTRA_COLS:
+            update_fields.append(f"{key}=%s")
+            update_values.append(extra[key])
 
         if nueva_contrasena:
             if len(nueva_contrasena) < 8:
@@ -1501,6 +1877,9 @@ def actualizar_estudiante():
             tuple(update_values)
         )
         updated = cur.fetchone()
+        acudiente = _acudiente_from_request(data)
+        if acudiente:
+            _upsert_acudiente_principal(cur, id_est_db, id_colegio, acudiente)
         conn.commit()
         cur.close()
         conn.close()
@@ -1575,6 +1954,10 @@ def actualizar_profesor():
                          "correo_electronico=%s", "telefono=%s", "asignaturas=%s"]
         update_values = [nombre_completo, tipo_documento, numero_documento,
                          correo_electronico, telefono, asignaturas_str]
+        extra = _profesor_extra_from_request(data)
+        for key in PROFESOR_EXTRA_COLS:
+            update_fields.append(f"{key}=%s")
+            update_values.append(extra[key])
 
         if nueva_contrasena:
             if len(nueva_contrasena) < 8:
@@ -1714,6 +2097,26 @@ def dashboard_stats():
     try:
         conn = get_db_connection()
         cur = conn.cursor()
+        if is_superadmin(admin):
+            cur.execute("SELECT COUNT(*) FROM colegios WHERE estado = 'activo'")
+            colegios_count = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM administradores WHERE rol = 'superadmin'")
+            superadmins_count = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM administradores WHERE rol = 'admin_colegio'")
+            admins_count = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM estudiantes WHERE estado = 'activo'")
+            estudiantes_count = cur.fetchone()[0]
+            cur.close()
+            conn.close()
+            return jsonify({
+                "status": "success",
+                "data": {
+                    "colegios": colegios_count,
+                    "superadmins": superadmins_count,
+                    "admins_colegio": admins_count,
+                    "estudiantes": estudiantes_count,
+                },
+            })
         filt, params = colegio_filter_sql(admin)
         cur.execute(f"SELECT COUNT(*) FROM estudiantes WHERE estado = 'activo' {filt}", params)
         estudiantes_count = cur.fetchone()[0]
@@ -1806,16 +2209,9 @@ def registrar_estudiante():
         return jsonify({"status": "error", "message": "Todos los campos son requeridos."})
     if len(contrasena) < 8:
         return jsonify({"status": "error", "message": "La contraseña debe tener al menos 8 caracteres."})
-    hashed_password = bcrypt.hashpw(contrasena.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute(
-            "SELECT id_estudiante FROM estudiantes WHERE id_colegio = %s AND (correo_electronico = %s OR numero_documento = %s)",
-            (id_colegio, correo_electronico, numero_documento),
-        )
-        if cur.fetchone():
-            return jsonify({"status": "error", "message": "El correo o número de documento ya están registrados en este colegio."})
         cur.execute(
             "SELECT codigo_estudiante FROM estudiantes WHERE id_colegio = %s ORDER BY id_estudiante DESC LIMIT 1",
             (id_colegio,),
@@ -1824,15 +2220,15 @@ def registrar_estudiante():
         new_number = int(last[0][3:]) + 1 if last else 1
         codigo_estudiante = f"EST{new_number:03d}"
         _realign_pk_sequence(cur, "estudiantes", "id_estudiante")
-        cur.execute(
-            "INSERT INTO estudiantes (codigo_estudiante, nombre_completo, tipo_documento, numero_documento, correo_electronico, grado, grupo, contrasena, id_admin, nombre_completo_admin, correo_electronico_admin, id_colegio) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id_estudiante, codigo_estudiante;",
-            (codigo_estudiante, nombre_completo, tipo_documento, numero_documento, correo_electronico, grado, grupo, hashed_password, session.get('user_id'), session.get('user_name'), session.get('user_email'), id_colegio)
-        )
-        new_student = cur.fetchone()
+        ok, err, id_est, codigo = _insert_estudiante_db(cur, id_colegio, data, codigo_estudiante)
+        if not ok:
+            cur.close()
+            conn.close()
+            return jsonify({"status": "error", "message": err})
         conn.commit()
         cur.close()
         conn.close()
-        return jsonify({"status": "success", "message": "Estudiante registrado exitosamente!", "data": {"id": new_student[0], "codigo": new_student[1]}})
+        return jsonify({"status": "success", "message": "Estudiante registrado exitosamente!", "data": {"id": id_est, "codigo": codigo}})
     except Exception as e:
         print(f"Error registrando estudiante: {e}")
         return jsonify({"status": "error", "message": "Error en la base de datos."})
@@ -1859,17 +2255,11 @@ def registrar_profesor():
         return jsonify({"status": "error", "message": "Todos los campos son requeridos."})
     if len(contrasena) < 8:
         return jsonify({"status": "error", "message": "La contraseña debe tener al menos 8 caracteres."})
-    asignaturas_str = ','.join(asignaturas) if isinstance(asignaturas, list) else (asignaturas or "")
-    hashed_password = bcrypt.hashpw(contrasena.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    if not asignaturas or (isinstance(asignaturas, list) and len(asignaturas) == 0):
+        return jsonify({"status": "error", "message": "Debes seleccionar al menos una asignatura."})
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute(
-            "SELECT id_profesor FROM profesores WHERE id_colegio = %s AND (correo_electronico = %s OR numero_documento = %s)",
-            (id_colegio, correo_electronico, numero_documento),
-        )
-        if cur.fetchone():
-            return jsonify({"status": "error", "message": "El correo o número de documento ya están registrados en este colegio."})
         cur.execute(
             "SELECT codigo_profesor FROM profesores WHERE id_colegio = %s ORDER BY id_profesor DESC LIMIT 1",
             (id_colegio,),
@@ -1878,15 +2268,15 @@ def registrar_profesor():
         new_number = int(last[0][4:]) + 1 if last else 1
         codigo_profesor = f"PROF{new_number:03d}"
         _realign_pk_sequence(cur, "profesores", "id_profesor")
-        cur.execute(
-            "INSERT INTO profesores (codigo_profesor, nombre_completo, tipo_documento, numero_documento, correo_electronico, telefono, asignaturas, contrasena, id_admin, nombre_completo_admin, correo_electronico_admin, id_colegio) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id_profesor, codigo_profesor;",
-            (codigo_profesor, nombre_completo, tipo_documento, numero_documento, correo_electronico, telefono, asignaturas_str, hashed_password, session.get('user_id'), session.get('user_name'), session.get('user_email'), id_colegio)
-        )
-        new_professor = cur.fetchone()
+        ok, err, id_prof, codigo = _insert_profesor_db(cur, id_colegio, data, codigo_profesor)
+        if not ok:
+            cur.close()
+            conn.close()
+            return jsonify({"status": "error", "message": err})
         conn.commit()
         cur.close()
         conn.close()
-        return jsonify({"status": "success", "message": "Profesor registrado exitosamente!", "data": {"id": new_professor[0], "codigo": new_professor[1]}})
+        return jsonify({"status": "success", "message": "Profesor registrado exitosamente!", "data": {"id": id_prof, "codigo": codigo}})
     except Exception as e:
         print(f"Error registrando profesor: {e}")
         return jsonify({"status": "error", "message": "Error en la base de datos."})
@@ -1938,6 +2328,135 @@ def eliminar_profesor():
     except Exception as e:
         print(f"Error eliminando profesor: {e}")
         return jsonify({"status": "error", "message": "Error al eliminar."})
+
+
+@app.route('/admin/plantilla/estudiantes.csv', methods=['GET'])
+def plantilla_estudiantes_csv():
+    admin, id_colegio, err = _require_colegio_admin_api()
+    if err:
+        return err
+    return _make_csv_response(ESTUDIANTES_CSV_HEADERS, ESTUDIANTES_CSV_EJEMPLO, 'plantilla_estudiantes.csv')
+
+
+@app.route('/admin/plantilla/profesores.csv', methods=['GET'])
+def plantilla_profesores_csv():
+    admin, id_colegio, err = _require_colegio_admin_api()
+    if err:
+        return err
+    return _make_csv_response(PROFESORES_CSV_HEADERS, PROFESORES_CSV_EJEMPLO, 'plantilla_profesores.csv')
+
+
+@app.route('/admin/importar/estudiantes', methods=['POST'])
+def importar_estudiantes_csv():
+    admin, id_colegio, err = _require_colegio_admin_api()
+    if err:
+        return err
+    archivo = request.files.get('archivo')
+    if not archivo or not archivo.filename:
+        return jsonify({'status': 'error', 'message': 'Selecciona un archivo CSV.'}), 400
+    try:
+        rows = _read_csv_rows(archivo)
+    except ValueError as exc:
+        return jsonify({'status': 'error', 'message': str(exc)}), 400
+
+    registrados = []
+    errores = []
+    vistos = set()
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT codigo_estudiante FROM estudiantes WHERE id_colegio = %s ORDER BY id_estudiante DESC LIMIT 1",
+            (id_colegio,),
+        )
+        last = cur.fetchone()
+        next_num = int(last[0][3:]) + 1 if last else 1
+        _realign_pk_sequence(cur, 'estudiantes', 'id_estudiante')
+
+        for idx, row in enumerate(rows, start=2):
+            clave = (row.get('correo_electronico', ''), row.get('numero_documento', ''))
+            if clave in vistos:
+                errores.append({'fila': idx, 'mensaje': 'Correo o documento repetido en el archivo.'})
+                continue
+            vistos.add(clave)
+            payload = _estudiante_payload_from_row(row)
+            codigo = f"EST{next_num:03d}"
+            ok, msg, _, cod = _insert_estudiante_db(cur, id_colegio, payload, codigo)
+            if ok:
+                registrados.append({'fila': idx, 'codigo': cod, 'nombre': payload.get('nombre_completo')})
+                next_num += 1
+            else:
+                errores.append({'fila': idx, 'mensaje': msg})
+
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as exc:
+        print(f'Error importando estudiantes: {exc}')
+        return jsonify({'status': 'error', 'message': 'Error en la base de datos al importar.'}), 500
+
+    return jsonify({
+        'status': 'success',
+        'message': f'{len(registrados)} estudiante(s) registrados, {len(errores)} con error.',
+        'data': {'registrados': registrados, 'errores': errores},
+    })
+
+
+@app.route('/admin/importar/profesores', methods=['POST'])
+def importar_profesores_csv():
+    admin, id_colegio, err = _require_colegio_admin_api()
+    if err:
+        return err
+    archivo = request.files.get('archivo')
+    if not archivo or not archivo.filename:
+        return jsonify({'status': 'error', 'message': 'Selecciona un archivo CSV.'}), 400
+    try:
+        rows = _read_csv_rows(archivo)
+    except ValueError as exc:
+        return jsonify({'status': 'error', 'message': str(exc)}), 400
+
+    registrados = []
+    errores = []
+    vistos = set()
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT codigo_profesor FROM profesores WHERE id_colegio = %s ORDER BY id_profesor DESC LIMIT 1",
+            (id_colegio,),
+        )
+        last = cur.fetchone()
+        next_num = int(last[0][4:]) + 1 if last else 1
+        _realign_pk_sequence(cur, 'profesores', 'id_profesor')
+
+        for idx, row in enumerate(rows, start=2):
+            clave = (row.get('correo_electronico', ''), row.get('numero_documento', ''))
+            if clave in vistos:
+                errores.append({'fila': idx, 'mensaje': 'Correo o documento repetido en el archivo.'})
+                continue
+            vistos.add(clave)
+            payload = _profesor_payload_from_row(row)
+            codigo = f"PROF{next_num:03d}"
+            ok, msg, _, cod = _insert_profesor_db(cur, id_colegio, payload, codigo)
+            if ok:
+                registrados.append({'fila': idx, 'codigo': cod, 'nombre': payload.get('nombre_completo')})
+                next_num += 1
+            else:
+                errores.append({'fila': idx, 'mensaje': msg})
+
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as exc:
+        print(f'Error importando profesores: {exc}')
+        return jsonify({'status': 'error', 'message': 'Error en la base de datos al importar.'}), 500
+
+    return jsonify({
+        'status': 'success',
+        'message': f'{len(registrados)} profesor(es) registrados, {len(errores)} con error.',
+        'data': {'registrados': registrados, 'errores': errores},
+    })
+
     
 ###### PDF con branding del colegio (encabezado, escudo, marca de agua). ######
 #
