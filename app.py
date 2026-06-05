@@ -644,14 +644,8 @@ def profesor_dashboard():
                            nombre=user_info['nombre'],
                            codigo=user_info['codigo'])
 
-########Esta ruta muestra una página donde los usuarios pueden solicitar acceso, incluyendo la información de contacto del administrador.############
-#
-@app.route('/solicitud_user')
-def solicitud_user():
-    id_colegio = request.args.get('id_colegio', type=int)
-    user_info = session.get('user_info')
-    if not id_colegio and user_info:
-        id_colegio = user_info.get('id_colegio')
+def _get_admin_for_colegio(id_colegio):
+    """Devuelve (id_admin, nombre, correo) del administrador del colegio."""
     conn = get_db_connection()
     cur = conn.cursor()
     admin = None
@@ -670,16 +664,59 @@ def solicitud_user():
         admin = cur.fetchone()
     cur.close()
     conn.close()
-
     if admin:
-        admin_id, admin_name, admin_email = admin
-    else:
-        admin_id, admin_name, admin_email = 'ADM001', 'Administrador del Sistema', 'admin@sistema.com'
+        return admin
+    return ('ADM001', 'Administrador del Sistema', 'admin@sistema.com')
+
+
+########Esta ruta muestra una página donde los usuarios pueden solicitar acceso, incluyendo la información de contacto del administrador.############
+#
+@app.route('/solicitud_user')
+def solicitud_user():
+    id_colegio = request.args.get('id_colegio', type=int)
+    user_info = session.get('user_info')
+    if not id_colegio and user_info:
+        id_colegio = user_info.get('id_colegio')
+
+    colegio_nombre = ''
+    colegio_codigo = ''
+    if id_colegio:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT nombre_oficial, codigo_colegio FROM colegios WHERE id_colegio = %s",
+            (id_colegio,),
+        )
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        if row:
+            colegio_nombre, colegio_codigo = row
+
+    admin_id, admin_name, admin_email = _get_admin_for_colegio(id_colegio)
 
     return render_template('general/solicitud.html',
                            admin_id=admin_id,
                            admin_name=admin_name,
-                           admin_email=admin_email)
+                           admin_email=admin_email,
+                           id_colegio=id_colegio or '',
+                           colegio_nombre=colegio_nombre,
+                           colegio_codigo=colegio_codigo)
+
+
+@app.route('/api/colegio/admin', methods=['GET'])
+def api_colegio_admin():
+    """Administrador de un colegio (público, para solicitud de cambio de contraseña)."""
+    id_colegio = request.args.get('id_colegio', type=int)
+    if not id_colegio:
+        return jsonify({'status': 'error', 'message': 'id_colegio requerido'}), 400
+    admin_id, admin_name, admin_email = _get_admin_for_colegio(id_colegio)
+    return jsonify({
+        'status': 'success',
+        'admin_id': admin_id,
+        'admin_name': admin_name,
+        'admin_email': admin_email,
+    })
 
 ######Esta ruta verifica si un usuario existe (estudiante o profesor) y devuelve la información en formato JSON.#########
 #

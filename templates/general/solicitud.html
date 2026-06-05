@@ -24,6 +24,21 @@
             <!-- SECCIÓN 2: FORMULARIO DE SOLICITUD -->
             <!-- Formulario para que el usuario solicite cambio o restablecimiento de contraseña -->
             <form id="passwordRequestForm" class="form">
+                <!-- CAMPO 0: Selección de colegio -->
+                <div class="form-group" id="colegioGroup">
+                    <label for="colegioSearch"><i class="fas fa-school"></i> Tu colegio</label>
+                    <input type="text" id="colegioSearch"
+                        placeholder="Busca por nombre o código (ej. COL-001)" autocomplete="off">
+                    <input type="hidden" id="id_colegio" value="{{ id_colegio }}">
+                    <div id="colegioSeleccionado" class="colegio-seleccionado" {% if not id_colegio %}style="display:none;"{% endif %}>
+                        <strong id="colegioSelNombre">{{ colegio_nombre }}</strong>
+                        <span id="colegioSelCodigo">{{ colegio_codigo }}</span>
+                        <button type="button" id="colegioCambiar">Cambiar</button>
+                    </div>
+                    <ul id="colegioResultados" class="colegio-resultados"></ul>
+                    <div class="error-message" id="colegioError"></div>
+                </div>
+
                 <!-- CAMPO 1: Identificador de Usuario -->
                 <div class="form-group">
                     <label for="userIdentifier"><i class="fas fa-user"></i> Identificador de Usuario</label>
