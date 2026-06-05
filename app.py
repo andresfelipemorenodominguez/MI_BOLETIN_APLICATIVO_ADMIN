@@ -15,8 +15,9 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
 import re
-from werkzeug.utils import secure_filename
 import json
+import urllib.request
+import urllib.error
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -89,6 +90,8 @@ EMAIL_FROM = os.environ.get("EMAIL_FROM") or (
 )
 # URL pública de la app (enlaces en correos, p. ej. recuperación de contraseña)
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "http://127.0.0.1:5005").rstrip("/")
+SMTP_TIMEOUT = int(os.environ.get("SMTP_TIMEOUT", "15"))
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 
 
 # CONFIGURACIÓN DATABASE
@@ -380,12 +383,77 @@ def _realign_pk_sequence(cur, table: str, id_column: str):
 
 # FUNCIONES DE EMAIL
 
+def _email_config_ok():
+    return bool(RESEND_API_KEY) or _smtp_config_ok()
+
+
+def _send_via_smtp(to_email, subject, html_content, text_content=""):
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = subject
+    msg['From'] = EMAIL_FROM or EMAIL_USER
+    msg['To'] = to_email
+    if text_content:
+        msg.attach(MIMEText(text_content, 'plain'))
+    msg.attach(MIMEText(html_content, 'html'))
+    with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT, timeout=SMTP_TIMEOUT) as server:
+        server.starttls()
+        server.login(EMAIL_USER, EMAIL_PASSWORD)
+        server.send_message(msg)
+
+
+def _send_via_resend(to_email, subject, html_content, text_content=""):
+    from_addr = EMAIL_FROM or (
+        f"MiBoletín <{EMAIL_USER}>" if EMAIL_USER else "MiBoletín <onboarding@resend.dev>"
+    )
+    payload = {
+        "from": from_addr,
+        "to": [to_email],
+        "subject": subject,
+        "html": html_content,
+    }
+    if text_content:
+        payload["text"] = text_content
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=SMTP_TIMEOUT) as resp:
+        if resp.status >= 300:
+            raise RuntimeError(f"Resend respondió HTTP {resp.status}")
+
+
+def _send_html_email(to_email, subject, html_content, text_content=""):
+    if not _email_config_ok():
+        print("Email no configurado: define RESEND_API_KEY o EMAIL_USER + EMAIL_PASSWORD")
+        return False
+    try:
+        if RESEND_API_KEY:
+            _send_via_resend(to_email, subject, html_content, text_content)
+        else:
+            _send_via_smtp(to_email, subject, html_content, text_content)
+        print(f"Email enviado exitosamente a {to_email}")
+        return True
+    except Exception as e:
+        print(f"Error enviando email a {to_email}: {e}")
+        err = str(e).lower()
+        if "timed out" in err or "timeout" in err:
+            print(
+                "Consejo: Railway (plan Hobby/Free) bloquea SMTP. "
+                "Usa RESEND_API_KEY o actualiza a plan Pro."
+            )
+        return False
+
 ######Esta función construye un correo visual y personalizado con un código de verificación que el usuario debe usar para completar su registro en el sistema.#######
 #
 def send_verification_email(to_email, verification_code):
     """Envía un email con el código de verificación (para administradores)"""
-    if not _smtp_config_ok():
-        print("SMTP no configurado: define EMAIL_USER y EMAIL_PASSWORD en .env")
+    if not _email_config_ok():
+        print("Email no configurado: define RESEND_API_KEY o EMAIL_USER y EMAIL_PASSWORD en .env")
         return False
     try:
         subject = "Verifica tu cuenta en MiBoletín.com"
@@ -422,18 +490,7 @@ def send_verification_email(to_email, verification_code):
         </body>
         </html>
         """
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = subject
-        msg['From'] = EMAIL_FROM
-        msg['To'] = to_email
-        msg.attach(MIMEText(html_content, 'html'))
-        server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
-        server.starttls()
-        server.login(EMAIL_USER, EMAIL_PASSWORD)
-        server.send_message(msg)
-        server.quit()
-        print(f"Email enviado exitosamente a {to_email}")
-        return True
+        return _send_html_email(to_email, subject, html_content)
     except Exception as e:
         print(f"Error enviando email a {to_email}: {str(e)}")
         import traceback
@@ -444,9 +501,8 @@ def send_verification_email(to_email, verification_code):
 #
 def send_recovery_email(to_email, recovery_link, user_name):
     """Envía un email con el enlace de recuperación de contraseña"""
-    try:
-        subject = "Restablece tu contraseña en MiBoletín.com"
-        html_content = f"""
+    subject = "Restablece tu contraseña en MiBoletín.com"
+    html_content = f"""
         <!DOCTYPE html>
         <html>
         <head><meta charset="UTF-8">
@@ -474,46 +530,13 @@ def send_recovery_email(to_email, recovery_link, user_name):
         </div>
         </body></html>
         """
-        ########Este bloque se encarga de enviar el correo con el enlace de recuperación de contraseña y manejar posibles errores.#########
-        #
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = subject
-        msg['From'] = EMAIL_FROM
-        msg['To'] = to_email
-        msg.attach(MIMEText(html_content, 'html'))
-        server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
-        server.starttls()
-        server.login(EMAIL_USER, EMAIL_PASSWORD)
-        server.send_message(msg)
-        server.quit()
-        return True
-    except Exception as e:
-        print(f"Error enviando email de recuperación: {str(e)}")
-        return False
+    return _send_html_email(to_email, subject, html_content)
 
 ##########Esta función es una forma general de enviar correos dentro del sistema (notificaciones a estudiantes o profesores).#########
 #
 def enviar_correo_admin(destinatario, asunto, cuerpo_html, cuerpo_texto=""):
     """Envía correos electrónicos desde el módulo de usuarios (estudiantes/profesores)"""
-    if not _smtp_config_ok():
-        print("SMTP no configurado: define EMAIL_USER y EMAIL_PASSWORD en .env")
-        return False
-    try:
-        mensaje = MIMEMultipart('alternative')
-        mensaje['Subject'] = asunto
-        mensaje['From'] = EMAIL_FROM or EMAIL_USER
-        mensaje['To'] = destinatario
-        mensaje.attach(MIMEText(cuerpo_texto, 'plain'))
-        mensaje.attach(MIMEText(cuerpo_html, 'html'))
-        with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT) as server:
-            server.starttls()
-            server.login(EMAIL_USER, EMAIL_PASSWORD)
-            server.send_message(mensaje)
-        print(f"Correo enviado exitosamente a {destinatario}")
-        return True
-    except Exception as e:
-        print(f"Error al enviar correo: {str(e)}")
-        return False
+    return _send_html_email(destinatario, asunto, cuerpo_html, cuerpo_texto)
 
 
 # 🔑 FUNCIÓN PARA GENERAR CÓDIGO
@@ -1311,8 +1334,17 @@ def request_password_post():
 
         if email_sent:
             return jsonify({"status": "success", "message": f"Enlace de recuperación enviado a {email}"})
-        else:
-            return jsonify({"status": "error", "message": "Error al enviar el email. Intenta nuevamente."})
+        msg = (
+            "Error al enviar el email. Intenta nuevamente."
+            if _smtp_config_ok() or RESEND_API_KEY
+            else "Servicio de correo no configurado en el servidor."
+        )
+        if not RESEND_API_KEY and _smtp_config_ok():
+            msg += (
+                " En Railway (plan Hobby/Free) SMTP está bloqueado: "
+                "agrega RESEND_API_KEY en Variables o usa plan Pro."
+            )
+        return jsonify({"status": "error", "message": msg})
 
     except Exception as e:
         print(f"Request password error: {e}")
