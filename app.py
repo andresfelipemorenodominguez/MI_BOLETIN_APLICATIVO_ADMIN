@@ -952,9 +952,9 @@ def index():
 #  RUTAS DE USUARIOS (estudiantes y profesores) — inicio.py
 ###########Este bloque permite que estudiantes y profesores inicien sesión, validando sus datos y redirigiéndolos a su respectivo panel.###########
 #
-@app.route('/loginuser', methods=['GET', 'POST'])
+@app.route('/loginuser', methods=['GET', 'POST', 'HEAD'])
 def loginuser():
-    if request.method == 'GET':
+    if request.method in ('GET', 'HEAD'):
         return render_template('general/loginuser.html')
 
     elif request.method == 'POST':

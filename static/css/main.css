@@ -4755,10 +4755,6 @@ li {
         font-size: var(--font-size-md) !important;
     }
 
-    .page-dashboard .data-table {
-        min-width: 600px;
-    }
-
     .page-dashboard .action-btn {
         width: 28px;
         height: 28px;
@@ -5823,9 +5819,36 @@ li {
 /* Forms */
 .form-group{margin-bottom:16px;}
 .form-group label{display:block;font-weight:600;color:#1f3a5d;margin-bottom:6px;}
-.form-group input:not([type="checkbox"]):not([type="radio"]),.form-group select,.form-group textarea{width:100%;padding:10px 14px;border:1px solid #d1d5db;border-radius:10px;font-size:15px;font-family:inherit;}
+.form-group > input:not([type="checkbox"]):not([type="radio"]),
+.form-group > select,
+.form-group > textarea{width:100%;padding:10px 14px;border:1px solid #d1d5db;border-radius:10px;font-size:15px;font-family:inherit;box-sizing:border-box;}
 .form-group textarea{min-height:80px;resize:vertical;}
-.form-group input:focus,.form-group select:focus,.form-group textarea:focus{outline:none;border-color:#3182ce;box-shadow:0 0 0 3px rgba(49,130,206,0.1);}
+.form-group > input:not([type="checkbox"]):not([type="radio"]):focus,
+.form-group > select:focus,
+.form-group > textarea:focus{outline:none;border-color:#3182ce;box-shadow:0 0 0 3px rgba(49,130,206,0.1);}
+
+/* Inputs con icono: padding izquierdo protegido */
+.input-with-icon .form-input,
+.input-with-icon input,
+.input-container input,
+.select-wrapper .form-select,
+.select-wrapper select {
+    box-sizing: border-box;
+}
+.page-dashboard .input-with-icon .form-input,
+.page-dashboard .input-with-icon input {
+    padding-left: 40px;
+}
+.page-dashboard .select-wrapper .form-select,
+.page-dashboard .select-wrapper select {
+    padding-left: 40px;
+}
+.page-auth .input-container input {
+    padding-left: 45px;
+}
+.page-auth .input-container input[type="password"] {
+    padding-right: 44px;
+}
 
 /* Sección header */
 .section-header-bar{margin-bottom:16px;}
@@ -6490,10 +6513,10 @@ body {
 
     .page-dashboard .main-content {
         margin-left: 0 !important;
-        padding: 12px !important;
-        padding-top: 64px !important;
+        padding: 64px 12px 12px 52px !important;
         width: 100% !important;
         overflow-x: hidden;
+        box-sizing: border-box;
     }
 
     .page-dashboard .content-wrapper {
@@ -6561,16 +6584,27 @@ body {
     }
 
     .page-dashboard .data-table {
-        min-width: 560px;
+        table-layout: auto;
+        min-width: 940px;
     }
 
-    .page-dashboard #tabla-estudiantes th,
-    .page-dashboard #tabla-estudiantes td,
-    .page-dashboard #tabla-profesores th,
-    .page-dashboard #tabla-profesores td {
-        width: auto !important;
-        min-width: 0 !important;
-        max-width: none !important;
+    .page-dashboard #tabla-profesores {
+        min-width: 1070px;
+    }
+
+    .page-dashboard .data-table th,
+    .page-dashboard .data-table td {
+        white-space: nowrap;
+    }
+
+    .page-dashboard .data-table .nombre-cell {
+        white-space: normal;
+        word-break: break-word;
+    }
+
+    .page-dashboard #tabla-profesores td:nth-child(4) {
+        white-space: normal;
+        word-break: break-word;
     }
 
     .page-dashboard .mgmt-table {
