@@ -1722,11 +1722,7 @@ def request_password_post():
             else "Servicio de correo no configurado en el servidor."
         )
         if not RESEND_API_KEY and _smtp_config_ok():
-            msg += (
-                " En Railway (plan Hobby/Free) SMTP está bloqueado: "
-                "agrega RESEND_API_KEY en Variables o usa plan Pro."
-            )
-        return jsonify({"status": "error", "message": msg})
+            return jsonify({"status": "error", "message": msg})
 
     except Exception as e:
         print(f"Request password error: {e}")
