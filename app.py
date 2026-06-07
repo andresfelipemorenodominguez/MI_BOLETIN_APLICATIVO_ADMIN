@@ -932,6 +932,18 @@ def generate_verification_code(length=6):
 # 📌 RUTAS PRINCIPALES
 # =========================================================
 ########Esta ruta hace que, al entrar al sistema, el usuario vaya directamente al login del sistema de calificaciones.#######
+@app.route('/debug-email')
+def debug_email():
+    import requests as req
+    r = req.post('https://oauth2.googleapis.com/token', data={
+        'grant_type': 'refresh_token',
+        'refresh_token': GMAIL_REFRESH_TOKEN,
+        'client_id': GMAIL_CLIENT_ID,
+        'client_secret': GMAIL_CLIENT_SECRET,
+    })
+    return jsonify({"status": r.status_code, "response": r.json(), "user": EMAIL_USER})
+
+
 #
 @app.route("/")
 def index():
