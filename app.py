@@ -770,7 +770,6 @@ def _send_via_smtp(to_email, subject, html_content, text_content=""):
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
     access_token = _get_gmail_access_token()
-    
     msg = MIMEMultipart('alternative')
     msg['Subject'] = subject
     msg['From'] = EMAIL_FROM or EMAIL_USER
@@ -778,9 +777,7 @@ def _send_via_smtp(to_email, subject, html_content, text_content=""):
     if text_content:
         msg.attach(MIMEText(text_content, 'plain'))
     msg.attach(MIMEText(html_content, 'html'))
-    
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
-    
     r = _requests.post(
         'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
         headers={
@@ -792,7 +789,6 @@ def _send_via_smtp(to_email, subject, html_content, text_content=""):
     )
     if r.status_code >= 300:
         raise RuntimeError(f"Gmail API error {r.status_code}: {r.text}")
-
 def _send_via_resend(to_email, subject, html_content, text_content=""):
     from_addr = EMAIL_FROM or (
         f"MiBoletín <{EMAIL_USER}>" if EMAIL_USER else "MiBoletín <onboarding@resend.dev>"
@@ -943,40 +939,7 @@ def generate_verification_code(length=6):
 # 📌 RUTAS PRINCIPALES
 # =========================================================
 ########Esta ruta hace que, al entrar al sistema, el usuario vaya directamente al login del sistema de calificaciones.#######
-@app.route('/debug-email')
-def debug_email():
-    import requests as req
-    r = req.post('https://oauth2.googleapis.com/token', data={
-        'grant_type': 'refresh_token',
-        'refresh_token': GMAIL_REFRESH_TOKEN,
-        'client_id': GMAIL_CLIENT_ID,
-        'client_secret': GMAIL_CLIENT_SECRET,
-    })
-    return jsonify({"status": r.status_code, "response": r.json(), "user": EMAIL_USER})
 
-@app.route('/debug-send')
-def debug_send():
-    import traceback, base64
-    from email.mime.multipart import MIMEMultipart
-    from email.mime.text import MIMEText
-    try:
-        access_token = _get_gmail_access_token()
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = 'Test'
-        msg['From'] = EMAIL_USER
-        msg['To'] = EMAIL_USER
-        msg.attach(MIMEText('<p>Test</p>', 'html'))
-        raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
-        r = _requests.post(
-            'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
-            headers={'Authorization': f'Bearer {access_token}', 'Content-Type': 'application/json'},
-            json={'raw': raw},
-            timeout=15
-        )
-        return jsonify({"status": r.status_code, "response": r.json()})
-    except Exception as e:
-        return jsonify({"error": str(e), "trace": traceback.format_exc()})
-#
 @app.route("/")
 def index():
     """
