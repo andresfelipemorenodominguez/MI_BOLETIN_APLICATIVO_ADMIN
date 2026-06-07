@@ -4021,6 +4021,7 @@ li {
 
 .page-dashboard .password-container .input-with-icon {
     flex: 1;
+    min-width: 0;
     position: relative;
 }
 
@@ -4096,10 +4097,41 @@ li {
     min-height: 120px;
     padding: var(--space-sm) var(--space-sm) var(--space-sm) 44px;
 }
-.page-dashboard #prof-asignaturas {
-    height: auto !important;
-    min-height: 80px;
-    max-height: 200px;
+.page-dashboard .asignaturas-checkbox-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px 16px;
+    padding: 12px;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--border-radius-md);
+    background: var(--gray-50);
+}
+
+.page-dashboard .asignaturas-checkbox-grid .check-asig {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    padding: 4px 0;
+}
+
+.page-dashboard .asignaturas-checkbox-grid .check-asig input {
+    cursor: pointer;
+    accent-color: var(--primary);
+    flex-shrink: 0;
+}
+
+.page-dashboard .asignaturas-empty {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+}
+
+.page-dashboard .asignaturas-count-info {
+    margin-top: var(--space-xs);
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
 }
 
 .page-dashboard .multi-select-info {
@@ -4313,13 +4345,19 @@ li {
         min-height: 40px;
     }
 
-    .page-dashboard .password-generator-container {
+    .page-dashboard .password-generator-container,
+    .page-dashboard .password-container {
         flex-direction: column;
+        align-items: stretch;
         gap: var(--space-sm);
     }
 
     .page-dashboard .generate-password-btn {
         width: 100%;
+    }
+
+    .page-dashboard .asignaturas-checkbox-grid {
+        grid-template-columns: 1fr;
     }
 
     .page-dashboard .form-actions {

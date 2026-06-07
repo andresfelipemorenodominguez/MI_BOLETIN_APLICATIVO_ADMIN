@@ -551,10 +551,11 @@ class ProfessorFormHandler {
                 btn.querySelector('i').className = isPass ? 'fas fa-eye-slash' : 'fas fa-eye';
             });
         });
-        const sel = document.getElementById('prof-asignaturas');
+        const asigContainer = document.getElementById('prof-asignaturas');
         const counter = document.getElementById('asignaturas-count');
-        sel?.addEventListener('change', () => {
-            const count = Array.from(sel.selectedOptions).length;
+        asigContainer?.addEventListener('change', (e) => {
+            if (e.target.type !== 'checkbox') return;
+            const count = asigContainer.querySelectorAll('input[type="checkbox"]:checked').length;
             if (counter) counter.textContent = `${count} seleccionada${count !== 1 ? 's' : ''}`;
         });
         ['prof-num-doc', 'prof-telefono'].forEach(id => {
@@ -563,18 +564,20 @@ class ProfessorFormHandler {
         this.cargarAsignaturas();
     }
     async cargarAsignaturas() {
-        const sel = document.getElementById('prof-asignaturas');
-        if (!sel) return;
+        const container = document.getElementById('prof-asignaturas');
+        if (!container) return;
         try {
             const res  = await fetch('/admin/materias');
             const data = await res.json();
             const materias = data.data || [];
             if (!materias.length) {
-                sel.innerHTML = '<option disabled>No hay materias registradas</option>';
+                container.innerHTML = '<p class="asignaturas-empty">No hay materias registradas</p>';
                 return;
             }
-            sel.innerHTML = materias.map(m =>
-                `<option value="${m.nombre}">${m.nombre}</option>`
+            container.innerHTML = materias.map(m =>
+                `<label class="check-asig">
+                    <input type="checkbox" value="${m.nombre}" name="asignatura"> ${m.nombre}
+                </label>`
             ).join('');
         } catch(e) {
             console.error('Error cargando materias:', e);
@@ -582,8 +585,8 @@ class ProfessorFormHandler {
     }
     async handleSubmit(e) {
         e.preventDefault();
-        const sel = document.getElementById('prof-asignaturas');
-        const asignaturas = sel ? Array.from(sel.selectedOptions).map(o => o.value) : [];
+        const asignaturas = [...document.querySelectorAll('#prof-asignaturas input[type="checkbox"]:checked')]
+            .map(cb => cb.value);
         if (!asignaturas.length) { Utils.showToast('Selecciona al menos una asignatura.', 'error'); return; }
 
         const data = {
@@ -618,6 +621,7 @@ class ProfessorFormHandler {
     resetForm() {
         this.form.reset();
         this.form.querySelectorAll('.form-input, .form-select').forEach(el => el.classList.remove('success', 'error'));
+        document.querySelectorAll('#prof-asignaturas input[type="checkbox"]').forEach(cb => { cb.checked = false; });
         const counter = document.getElementById('asignaturas-count');
         if (counter) counter.textContent = '0 seleccionadas';
     }

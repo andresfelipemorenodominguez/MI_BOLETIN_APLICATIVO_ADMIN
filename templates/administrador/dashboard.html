@@ -755,17 +755,11 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
                         <h3 class="form-section-title"><i class="fas fa-graduation-cap"></i> Asignaturas</h3>
                         <div class="form-group">
                             <label class="form-label">Asignatura(s) <span class="required">*</span></label>
-                            <div class="select-wrapper multi-select-wrapper">
-                                <i class="fas fa-book select-icon"></i>
-                                <!-- Selector múltiple de asignaturas -->
-                                <select id="prof-asignaturas" class="form-select" multiple required>
-
-                                </select>
-                                <!-- Información del selector múltiple -->
-                                <div class="multi-select-info">
-                                    <span id="asignaturas-count">0 seleccionadas</span>
-                                    <small>(Mantén Ctrl para seleccionar varias)</small>
-                                </div>
+                            <div id="prof-asignaturas" class="asignaturas-checkbox-grid">
+                                <!-- Se genera dinámicamente por JS -->
+                            </div>
+                            <div class="asignaturas-count-info">
+                                <span id="asignaturas-count">0 seleccionadas</span>
                             </div>
                         </div>
                     </div>
@@ -773,13 +767,12 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
                     <div class="form-section">
                         <h3 class="form-section-title"><i class="fas fa-lock"></i> Contraseña</h3>
                         <div class="form-group">
+                            <label class="form-label">Contraseña <span class="required">*</span></label>
                             <div class="password-container">
-                                <div class="input-with-icon" style="position:relative; flex:1;">
+                                <div class="input-with-icon">
                                     <i class="fas fa-lock input-icon"></i>
-                                    <input type="password" id="prof-contrasena" class="form-input password-input" placeholder="Mínimo 8 caracteres" required>
-                                    <button type="button" class="toggle-password-btn" data-target="prof-contrasena" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; color:#6b7280;">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
+                                    <input type="password" id="prof-contrasena" class="form-input password-input" placeholder="Mínimo 8 caracteres" required autocomplete="new-password">
+                                    <button type="button" class="toggle-password-btn" data-target="prof-contrasena" aria-label="Mostrar u ocultar contraseña" title="Mostrar u ocultar contraseña"><i class="fas fa-eye" aria-hidden="true"></i></button>
                                 </div>
                                 <button type="button" class="btn-secondary generate-password-btn" id="generate-profesor-password">
                                     <i class="fas fa-random"></i> Generar
