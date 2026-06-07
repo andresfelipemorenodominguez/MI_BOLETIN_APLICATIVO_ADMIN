@@ -821,14 +821,9 @@ def _send_html_email(to_email, subject, html_content, text_content=""):
         print(f"Email enviado exitosamente a {to_email}")
         return True
     except Exception as e:
-        print(f"Error enviando email a {to_email}: {e}")
-        err = str(e).lower()
-        if "timed out" in err or "timeout" in err:
-            print(
-                "Consejo: Railway (plan Hobby/Free) bloquea SMTP. "
-                "Usa RESEND_API_KEY o actualiza a plan Pro."
-            )
-        return False
+            import traceback
+            print(f"ERROR EMAIL COMPLETO: {traceback.format_exc()}")
+            return False
 
 ######Esta función construye un correo visual y personalizado con un código de verificación que el usuario debe usar para completar su registro en el sistema.#######
 #
