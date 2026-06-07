@@ -943,7 +943,14 @@ def debug_email():
     })
     return jsonify({"status": r.status_code, "response": r.json(), "user": EMAIL_USER})
 
-
+@app.route('/debug-send')
+def debug_send():
+    try:
+        result = _send_html_email('aragondidier19@gmail.com', 'Test', '<p>Test email</p>')
+        return jsonify({"sent": result})
+    except Exception as e:
+        import traceback
+        return jsonify({"error": str(e), "trace": traceback.format_exc()})
 #
 @app.route("/")
 def index():
