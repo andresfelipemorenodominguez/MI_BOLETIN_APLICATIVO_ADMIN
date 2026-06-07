@@ -353,11 +353,11 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
                     <p style="color:var(--gray-600);margin:8px 0 0;">
                         Ideal para registrar muchos estudiantes a la vez. Descarga la plantilla, complétala en Excel o Google Sheets y súbela aquí (máx. 300 por archivo).
                     </p>
-                    <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:16px;">
+                    <div class="import-actions">
                         <a href="/admin/plantilla/estudiantes.csv" class="btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px;">
                             <i class="fas fa-download"></i> Descargar plantilla
                         </a>
-                        <input type="file" id="import-estudiantes-file" accept=".csv,text/csv" class="form-input" style="max-width:280px;padding:8px;">
+                        <input type="file" id="import-estudiantes-file" accept=".csv,text/csv" class="form-input">
                         <button type="button" id="import-estudiantes-btn" class="btn-primary">
                             <i class="fas fa-upload"></i> Importar estudiantes
                         </button>
@@ -647,11 +647,11 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
                     <p style="color:var(--gray-600);margin:8px 0 0;">
                         Registra varios profesores de una sola vez. Las asignaturas van separadas por coma (ej: Matemáticas,Lenguaje).
                     </p>
-                    <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:16px;">
+                    <div class="import-actions">
                         <a href="/admin/plantilla/profesores.csv" class="btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px;">
                             <i class="fas fa-download"></i> Descargar plantilla
                         </a>
-                        <input type="file" id="import-profesores-file" accept=".csv,text/csv" class="form-input" style="max-width:280px;padding:8px;">
+                        <input type="file" id="import-profesores-file" accept=".csv,text/csv" class="form-input">
                         <button type="button" id="import-profesores-btn" class="btn-primary">
                             <i class="fas fa-upload"></i> Importar profesores
                         </button>

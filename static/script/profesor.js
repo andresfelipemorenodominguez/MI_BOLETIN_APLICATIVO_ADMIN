@@ -144,6 +144,120 @@ window.navToProf = function (sec) {
 // ══════════════════════════════════════════════════════
 let notasData = { materias: [], tipos: [], estudiantes: [] };
 
+function formatFechaRegistro(f) {
+  if (!f) return '—';
+  const [y, m, d] = f.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function renderRegistroNotas(registro, id_gm, id_tipo) {
+  const cont = document.getElementById('notas-registro-container');
+  if (!cont) return;
+  if (!registro.length) {
+    cont.innerHTML = `<div class="registro-panel"><h3 class="registro-title"><i class="fas fa-history"></i> Registro de subidas</h3>
+      <p class="registro-empty">Aún no hay notas guardadas para esta materia y tipo.</p></div>`;
+    return;
+  }
+  cont.innerHTML = `
+  <div class="registro-panel">
+    <h3 class="registro-title"><i class="fas fa-history"></i> Registro de subidas</h3>
+    <p class="registro-hint">Consulta las notas ya guardadas. Haz clic en una fecha para ver el detalle.</p>
+    <div class="registro-lista">
+      ${registro.map(r => `
+        <button type="button" class="registro-item" onclick="verDetalleNotas('${r.fecha}')">
+          <span class="registro-fecha"><i class="fas fa-calendar-day"></i> ${formatFechaRegistro(r.fecha)}</span>
+          <span class="registro-meta">${r.cantidad} nota(s) · Promedio ${r.promedio}</span>
+          <span class="registro-ver">Ver <i class="fas fa-chevron-right"></i></span>
+        </button>`).join('')}
+    </div>
+    <div id="notas-detalle-registro"></div>
+  </div>`;
+}
+
+window.verDetalleNotas = async function(fecha) {
+  const id_gm   = document.getElementById('selMateria')?.value;
+  const id_tipo = document.getElementById('selTipo')?.value;
+  const cont    = document.getElementById('notas-detalle-registro');
+  if (!cont || !id_gm || !id_tipo) return;
+
+  cont.innerHTML = `<div class="loading-state">⏳ Cargando registro...</div>`;
+  const res  = await fetch(`/profesor/notas-registro-detalle?id_grupo_materia=${id_gm}&id_tipo=${id_tipo}&fecha=${fecha}`);
+  const data = await res.json();
+  const filas = data.data || [];
+
+  if (!filas.length) {
+    cont.innerHTML = `<p class="registro-empty">No hay datos para esta fecha.</p>`;
+    return;
+  }
+
+  cont.innerHTML = `
+  <div class="registro-detalle">
+    <div class="registro-detalle-header">
+      <strong>Detalle del ${formatFechaRegistro(fecha)}</strong>
+      <button type="button" class="btn-registro-cerrar" onclick="document.getElementById('notas-detalle-registro').innerHTML=''">✕ Cerrar</button>
+    </div>
+    <div class="tabla-scroll">
+      <table class="grade-table registro-table">
+        <thead><tr>
+          <th>Estudiante</th><th>Código</th><th>Nota</th><th>Descripción</th>
+        </tr></thead>
+        <tbody>
+          ${filas.map(f => `
+          <tr>
+            <td>${f.nombre_completo}</td>
+            <td><span class="codigo-badge">${f.codigo_estudiante}</span></td>
+            <td><span class="nota-chip" style="background:${f.valor>=3?'#c6f6d5':'#fed7d7'};color:${f.valor>=3?'#276749':'#9b2c2c'}">${f.valor}</span></td>
+            <td class="cell-muted">${f.descripcion || '—'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+};
+
+async function renderRegistroAsistencia(id_gm) {
+  const cont = document.getElementById('asist-registro-container');
+  if (!cont) return;
+  if (!id_gm) {
+    cont.innerHTML = '';
+    return;
+  }
+
+  cont.innerHTML = `<div class="loading-state">⏳ Cargando registro...</div>`;
+  const res  = await fetch(`/profesor/asistencia/registro?id_grupo_materia=${id_gm}`);
+  const data = await res.json();
+  const registro = data.data || [];
+
+  if (!registro.length) {
+    cont.innerHTML = `<div class="registro-panel"><h3 class="registro-title"><i class="fas fa-history"></i> Registro de asistencia</h3>
+      <p class="registro-empty">Aún no hay listas guardadas para esta materia.</p></div>`;
+    return;
+  }
+
+  cont.innerHTML = `
+  <div class="registro-panel">
+    <h3 class="registro-title"><i class="fas fa-history"></i> Registro de asistencia</h3>
+    <p class="registro-hint">Listas ya guardadas. Haz clic en una fecha para consultarla o editarla.</p>
+    <div class="registro-lista">
+      ${registro.map(r => `
+        <button type="button" class="registro-item" onclick="cargarFechaAsistencia('${r.fecha}')">
+          <span class="registro-fecha"><i class="fas fa-calendar-day"></i> ${formatFechaRegistro(r.fecha)}</span>
+          <span class="registro-meta">✓ ${r.presentes} · ✗ ${r.ausentes} · ⏱ ${r.tardanzas} · 📋 ${r.justificados}</span>
+          <span class="registro-ver">Abrir <i class="fas fa-chevron-right"></i></span>
+        </button>`).join('')}
+    </div>
+  </div>`;
+}
+
+window.cargarFechaAsistencia = function(fecha) {
+  const input = document.getElementById('asist-fecha');
+  if (input) {
+    input.value = fecha;
+    cargarTablaAsistencia();
+    document.getElementById('tabla-asist-container')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+};
+
 async function renderNotas() {
   const [materiasRes, tiposRes] = await Promise.all([
     fetch('/profesor/materias').then(r => r.json()),
@@ -201,7 +315,8 @@ async function renderNotas() {
       <span>📋</span>
       <p>Selecciona una materia y tipo de nota para ver los estudiantes.</p>
     </div>
-  </div>`;
+  </div>
+  <div id="notas-registro-container"></div>`;
 }
 
 window.cargarTablaNotas = async function() {
@@ -213,24 +328,36 @@ window.cargarTablaNotas = async function() {
   if (!id_gm || !id_tipo) {
     cont.innerHTML = `<div class="empty-table-msg"><span>📋</span><p>Selecciona una materia y tipo de nota.</p></div>`;
     if (btnGuardar) btnGuardar.disabled = true;
+    const regCont = document.getElementById('notas-registro-container');
+    if (regCont) regCont.innerHTML = '';
     return;
   }
 
   cont.innerHTML = `<div class="loading-state">⏳ Cargando estudiantes...</div>`;
-  const res  = await fetch(`/profesor/estudiantes-por-materia/${id_gm}`);
-  const data = await res.json();
+  const [res, resNotas] = await Promise.all([
+    fetch(`/profesor/estudiantes-por-materia/${id_gm}`).then(r => r.json()),
+    fetch(`/profesor/notas-cargadas?id_grupo_materia=${id_gm}&id_tipo=${id_tipo}`).then(r => r.json()),
+  ]);
+  const data = res;
+  const ultimas = resNotas.ultimas || {};
+  const registro = resNotas.registro || [];
   const estudiantes = data.data || [];
   notasData.estudiantes = estudiantes;
 
   if (!estudiantes.length) {
     cont.innerHTML = `<div class="empty-table-msg"><span>👥</span><p>No hay estudiantes asignados a esta materia.</p></div>`;
     if (btnGuardar) btnGuardar.disabled = true;
+    renderRegistroNotas(registro, id_gm, id_tipo);
     return;
   }
 
   if (btnGuardar) btnGuardar.disabled = false;
 
+  const yaRegistradas = Object.keys(ultimas).length;
+
   cont.innerHTML = `
+  ${yaRegistradas ? `<div class="registro-aviso"><i class="fas fa-info-circle"></i> Se muestran las últimas notas guardadas. Puedes modificarlas y guardar de nuevo; se creará un nuevo registro.</div>` : ''}
+  <div class="table-scroll-hint"><i class="fas fa-arrows-alt-h"></i> Desliza horizontalmente para ver más columnas</div>
   <div class="tabla-scroll">
     <table class="grade-table">
       <thead>
@@ -245,30 +372,42 @@ window.cargarTablaNotas = async function() {
         </tr>
       </thead>
       <tbody>
-        ${estudiantes.map((e,i) => `
-        <tr class="grade-row" id="row-${e.id_estudiante}">
+        ${estudiantes.map((e,i) => {
+          const prev = ultimas[e.id_estudiante];
+          const valPrev = prev ? prev.valor : '';
+          const descPrev = prev ? prev.descripcion : '';
+          return `
+        <tr class="grade-row ${prev ? 'row-ya-registrada' : ''}" id="row-${e.id_estudiante}">
           <td class="td-num">${i+1}</td>
           <td class="td-codigo"><span class="codigo-badge">${e.codigo_estudiante}</span></td>
-          <td class="td-nombre">${e.nombre_completo}</td>
+          <td class="td-nombre">${e.nombre_completo}${prev ? `<small class="fecha-registro-tag">${formatFechaRegistro(prev.fecha_registro)}</small>` : ''}</td>
           <td class="td-grado">${e.grado}–${e.grupo}</td>
           <td class="td-nota">
             <input type="number" class="nota-input" id="nota-${e.id_estudiante}"
-              min="0" max="5" step="0.1" placeholder="—"
+              min="0" max="5" step="0.1" placeholder="—" value="${valPrev !== '' ? valPrev : ''}"
               oninput="actualizarEstadoFila(${e.id_estudiante}, this.value)">
           </td>
           <td class="td-desc">
-            <input type="text" class="desc-input" id="desc-${e.id_estudiante}" placeholder="Opcional...">
+            <input type="text" class="desc-input" id="desc-${e.id_estudiante}" placeholder="Opcional..." value="${descPrev}">
           </td>
           <td class="td-estado">
             <span class="estado-chip chip-vacio" id="chip-${e.id_estudiante}">Sin nota</span>
           </td>
-        </tr>`).join('')}
+        </tr>`;
+        }).join('')}
       </tbody>
     </table>
   </div>
   <div class="table-footer">
     <span id="conteo-notas">0 / ${estudiantes.length} notas ingresadas</span>
   </div>`;
+
+  estudiantes.forEach(e => {
+    const prev = ultimas[e.id_estudiante];
+    if (prev) actualizarEstadoFila(e.id_estudiante, String(prev.valor));
+  });
+
+  renderRegistroNotas(registro, id_gm, id_tipo);
 };
 
 window.actualizarEstadoFila = function(id, valor) {
@@ -370,6 +509,7 @@ window.guardarTodasNotas = async function() {
   const data = await res.json();
   msg.innerHTML = `<span class="${data.status==='success'?'msg-ok':'msg-err'}">${data.message}</span>`;
   btn.disabled = false; btn.innerHTML = '💾 Guardar Todas';
+  if (data.status === 'success') cargarTablaNotas();
 };
 
 
@@ -396,7 +536,7 @@ async function renderAsistencia() {
   <div class="filtros-bar">
     <div class="filtro-group">
       <label>Materia / Grupo</label>
-      <select id="asist-materia" onchange="cargarTablaAsistencia()">
+      <select id="asist-materia" onchange="cargarTablaAsistencia(); renderRegistroAsistencia(this.value)">
         <option value="">Selecciona una materia</option>
         ${asistData.materias.map(m=>`<option value="${m.id_grupo_materia}">${m.materia} — ${m.grupo}</option>`).join('')}
       </select>
@@ -424,7 +564,8 @@ async function renderAsistencia() {
       <span>📋</span>
       <p>Selecciona una materia y fecha para pasar lista.</p>
     </div>
-  </div>`;
+  </div>
+  <div id="asist-registro-container"></div>`;
 }
 
 window.cargarTablaAsistencia = async function() {
@@ -467,8 +608,9 @@ window.cargarTablaAsistencia = async function() {
   const iconos  = { presente:'✓', ausente:'✗', tardanza:'⏱', justificado:'📋' };
 
   cont.innerHTML = `
+  <div class="table-scroll-hint"><i class="fas fa-arrows-alt-h"></i> Desliza horizontalmente para ver más columnas</div>
   <div class="tabla-scroll">
-    <table class="grade-table">
+    <table class="grade-table asist-card-table">
       <thead>
         <tr>
           <th class="th-num">#</th>
@@ -568,6 +710,7 @@ window.guardarAsistencia = async function() {
   const data = await res.json();
   msg.innerHTML = `<span class="${data.status==='success'?'msg-ok':'msg-err'}">${data.message}</span>`;
   btn.disabled = false; btn.innerHTML = '💾 Guardar Asistencia';
+  if (data.status === 'success') renderRegistroAsistencia(id_gm);
 };
 
 
@@ -958,7 +1101,7 @@ async function renderAgenda() {
 
   const gruposHtml = gruposAgenda.length
     ? gruposAgenda.map(g => `
-        <label class="check-asig" style="display:flex;align-items:center;gap:8px;margin:4px 0;">
+        <label class="check-asig">
           <input type="checkbox" class="ag-grupo-chk" value="${g.id_grupo}">
           <span>${g.nombre}</span>
         </label>`).join('')
@@ -974,13 +1117,13 @@ async function renderAgenda() {
         <textarea id="agDesc" placeholder="Detalles de la tarea o actividad..."></textarea></div>
       <div class="form-group"><label>Fecha <span style="color:#e53e3e">*</span></label>
         <input type="date" id="agFecha"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="agenda-time-row">
         <div class="form-group"><label>Hora inicio</label><input type="time" id="agHoraInicio"></div>
         <div class="form-group"><label>Hora fin</label><input type="time" id="agHoraFin"></div>
       </div>
       <div class="form-group">
         <label>Compartir con grupos</label>
-        <div id="agGruposLista" style="max-height:140px;overflow-y:auto;padding:8px;border:1px solid #e2e8f0;border-radius:10px;">
+        <div id="agGruposLista" class="agenda-grupos-list">
           ${gruposHtml}
         </div>
         <small style="color:#6b7a8a;font-size:12px;">Los estudiantes de los grupos marcados verán este evento en su agenda.</small>

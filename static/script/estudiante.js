@@ -187,6 +187,7 @@ async function renderNotas() {
         <span class="materia-prom" style="color:${cp};">Promedio: ${prom}</span>
       </div>
       <div class="table-wrap">
+        <div class="table-scroll-hint"><i class="fas fa-arrows-alt-h"></i> Desliza horizontalmente para ver más columnas</div>
         <table class="est-table">
           <thead><tr><th>Tipo</th><th>Valor</th><th>Descripción</th><th>Profesor</th><th>Fecha</th></tr></thead>
           <tbody>
@@ -327,14 +328,14 @@ async function renderAsistencia() {
   <!-- Historial detallado -->
   <h3 class="subsection-title">Historial Completo</h3>
   <div class="table-wrap">
-    <table class="est-table">
+    <table class="est-table mobile-card-table">
       <thead><tr><th>Fecha</th><th>Materia</th><th>Profesor</th><th>Estado</th></tr></thead>
       <tbody>
         ${registros.map(r => `<tr>
-          <td class="cell-muted">${r.fecha}</td>
-          <td>${r.materia}</td>
-          <td class="cell-muted">${r.profesor}</td>
-          <td><span class="asist-chip" style="background:${colores[r.estado]};color:${textCol[r.estado]};">
+          <td class="cell-muted" data-label="Fecha">${r.fecha}</td>
+          <td data-label="Materia">${r.materia}</td>
+          <td class="cell-muted" data-label="Profesor">${r.profesor}</td>
+          <td data-label="Estado"><span class="asist-chip" style="background:${colores[r.estado]};color:${textCol[r.estado]};">
             ${iconos[r.estado]} ${r.estado.charAt(0).toUpperCase()+r.estado.slice(1)}
           </span></td>
         </tr>`).join('')}

@@ -23,6 +23,7 @@ import secrets
 import urllib.request
 import urllib.error
 from dotenv import load_dotenv
+from werkzeug.utils import secure_filename
 load_dotenv()
 
 from multicolegio import (
@@ -535,7 +536,7 @@ PROFESORES_CSV_HEADERS = [
 ]
 
 ESTUDIANTES_CSV_EJEMPLO = [
-    'Juan Pérez', 'ti', '1234567890', 'juan.perez@est.edu.co', '8° Secundaria', 'A',
+    'Andres portilla', 'ti', '1234567890', 'andres.portilla@est.edu.co', '8° Secundaria', 'A',
     'MiBoletin123', '2010-05-15', 'Bogotá', 'Masculino', 'Calle 10 #5-20', 'Sanitas',
     'O+', 'Ninguna', '7° Secundaria', 'Colegio ABC', 'María Pérez', 'cc', '9876543210',
     'Madre', '3101234567', 'maria.perez@email.com', 'Calle 10 #5-20', 'Comerciante', '3',
@@ -935,9 +936,8 @@ def generate_verification_code(length=6):
         return ''.join(random.choices(string.digits, k=length))
 
 
-# =========================================================
-# 📌 RUTAS PRINCIPALES
-# =========================================================
+
+#  RUTAS PRINCIPALES
 ########Esta ruta hace que, al entrar al sistema, el usuario vaya directamente al login del sistema de calificaciones.#######
 
 @app.route("/")
@@ -949,9 +949,7 @@ def index():
     return redirect(url_for('loginuser'))
 
 
-# =========================================================
-# 📌 RUTAS DE USUARIOS (estudiantes y profesores) — inicio.py
-# =========================================================
+#  RUTAS DE USUARIOS (estudiantes y profesores) — inicio.py
 ###########Este bloque permite que estudiantes y profesores inicien sesión, validando sus datos y redirigiéndolos a su respectivo panel.###########
 #
 @app.route('/loginuser', methods=['GET', 'POST'])
@@ -3446,6 +3444,92 @@ def subir_notas_masivo():
         return _api_error_response(e)
 
 
+@app.route('/profesor/notas-cargadas', methods=['GET'])
+def notas_cargadas_profesor():
+    """Últimas notas por estudiante y resumen de subidas por fecha."""
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    id_grupo_materia = request.args.get('id_grupo_materia')
+    id_tipo = request.args.get('id_tipo')
+    if not id_grupo_materia or not id_tipo:
+        return jsonify({"status": "error", "message": "Faltan parámetros."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT DISTINCT ON (n.id_estudiante)
+                   n.id_estudiante, n.valor, n.descripcion, n.fecha_registro, n.id_nota
+            FROM notas n
+            JOIN grupo_materias gm ON n.id_grupo_materia = gm.id_grupo_materia
+            WHERE n.id_grupo_materia = %s AND n.id_tipo = %s AND gm.id_docente = %s
+            ORDER BY n.id_estudiante, n.fecha_registro DESC, n.id_nota DESC
+        """, (id_grupo_materia, id_tipo, user_info['id']))
+        ultimas = {}
+        for r in cur.fetchall():
+            ultimas[r['id_estudiante']] = {
+                'valor': float(r['valor']),
+                'descripcion': r['descripcion'] or '',
+                'fecha_registro': str(r['fecha_registro']),
+                'id_nota': r['id_nota'],
+            }
+        cur.execute("""
+            SELECT n.fecha_registro,
+                   COUNT(*) AS cantidad,
+                   ROUND(AVG(n.valor)::numeric, 2) AS promedio
+            FROM notas n
+            JOIN grupo_materias gm ON n.id_grupo_materia = gm.id_grupo_materia
+            WHERE n.id_grupo_materia = %s AND n.id_tipo = %s AND gm.id_docente = %s
+            GROUP BY n.fecha_registro
+            ORDER BY n.fecha_registro DESC
+        """, (id_grupo_materia, id_tipo, user_info['id']))
+        registro = [{
+            'fecha': str(r['fecha_registro']),
+            'cantidad': r['cantidad'],
+            'promedio': float(r['promedio']) if r['promedio'] is not None else 0,
+        } for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "ultimas": ultimas, "registro": registro})
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/profesor/notas-registro-detalle', methods=['GET'])
+def notas_registro_detalle():
+    """Detalle de una subida de notas por fecha."""
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    id_grupo_materia = request.args.get('id_grupo_materia')
+    id_tipo = request.args.get('id_tipo')
+    fecha = request.args.get('fecha')
+    if not all([id_grupo_materia, id_tipo, fecha]):
+        return jsonify({"status": "error", "message": "Faltan parámetros."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT e.id_estudiante, e.nombre_completo, e.codigo_estudiante,
+                   n.valor, n.descripcion, n.fecha_registro
+            FROM notas n
+            JOIN estudiantes e ON e.id_estudiante = n.id_estudiante
+            JOIN grupo_materias gm ON n.id_grupo_materia = gm.id_grupo_materia
+            WHERE n.id_grupo_materia = %s AND n.id_tipo = %s
+              AND n.fecha_registro = %s AND gm.id_docente = %s
+            ORDER BY e.nombre_completo
+        """, (id_grupo_materia, id_tipo, fecha, user_info['id']))
+        filas = [dict(r) for r in cur.fetchall()]
+        for f in filas:
+            f['valor'] = float(f['valor'])
+            f['fecha_registro'] = str(f['fecha_registro'])
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "data": filas})
+    except Exception as e:
+        return _api_error_response(e)
+
+
 # ── ASISTENCIA ──
 
 ########consulta la asistencia de los estudiantes para una fecha y materia/grupo específico del profesor, devolviendo el estado (presente, ausente, etc.) por estudiante######
@@ -3498,6 +3582,45 @@ def guardar_asistencia():
             """, (r['id_estudiante'], id_grupo_materia, user_info['id'], fecha, r['estado']))
         conn.commit(); cur.close(); conn.close()
         return jsonify({"status": "success", "message": f"Asistencia del {fecha} guardada."})
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/profesor/asistencia/registro', methods=['GET'])
+def asistencia_registro_profesor():
+    """Historial de fechas con asistencia guardada por materia."""
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    id_grupo_materia = request.args.get('id_grupo_materia')
+    if not id_grupo_materia:
+        return jsonify({"status": "error", "message": "Falta id_grupo_materia."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT a.fecha,
+                   COUNT(*) AS total,
+                   COUNT(*) FILTER (WHERE a.estado = 'presente') AS presentes,
+                   COUNT(*) FILTER (WHERE a.estado = 'ausente') AS ausentes,
+                   COUNT(*) FILTER (WHERE a.estado = 'tardanza') AS tardanzas,
+                   COUNT(*) FILTER (WHERE a.estado = 'justificado') AS justificados
+            FROM asistencia a
+            WHERE a.id_grupo_materia = %s AND a.id_profesor = %s
+            GROUP BY a.fecha
+            ORDER BY a.fecha DESC
+        """, (id_grupo_materia, user_info['id']))
+        registro = [{
+            'fecha': str(r['fecha']),
+            'total': r['total'],
+            'presentes': r['presentes'],
+            'ausentes': r['ausentes'],
+            'tardanzas': r['tardanzas'],
+            'justificados': r['justificados'],
+        } for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "data": registro})
     except Exception as e:
         return _api_error_response(e)
 
