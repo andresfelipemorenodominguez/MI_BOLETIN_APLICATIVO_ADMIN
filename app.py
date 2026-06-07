@@ -956,25 +956,24 @@ def debug_email():
 
 @app.route('/debug-send')
 def debug_send():
-    import traceback
+    import traceback, base64
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
     try:
-        import base64, smtplib
-        from email.mime.multipart import MIMEMultipart
-        from email.mime.text import MIMEText
         access_token = _get_gmail_access_token()
         msg = MIMEMultipart('alternative')
         msg['Subject'] = 'Test'
         msg['From'] = EMAIL_USER
         msg['To'] = EMAIL_USER
         msg.attach(MIMEText('<p>Test</p>', 'html'))
-        auth_string = base64.b64encode(
-            f'user={EMAIL_USER}\x01auth=Bearer {access_token}\x01\x01'.encode()
-        ).decode()
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=15) as server:
-            server.ehlo()
-            server.docmd('AUTH', 'XOAUTH2 ' + auth_string)
-            server.send_message(msg)
-        return jsonify({"sent": True})
+        raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+        r = _requests.post(
+            'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+            headers={'Authorization': f'Bearer {access_token}', 'Content-Type': 'application/json'},
+            json={'raw': raw},
+            timeout=15
+        )
+        return jsonify({"status": r.status_code, "response": r.json()})
     except Exception as e:
         return jsonify({"error": str(e), "trace": traceback.format_exc()})
 #
