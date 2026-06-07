@@ -766,7 +766,11 @@ def _get_gmail_access_token():
     return r.json()['access_token']
 
 def _send_via_smtp(to_email, subject, html_content, text_content=""):
+    import base64
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
     access_token = _get_gmail_access_token()
+    
     msg = MIMEMultipart('alternative')
     msg['Subject'] = subject
     msg['From'] = EMAIL_FROM or EMAIL_USER
@@ -774,13 +778,20 @@ def _send_via_smtp(to_email, subject, html_content, text_content=""):
     if text_content:
         msg.attach(MIMEText(text_content, 'plain'))
     msg.attach(MIMEText(html_content, 'html'))
-    auth_string = base64.b64encode(
-        f'user={EMAIL_USER}\x01auth=Bearer {access_token}\x01\x01'.encode()
-    ).decode()
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=SMTP_TIMEOUT) as server:
-        server.ehlo()
-        server.docmd('AUTH', 'XOAUTH2 ' + auth_string)
-        server.send_message(msg)
+    
+    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+    
+    r = _requests.post(
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+        headers={
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json',
+        },
+        json={'raw': raw},
+        timeout=15
+    )
+    if r.status_code >= 300:
+        raise RuntimeError(f"Gmail API error {r.status_code}: {r.text}")
 
 def _send_via_resend(to_email, subject, html_content, text_content=""):
     from_addr = EMAIL_FROM or (
