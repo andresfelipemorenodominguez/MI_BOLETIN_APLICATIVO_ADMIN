@@ -576,7 +576,8 @@ class ProfessorFormHandler {
             }
             container.innerHTML = materias.map(m =>
                 `<label class="check-asig">
-                    <input type="checkbox" value="${m.nombre}" name="asignatura"> ${m.nombre}
+                    <input type="checkbox" value="${m.nombre}" name="asignatura">
+                    <span>${m.nombre}</span>
                 </label>`
             ).join('');
         } catch(e) {
@@ -1065,7 +1066,8 @@ const EditarProfesor = {
         if (container) {
             container.innerHTML = ASIGNATURAS_DISPONIBLES.map(a =>
                 `<label class="check-asig">
-                    <input type="checkbox" value="${a}" name="asignatura"> ${a}
+                    <input type="checkbox" value="${a}" name="asignatura">
+                    <span>${a}</span>
                 </label>`
             ).join('');
         }
