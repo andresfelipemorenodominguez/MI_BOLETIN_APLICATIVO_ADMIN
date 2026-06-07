@@ -11,6 +11,8 @@ import random
 import string
 from datetime import datetime, timedelta
 import smtplib
+import base64
+import requests as _requests
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
@@ -74,8 +76,6 @@ def _pdf_to_bytesio(pdf):
     return buffer
 
 
-def _smtp_config_ok():
-    return bool(EMAIL_USER and EMAIL_PASSWORD)
 
 
 app = Flask(__name__)
@@ -84,17 +84,22 @@ app.secret_key = _require_secret_key()
 
 #  CONFIGURACIÓN EMAIL (GMAIL) — desde variables de entorno
 
-EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
-EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
-EMAIL_USER = os.environ.get("EMAIL_USER", "")
-EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD", "")
+EMAIL_HOST = "smtp.gmail.com"
+EMAIL_PORT = 465
+EMAIL_USER = os.environ.get("GMAIL_USER", "")
 EMAIL_FROM = os.environ.get("EMAIL_FROM") or (
     f"MiBoletín <{EMAIL_USER}>" if EMAIL_USER else ""
 )
-# URL pública de la app (enlaces en correos, p. ej. recuperación de contraseña)
-PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "http://127.0.0.1:5005").rstrip("/")
+GMAIL_CLIENT_ID = os.environ.get("GMAIL_CLIENT_ID", "")
+GMAIL_CLIENT_SECRET = os.environ.get("GMAIL_CLIENT_SECRET", "")
+GMAIL_REFRESH_TOKEN = os.environ.get("GMAIL_REFRESH_TOKEN", "")
 SMTP_TIMEOUT = int(os.environ.get("SMTP_TIMEOUT", "15"))
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "http://127.0.0.1:5005").rstrip("/")
+
+
+def _smtp_config_ok():
+    return bool(EMAIL_USER and GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET and GMAIL_REFRESH_TOKEN)
 
 
 # CONFIGURACIÓN DATABASE
@@ -749,7 +754,19 @@ def _email_config_ok():
     return bool(RESEND_API_KEY) or _smtp_config_ok()
 
 
+# DESPUÉS
+def _get_gmail_access_token():
+    r = _requests.post('https://oauth2.googleapis.com/token', data={
+        'grant_type': 'refresh_token',
+        'refresh_token': GMAIL_REFRESH_TOKEN,
+        'client_id': GMAIL_CLIENT_ID,
+        'client_secret': GMAIL_CLIENT_SECRET,
+    }, timeout=10)
+    r.raise_for_status()
+    return r.json()['access_token']
+
 def _send_via_smtp(to_email, subject, html_content, text_content=""):
+    access_token = _get_gmail_access_token()
     msg = MIMEMultipart('alternative')
     msg['Subject'] = subject
     msg['From'] = EMAIL_FROM or EMAIL_USER
@@ -757,11 +774,13 @@ def _send_via_smtp(to_email, subject, html_content, text_content=""):
     if text_content:
         msg.attach(MIMEText(text_content, 'plain'))
     msg.attach(MIMEText(html_content, 'html'))
-    with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT, timeout=SMTP_TIMEOUT) as server:
-        server.starttls()
-        server.login(EMAIL_USER, EMAIL_PASSWORD)
+    auth_string = base64.b64encode(
+        f'user={EMAIL_USER}\x01auth=Bearer {access_token}\x01\x01'.encode()
+    ).decode()
+    with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=SMTP_TIMEOUT) as server:
+        server.ehlo()
+        server.docmd('AUTH', 'XOAUTH2 ' + auth_string)
         server.send_message(msg)
-
 
 def _send_via_resend(to_email, subject, html_content, text_content=""):
     from_addr = EMAIL_FROM or (
@@ -790,6 +809,7 @@ def _send_via_resend(to_email, subject, html_content, text_content=""):
 
 
 def _send_html_email(to_email, subject, html_content, text_content=""):
+    print(f"DEBUG EMAIL_USER={EMAIL_USER!r} CLIENT_ID={GMAIL_CLIENT_ID!r} SECRET={GMAIL_CLIENT_SECRET!r} TOKEN={GMAIL_REFRESH_TOKEN!r}")
     if not _email_config_ok():
         print("Email no configurado: define RESEND_API_KEY o EMAIL_USER + EMAIL_PASSWORD")
         return False
