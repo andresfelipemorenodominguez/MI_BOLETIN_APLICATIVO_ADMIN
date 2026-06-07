@@ -945,11 +945,26 @@ def debug_email():
 
 @app.route('/debug-send')
 def debug_send():
+    import traceback
     try:
-        result = _send_html_email('aragondidier19@gmail.com', 'Test', '<p>Test email</p>')
-        return jsonify({"sent": result})
+        import base64, smtplib
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+        access_token = _get_gmail_access_token()
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = 'Test'
+        msg['From'] = EMAIL_USER
+        msg['To'] = EMAIL_USER
+        msg.attach(MIMEText('<p>Test</p>', 'html'))
+        auth_string = base64.b64encode(
+            f'user={EMAIL_USER}\x01auth=Bearer {access_token}\x01\x01'.encode()
+        ).decode()
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=15) as server:
+            server.ehlo()
+            server.docmd('AUTH', 'XOAUTH2 ' + auth_string)
+            server.send_message(msg)
+        return jsonify({"sent": True})
     except Exception as e:
-        import traceback
         return jsonify({"error": str(e), "trace": traceback.format_exc()})
 #
 @app.route("/")
