@@ -31,6 +31,8 @@ from multicolegio import (
     ensure_profile_schema,
     get_admin_from_session,
     is_superadmin,
+    is_admin_lider,
+    MAX_ADMIN_LIDERES,
     colegio_filter_sql,
     crear_colegio_con_admin,
     branding_static_path,
@@ -151,14 +153,58 @@ def _admin_colegio_id(admin):
 
 APP_ROOT = os.path.dirname(__file__)
 BRANDING_UPLOAD_FOLDER = os.path.join(APP_ROOT, 'static', 'uploads_branding')
+PROFILE_UPLOAD_FOLDER = os.path.join(APP_ROOT, 'static', 'uploads_perfil')
 os.makedirs(BRANDING_UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(PROFILE_UPLOAD_FOLDER, exist_ok=True)
 ALLOW_PUBLIC_ADMIN_REGISTER = os.environ.get('ALLOW_PUBLIC_ADMIN_REGISTER', 'false').lower() in ('1', 'true', 'yes')
 BRANDING_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
+PROFILE_IMAGE_EXTENSIONS = BRANDING_IMAGE_EXTENSIONS
 MAX_BRANDING_UPLOAD_BYTES = 2 * 1024 * 1024
+MAX_PROFILE_UPLOAD_BYTES = 2 * 1024 * 1024
 
 
 def _allowed_branding_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in BRANDING_IMAGE_EXTENSIONS
+
+
+def _allowed_profile_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in PROFILE_IMAGE_EXTENSIONS
+
+
+def _avatar_fallback_url(nombre):
+    from urllib.parse import quote
+    name = quote(str(nombre or 'Usuario'))
+    return f'https://ui-avatars.com/api/?name={name}&background=003366&color=fff&size=120'
+
+
+def _save_profile_photo(tipo, user_id, file_storage):
+    if not file_storage or not file_storage.filename:
+        return None, 'No se envió archivo.'
+    if not _allowed_profile_file(file_storage.filename):
+        return None, 'Formato no permitido. Use PNG, JPG o WEBP.'
+    file_storage.seek(0, os.SEEK_END)
+    size = file_storage.tell()
+    file_storage.seek(0)
+    if size > MAX_PROFILE_UPLOAD_BYTES:
+        return None, 'La imagen supera 2 MB.'
+    ext = file_storage.filename.rsplit('.', 1)[1].lower()
+    if ext == 'jpeg':
+        ext = 'jpg'
+    folder = os.path.join(PROFILE_UPLOAD_FOLDER, tipo, str(user_id))
+    os.makedirs(folder, exist_ok=True)
+    filename = f'foto.{ext}'
+    path = os.path.join(folder, filename)
+    file_storage.save(path)
+    return f'/static/uploads_perfil/{tipo}/{user_id}/{filename}', None
+
+
+def _require_admin_lider_api():
+    admin, id_colegio, err = _require_colegio_admin_api()
+    if err:
+        return None, None, err
+    if not is_admin_lider(admin):
+        return None, None, (jsonify({"status": "error", "message": "Solo administradores líder."}), 403)
+    return admin, id_colegio, None
 
 
 def _pdf_sanitize(text):
@@ -1410,7 +1456,8 @@ def dashboard():
                                    admin_rol=admin_rol,
                                    id_colegio=id_colegio or '',
                                    colegio_nombre=colegio_nombre,
-                                   is_superadmin=(admin_rol == 'superadmin'))
+                                   is_superadmin=(admin_rol == 'superadmin'),
+                                   is_admin_lider=(admin_rol == 'admin_lider'))
         else:
             return render_template('administrador/dashboard.html',
                                    user_name=session.get('user_name', 'Usuario'),
@@ -1418,7 +1465,8 @@ def dashboard():
                                    admin_rol=admin_rol,
                                    id_colegio=id_colegio or '',
                                    colegio_nombre=colegio_nombre,
-                                   is_superadmin=(admin_rol == 'superadmin'))
+                                   is_superadmin=(admin_rol == 'superadmin'),
+                                   is_admin_lider=(admin_rol == 'admin_lider'))
     except Exception as e:
         print(f"Error al obtener datos del usuario: {e}")
         return render_template('administrador/dashboard.html',
@@ -3953,66 +4001,221 @@ def estudiante_agenda():
 @app.route('/change-password', methods=['POST'])
 def change_password():
     user_info = session.get('user_info')
-    if not user_info:
+    user_id = session.get('user_id')
+    if not user_info and not user_id:
         return jsonify({"status": "error", "message": "No autorizado"}), 401
     data = request.get_json()
     current_password = data.get('current_password')
     new_password = data.get('new_password')
     if not current_password or not new_password:
         return jsonify({"status": "error", "message": "Faltan campos."})
+    if len(new_password) < 6:
+        return jsonify({"status": "error", "message": "La nueva contraseña debe tener al menos 6 caracteres."})
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        tipo = user_info.get('tipo')
-        if tipo == 'estudiante':
-            cur.execute("SELECT contrasena FROM estudiantes WHERE id_estudiante = %s", (user_info['id'],))
-        elif tipo == 'profesor':
-            cur.execute("SELECT contrasena FROM profesores WHERE id_profesor = %s", (user_info['id'],))
+        if user_info:
+            tipo = user_info.get('tipo')
+            if tipo == 'estudiante':
+                cur.execute("SELECT contrasena FROM estudiantes WHERE id_estudiante = %s", (user_info['id'],))
+                uid = user_info['id']
+            elif tipo == 'profesor':
+                cur.execute("SELECT contrasena FROM profesores WHERE id_profesor = %s", (user_info['id'],))
+                uid = user_info['id']
+            else:
+                cur.close(); conn.close()
+                return jsonify({"status": "error", "message": "Tipo no válido."})
         else:
-            return jsonify({"status": "error", "message": "Tipo no válido."})
+            tipo = 'admin'
+            cur.execute("SELECT contrasena FROM administradores WHERE id_admin = %s", (user_id,))
+            uid = user_id
         row = cur.fetchone()
         if not row or not bcrypt.checkpw(current_password.encode(), row[0].encode()):
+            cur.close(); conn.close()
             return jsonify({"status": "error", "message": "Contraseña actual incorrecta."})
         hashed = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
         if tipo == 'estudiante':
-            cur.execute("UPDATE estudiantes SET contrasena=%s WHERE id_estudiante=%s", (hashed, user_info['id']))
+            cur.execute("UPDATE estudiantes SET contrasena=%s WHERE id_estudiante=%s", (hashed, uid))
+        elif tipo == 'profesor':
+            cur.execute("UPDATE profesores SET contrasena=%s WHERE id_profesor=%s", (hashed, uid))
         else:
-            cur.execute("UPDATE profesores SET contrasena=%s WHERE id_profesor=%s", (hashed, user_info['id']))
+            cur.execute("UPDATE administradores SET contrasena=%s WHERE id_admin=%s", (hashed, uid))
         conn.commit(); cur.close(); conn.close()
         return jsonify({"status": "success", "message": "Contraseña actualizada exitosamente."})
     except Exception as e:
         return _api_error_response(e)
 
-###########permite a estudiantes o profesores actualizar su nombre completo y correo electrónico, guardando los cambios en la base de datos y actualizando la sesión activa########
+###########Perfil del usuario en sesión (estudiante, profesor o administrador)########
+#
+@app.route('/api/profile', methods=['GET'])
+def get_profile():
+    user_info = session.get('user_info')
+    user_id = session.get('user_id')
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        if user_info:
+            tipo = user_info.get('tipo')
+            if tipo == 'estudiante':
+                cur.execute("""
+                    SELECT nombre_completo, correo_electronico, codigo_estudiante, tipo_documento,
+                           numero_documento, grado, grupo, foto_perfil,
+                           fecha_nacimiento, lugar_nacimiento, genero, direccion_residencia,
+                           eps, grupo_sanguineo, alergias, ultimo_grado, colegio_procedencia
+                    FROM estudiantes WHERE id_estudiante = %s
+                """, (user_info['id'],))
+            elif tipo == 'profesor':
+                cur.execute("""
+                    SELECT nombre_completo, correo_electronico, codigo_profesor, tipo_documento,
+                           numero_documento, telefono, asignaturas, foto_perfil,
+                           titulos_academicos, area_especialidad, anios_experiencia,
+                           registro_escalafon, entidad_salud, entidad_pension
+                    FROM profesores WHERE id_profesor = %s
+                """, (user_info['id'],))
+            else:
+                cur.close(); conn.close()
+                return jsonify({"status": "error", "message": "Tipo de usuario no válido."}), 400
+            row = cur.fetchone()
+            if not row:
+                cur.close(); conn.close()
+                return jsonify({"status": "error", "message": "Usuario no encontrado."}), 404
+            data = dict(row)
+            if data.get('fecha_nacimiento'):
+                data['fecha_nacimiento'] = data['fecha_nacimiento'].isoformat()
+            data['tipo'] = tipo
+            data['codigo'] = data.pop('codigo_estudiante', None) or data.pop('codigo_profesor', None)
+            data['avatar_url'] = data.get('foto_perfil') or _avatar_fallback_url(data.get('nombre_completo'))
+        elif user_id:
+            cur.execute("""
+                SELECT nombre_completo, correo_electronico, rol, telefono, cargo, foto_perfil
+                FROM administradores WHERE id_admin = %s
+            """, (user_id,))
+            row = cur.fetchone()
+            if not row:
+                cur.close(); conn.close()
+                return jsonify({"status": "error", "message": "Administrador no encontrado."}), 404
+            data = dict(row)
+            data['tipo'] = 'admin'
+            data['avatar_url'] = data.get('foto_perfil') or _avatar_fallback_url(data.get('nombre_completo'))
+        else:
+            cur.close(); conn.close()
+            return jsonify({"status": "error", "message": "No autorizado"}), 401
+        cur.close(); conn.close()
+        return jsonify({"status": "success", "data": data})
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/upload-profile-photo', methods=['POST'])
+def upload_profile_photo():
+    user_info = session.get('user_info')
+    user_id = session.get('user_id')
+    file = request.files.get('foto')
+    if not file:
+        return jsonify({"status": "error", "message": "No se envió imagen."}), 400
+    try:
+        if user_info:
+            tipo = user_info.get('tipo')
+            uid = user_info['id']
+            table = 'estudiantes' if tipo == 'estudiante' else 'profesores'
+            id_col = 'id_estudiante' if tipo == 'estudiante' else 'id_profesor'
+        elif user_id:
+            tipo = 'admin'
+            uid = user_id
+            table = 'administradores'
+            id_col = 'id_admin'
+        else:
+            return jsonify({"status": "error", "message": "No autorizado"}), 401
+        url, err = _save_profile_photo(tipo, uid, file)
+        if err:
+            return jsonify({"status": "error", "message": err}), 400
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(f"UPDATE {table} SET foto_perfil = %s WHERE {id_col} = %s", (url, uid))
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({"status": "success", "message": "Foto actualizada.", "foto_perfil": url})
+    except Exception as e:
+        return _api_error_response(e)
+
+
+###########permite a estudiantes, profesores o administradores actualizar su perfil########
 #
 @app.route('/update-profile', methods=['POST'])
 def update_profile():
-    data = request.get_json()
+    data = request.get_json() or {}
     fullname = data.get('fullname', '').strip()
     email = data.get('email', '').strip()
     if not fullname:
         return jsonify({"status": "error", "message": "El nombre es requerido."})
 
     user_info = session.get('user_info')
-    user_id   = session.get('user_id')
+    user_id = session.get('user_id')
 
     try:
         conn = get_db_connection()
-        cur  = conn.cursor()
+        cur = conn.cursor()
 
         if user_info:
             tipo = user_info.get('tipo')
             if tipo == 'estudiante':
-                cur.execute("UPDATE estudiantes SET nombre_completo=%s, correo_electronico=%s WHERE id_estudiante=%s",
-                            (fullname, email, user_info['id']))
+                cur.execute("""
+                    UPDATE estudiantes SET
+                        nombre_completo=%s, correo_electronico=%s,
+                        fecha_nacimiento=%s, lugar_nacimiento=%s, genero=%s,
+                        direccion_residencia=%s, eps=%s, grupo_sanguineo=%s,
+                        alergias=%s
+                    WHERE id_estudiante=%s
+                """, (
+                    fullname, email or None,
+                    data.get('fecha_nacimiento') or None,
+                    (data.get('lugar_nacimiento') or '').strip() or None,
+                    (data.get('genero') or '').strip() or None,
+                    (data.get('direccion_residencia') or '').strip() or None,
+                    (data.get('eps') or '').strip() or None,
+                    (data.get('grupo_sanguineo') or '').strip() or None,
+                    (data.get('alergias') or '').strip() or None,
+                    user_info['id'],
+                ))
             elif tipo == 'profesor':
-                cur.execute("UPDATE profesores SET nombre_completo=%s, correo_electronico=%s WHERE id_profesor=%s",
-                            (fullname, email, user_info['id']))
+                anios = data.get('anios_experiencia')
+                try:
+                    anios = int(anios) if anios not in (None, '') else None
+                except (TypeError, ValueError):
+                    anios = None
+                cur.execute("""
+                    UPDATE profesores SET
+                        nombre_completo=%s, correo_electronico=%s, telefono=%s,
+                        titulos_academicos=%s, area_especialidad=%s, anios_experiencia=%s,
+                        registro_escalafon=%s, entidad_salud=%s, entidad_pension=%s
+                    WHERE id_profesor=%s
+                """, (
+                    fullname, email,
+                    (data.get('telefono') or '').strip() or None,
+                    (data.get('titulos_academicos') or '').strip() or None,
+                    (data.get('area_especialidad') or '').strip() or None,
+                    anios,
+                    (data.get('registro_escalafon') or '').strip() or None,
+                    (data.get('entidad_salud') or '').strip() or None,
+                    (data.get('entidad_pension') or '').strip() or None,
+                    user_info['id'],
+                ))
             session['user_info']['nombre'] = fullname
+            if email:
+                session['user_info']['email'] = email
         elif user_id:
-            cur.execute("UPDATE administradores SET nombre_completo=%s, correo_electronico=%s WHERE id_admin=%s",
-                        (fullname, email, user_id))
+            cur.execute("""
+                UPDATE administradores SET nombre_completo=%s, correo_electronico=%s,
+                    telefono=%s, cargo=%s
+                WHERE id_admin=%s
+            """, (
+                fullname, email,
+                (data.get('telefono') or '').strip() or None,
+                (data.get('cargo') or '').strip() or None,
+                user_id,
+            ))
             session['user_name'] = fullname
+            if email:
+                session['user_email'] = email
         else:
             return jsonify({"status": "error", "message": "No autorizado"}), 401
 
@@ -4431,8 +4634,100 @@ def get_administradores():
             params,
         )
         data = [dict(r) for r in cur.fetchall()]
+        id_colegio = admin.get('id_colegio')
+        lideres = sum(1 for a in data if a.get('rol') == 'admin_lider')
         cur.close(); conn.close()
-        return jsonify({"status": "success", "data": data})
+        return jsonify({
+            "status": "success",
+            "data": data,
+            "meta": {
+                "es_lider": is_admin_lider(admin),
+                "lideres_actuales": lideres,
+                "max_lideres": MAX_ADMIN_LIDERES,
+            },
+        })
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/admin/administradores', methods=['POST'])
+def crear_administrador():
+    admin, id_colegio, err = _require_admin_lider_api()
+    if err:
+        return err
+    data = request.get_json() or {}
+    nombre = (data.get('nombre') or data.get('fullname') or '').strip()
+    email = (data.get('email') or '').strip()
+    password = data.get('password') or ''
+    if not all([nombre, email, password]):
+        return jsonify({"status": "error", "message": "Nombre, correo y contraseña son requeridos."}), 400
+    if len(password) < 6:
+        return jsonify({"status": "error", "message": "La contraseña debe tener al menos 6 caracteres."}), 400
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT id_admin FROM administradores WHERE correo_electronico = %s", (email,))
+        if cur.fetchone():
+            cur.close(); conn.close()
+            return jsonify({"status": "error", "message": "El correo ya está registrado."}), 400
+        hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        cur.execute("""
+            INSERT INTO administradores (
+                nombre_completo, correo_electronico, contrasena,
+                email_verified, rol, id_colegio
+            ) VALUES (%s, %s, %s, TRUE, 'admin_colegio', %s) RETURNING id_admin
+        """, (nombre, email, hashed, id_colegio))
+        new_id = cur.fetchone()[0]
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({
+            "status": "success",
+            "message": "Administrador creado. Ya puede iniciar sesión con su correo.",
+            "id_admin": new_id,
+        })
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/admin/administradores/<int:id_admin>/lider', methods=['PUT'])
+def toggle_admin_lider(id_admin):
+    admin, err = _require_superadmin_api()
+    if err:
+        return err
+    data = request.get_json() or {}
+    hacer_lider = bool(data.get('es_lider'))
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute(
+            "SELECT id_admin, rol, id_colegio FROM administradores WHERE id_admin = %s",
+            (id_admin,),
+        )
+        target = cur.fetchone()
+        if not target or target['rol'] == 'superadmin':
+            cur.close(); conn.close()
+            return jsonify({"status": "error", "message": "Administrador no encontrado."}), 404
+        if not target['id_colegio']:
+            cur.close(); conn.close()
+            return jsonify({"status": "error", "message": "Solo admins de colegio pueden ser líderes."}), 400
+        if hacer_lider:
+            cur.execute(
+                "SELECT COUNT(*) FROM administradores WHERE id_colegio = %s AND rol = 'admin_lider'",
+                (target['id_colegio'],),
+            )
+            count = cur.fetchone()[0]
+            if target['rol'] != 'admin_lider' and count >= MAX_ADMIN_LIDERES:
+                cur.close(); conn.close()
+                return jsonify({
+                    "status": "error",
+                    "message": f"Máximo {MAX_ADMIN_LIDERES} administradores líder por colegio.",
+                }), 400
+            nuevo_rol = 'admin_lider'
+        else:
+            nuevo_rol = 'admin_colegio'
+        cur.execute("UPDATE administradores SET rol = %s WHERE id_admin = %s", (nuevo_rol, id_admin))
+        conn.commit(); cur.close(); conn.close()
+        msg = 'Designado como administrador líder.' if hacer_lider else 'Rol de líder removido.'
+        return jsonify({"status": "success", "message": msg, "rol": nuevo_rol})
     except Exception as e:
         return _api_error_response(e)
 
@@ -4440,7 +4735,7 @@ def get_administradores():
 #
 @app.route('/admin/administradores/<int:id_admin>', methods=['DELETE'])
 def eliminar_administrador(id_admin):
-    admin, id_colegio, err = _require_colegio_admin_api()
+    admin, id_colegio, err = _require_admin_lider_api()
     if err:
         return err
     if id_admin == session['user_id']:

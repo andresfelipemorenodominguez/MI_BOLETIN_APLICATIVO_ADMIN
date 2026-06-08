@@ -3,69 +3,12 @@ const content = document.getElementById('panel-content');
 const navLinks = Array.from(document.querySelectorAll('.nav-link[data-section]'));
 const userName = document.querySelector('.user-name')?.textContent?.trim() || 'Profesor';
 
-function toggleOverlay(id, show) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.classList.toggle('active', show);
-}
-
-function closeAllModals() {
-  ['profile-modal-overlay', 'edit-modal-overlay', 'password-modal-overlay'].forEach(id => toggleOverlay(id, false));
-}
-
-document.getElementById('profile-btn')?.addEventListener('click', () => toggleOverlay('profile-modal-overlay', true));
-document.getElementById('close-profile-modal')?.addEventListener('click', () => toggleOverlay('profile-modal-overlay', false));
-document.getElementById('open-edit-profile')?.addEventListener('click', () => {
-  toggleOverlay('profile-modal-overlay', false);
-  toggleOverlay('edit-modal-overlay', true);
-});
-document.getElementById('open-password-modal')?.addEventListener('click', () => {
-  toggleOverlay('profile-modal-overlay', false);
-  toggleOverlay('password-modal-overlay', true);
-});
-document.getElementById('close-edit-modal')?.addEventListener('click', () => toggleOverlay('edit-modal-overlay', false));
-document.getElementById('cancel-edit-modal')?.addEventListener('click', () => toggleOverlay('edit-modal-overlay', false));
-document.getElementById('close-password-modal')?.addEventListener('click', () => toggleOverlay('password-modal-overlay', false));
-document.getElementById('cancel-password-modal')?.addEventListener('click', () => toggleOverlay('password-modal-overlay', false));
-
-document.querySelectorAll('.modal-overlay').forEach(overlay => {
-  overlay.addEventListener('click', e => {
-    if (e.target === overlay) overlay.classList.remove('active');
-  });
-});
-
-window.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeAllModals();
-});
-
-document.getElementById('save-profile')?.addEventListener('click', async () => {
-  const fullname = document.getElementById('editName')?.value;
-  const email = document.getElementById('editEmail')?.value;
-  const res = await fetch('/update-profile', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fullname, email }),
-  });
-  const data = await res.json();
-  alert(data.message);
-  if (data.status === 'success') toggleOverlay('edit-modal-overlay', false);
-});
-
-// ── Cambiar contraseña ──
-document.getElementById('savePassword')?.addEventListener('click', async () => {
-  const current   = document.getElementById('currentPassword').value;
-  const nueva     = document.getElementById('newPassword').value;
-  const confirmar = document.getElementById('confirmPassword').value;
-  if (!current||!nueva||!confirmar) return alert('Completa todos los campos.');
-  if (nueva !== confirmar) return alert('Las contraseñas no coinciden.');
-  const res  = await fetch('/change-password', { method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ current_password:current, new_password:nueva, confirm_password:confirmar }) });
-  const data = await res.json();
-  alert(data.message);
-  const msg = document.getElementById('pw-msg');
-  if (msg) msg.innerHTML = `<span class="${data.status === 'success' ? 'msg-ok' : 'msg-err'}">${data.message}</span>`;
-  if (data.status === 'success') setTimeout(() => toggleOverlay('password-modal-overlay', false), 1200);
+ProfilePanel.init({
+  notify: (msg, ok) => alert(msg),
+  onProfileOpen: () => {
+    const chk = document.getElementById('dark-mode-toggle');
+    if (chk) chk.checked = document.documentElement.classList.contains('dark-mode');
+  },
 });
 
 function setActiveNav(section) {

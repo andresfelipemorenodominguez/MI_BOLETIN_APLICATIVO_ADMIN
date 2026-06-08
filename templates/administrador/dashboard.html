@@ -1255,10 +1255,13 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
                 </div>
                 <div class="mgmt-card">
                     <h3><i class="fas fa-users-cog"></i> Administradores de colegio</h3>
+                    <p style="color:var(--gray-600);margin-bottom:12px;">
+                        Designa hasta 2 administradores líder por colegio. Ellos podrán crear y gestionar otros administradores.
+                    </p>
                     <div style="overflow-x:auto;">
                         <table class="mgmt-table">
-                            <thead><tr><th>Colegio</th><th>Nombre</th><th>Correo</th><th>Verificado</th></tr></thead>
-                            <tbody id="tbody-admins-colegio"><tr><td colspan="4">Cargando...</td></tr></tbody>
+                            <thead><tr><th>Colegio</th><th>Nombre</th><th>Correo</th><th>Rol</th><th>Líder</th></tr></thead>
+                            <tbody id="tbody-admins-colegio"><tr><td colspan="5">Cargando...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -1301,15 +1304,35 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
                     <h1>Administradores</h1>
                     <p class="form-subtitle">Gestiona los administradores del sistema.</p>
                 </div>
-                <div class="mgmt-card">
+                <div class="mgmt-card" id="admin-crear-card">
                     <h3><i class="fas fa-user-plus"></i> Crear Nuevo Administrador</h3>
-                    <p style="color:var(--gray-600);margin-bottom:16px;">
-                        El registro de administradores requiere verificación por correo electrónico.
+                    <p id="admin-crear-desc" style="color:var(--gray-600);margin-bottom:16px;">
+                        Los administradores líder registran nuevas cuentas para su colegio. El nuevo usuario podrá iniciar sesión de inmediato.
                     </p>
-                    <!-- Enlace externo al formulario de registro de administradores -->
-                    <a href="/register" target="_blank" class="btn-primary" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px;">
-                        <i class="fas fa-external-link-alt"></i> Ir al formulario de registro
-                    </a>
+                    <div id="admin-crear-form" style="display:none;">
+                        <div class="form-grid" style="display:grid;gap:12px;max-width:480px;">
+                            <div class="form-group">
+                                <label class="form-label" for="new-admin-nombre">Nombre completo</label>
+                                <input type="text" id="new-admin-nombre" class="form-input" placeholder="Nombre del administrador">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="new-admin-email">Correo electrónico</label>
+                                <input type="email" id="new-admin-email" class="form-input" placeholder="correo@colegio.edu.co">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="new-admin-pass">Contraseña inicial</label>
+                                <input type="password" id="new-admin-pass" class="form-input" placeholder="Mínimo 6 caracteres">
+                            </div>
+                        </div>
+                        <p id="admin-crear-msg" style="font-size:13px;min-height:18px;margin:8px 0 0;"></p>
+                        <button type="button" class="btn-primary" style="margin-top:12px;" onclick="AdminManager.crearAdministrador()">
+                            <i class="fas fa-user-plus"></i> Crear administrador
+                        </button>
+                    </div>
+                    <p id="admin-crear-aviso" style="display:none;color:var(--gray-600);">
+                        <i class="fas fa-info-circle"></i>
+                        Solo los administradores líder (designados por el super administrador) pueden registrar nuevos administradores.
+                    </p>
                 </div>
                 <div class="mgmt-card">
                     <h3><i class="fas fa-list"></i> Administradores Registrados</h3>
@@ -1395,25 +1418,18 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
 <!-- Modal Perfil -->
 <div class="modal-overlay" id="profile-modal-overlay">
     <div class="modal" id="profile-modal">
-        <!-- Cabecera del modal con título e icono, y botón de cerrar -->
         <div class="modal-header">
             <h2 class="modal-title"><i class="fas fa-user-circle"></i> Mi Perfil</h2>
             <button class="modal-close" id="close-profile-modal"><i class="fas fa-times"></i></button>
         </div>
-        <div class="modal-body">
+        <div class="modal-body" id="profile-view-body">
             <div class="avatar-wrapper">
-                <img src="https://ui-avatars.com/api/?name={{ user_name|urlencode }}&background=003366&color=fff&size=80" alt="Avatar">
-                <h3>{{ user_name }}</h3>
-                <p>{{ user_email }}</p>
+                <img id="profile-avatar-img" src="https://ui-avatars.com/api/?name={{ user_name|urlencode }}&background=003366&color=fff&size=80" alt="Avatar">
+                <h3 id="profile-view-name">{{ user_name }}</h3>
+                <p id="profile-view-email">{{ user_email }}</p>
+                <p id="profile-view-role" class="welcome-text" style="margin-top:8px;font-size:13px;"></p>
             </div>
-            <div class="form-group">
-                <label class="form-label">Nombre Completo</label>
-                <input type="text" id="profile-name" class="form-input" value="{{ user_name }}">
-            </div>
-            <div class="form-group">
-                <label class="form-label">Correo Electrónico</label>
-                <input type="email" id="profile-email" class="form-input" value="{{ user_email }}">
-            </div>
+            <div id="profile-info-list" class="profile-info-list"></div>
             <div class="dark-mode-row">
                 <label for="dark-mode-toggle">
                     <i class="fas fa-moon"></i> Modo Oscuro
@@ -1424,15 +1440,94 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
                 </label>
             </div>
         </div>
-        <div class="modal-footer">
-            <button class="btn-secondary" id="cancel-profile">Cancelar</button>
-            <button class="btn-primary" onclick="guardarPerfil()">
-                <i class="fas fa-save"></i> Guardar
+        <div class="modal-footer" style="flex-direction:column;gap:8px;">
+            <button type="button" class="btn-secondary" id="open-edit-profile" style="width:100%;">
+                <i class="fas fa-user-edit"></i> Editar Perfil
+            </button>
+            <button type="button" class="btn-secondary" id="open-password-modal" style="width:100%;">
+                <i class="fas fa-key"></i> Cambiar Contraseña
             </button>
         </div>
         <div class="logout-section">
             <button class="btn-danger" style="width:100%;" onclick="window.location.href='/logout'">
                 <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal editar perfil admin -->
+<div class="modal-overlay" id="edit-modal-overlay">
+    <div class="modal" style="max-width:480px;width:95%;">
+        <div class="modal-header">
+            <h2 class="modal-title"><i class="fas fa-user-edit"></i> Editar Perfil</h2>
+            <button class="modal-close" id="close-edit-modal"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <div class="edit-profile-avatar-section">
+                <div class="current-avatar">
+                    <img id="edit-profile-avatar" src="https://ui-avatars.com/api/?name={{ user_name|urlencode }}&background=003366&color=fff&size=120" alt="Avatar">
+                </div>
+                <div class="avatar-actions">
+                    <label class="btn-secondary change-photo-btn" style="cursor:pointer;">
+                        <i class="fas fa-camera"></i> Cambiar foto
+                        <input type="file" id="profile-photo-input" accept="image/png,image/jpeg,image/webp" hidden>
+                    </label>
+                    <p class="avatar-hint">PNG, JPG o WEBP. Máx. 2 MB.</p>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="profile-name">Nombre completo</label>
+                <input type="text" id="profile-name" class="form-input" value="{{ user_name }}">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="profile-email">Correo electrónico</label>
+                <input type="email" id="profile-email" class="form-input" value="{{ user_email }}">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="profile-telefono">Teléfono</label>
+                <input type="tel" id="profile-telefono" class="form-input" placeholder="Opcional">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="profile-cargo">Cargo</label>
+                <input type="text" id="profile-cargo" class="form-input" placeholder="Ej. Coordinador académico">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn-secondary" id="cancel-profile">Cancelar</button>
+            <button type="button" class="btn-primary" id="save-profile">
+                <i class="fas fa-save"></i> Guardar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal contraseña admin -->
+<div class="modal-overlay" id="password-modal-overlay">
+    <div class="modal" style="max-width:440px;width:95%;">
+        <div class="modal-header">
+            <h2 class="modal-title"><i class="fas fa-key"></i> Cambiar Contraseña</h2>
+            <button class="modal-close" id="close-password-modal"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="form-label" for="currentPassword">Contraseña actual</label>
+                <input type="password" id="currentPassword" class="form-input" autocomplete="current-password">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="newPassword">Nueva contraseña</label>
+                <input type="password" id="newPassword" class="form-input" autocomplete="new-password">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="confirmPassword">Confirmar contraseña</label>
+                <input type="password" id="confirmPassword" class="form-input" autocomplete="new-password">
+            </div>
+            <p id="pw-msg" style="font-size:13px;min-height:18px;margin:0;"></p>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn-secondary" id="cancel-password-modal">Cancelar</button>
+            <button type="button" class="btn-primary" id="savePassword">
+                <i class="fas fa-save"></i> Cambiar
             </button>
         </div>
     </div>
@@ -1445,6 +1540,7 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
      data-user-id="{{ session['user_id'] }}"
      data-admin-rol="{{ admin_rol|default('admin_colegio') }}"
      data-is-superadmin="{{ 'true' if is_superadmin else 'false' }}"
+     data-is-admin-lider="{{ 'true' if is_admin_lider else 'false' }}"
      data-colegio-nombre="{{ colegio_nombre|default('') }}"
      style="display:none;"></div>
 
@@ -1724,6 +1820,7 @@ ARCHIVO:- DASHBOARD ADMINISTRATIVO DE MIBOLETÍN
 <!-- SECCIÓN 6: SCRIPTS JAVASCRIPT -->
 <!-- Scripts para la funcionalidad del dashboard administrativo -->
 <script src="{{ url_for('static', filename='script/panel-branding.js') }}"></script>
+<script src="{{ url_for('static', filename='script/profile-panel.js') }}"></script>
 <script src="{{ url_for('static', filename='script/dashboard.js') }}"></script>
 <script>
 // Función para descargar reportes de estudiantes con filtros aplicados

@@ -122,11 +122,12 @@
         </div>
         <div class="modal-body">
             <div class="avatar-wrapper">
-                <img src="https://ui-avatars.com/api/?name={{ nombre|urlencode }}&background=003366&color=fff&size=80" alt="Avatar">
-                <h3>{{ nombre }}</h3>
-                <p>{{ codigo }}</p>
-                <p class="welcome-text" style="margin-top:8px;font-size:13px;">Profesor</p>
+                <img id="profile-avatar-img" src="https://ui-avatars.com/api/?name={{ nombre|urlencode }}&background=003366&color=fff&size=80" alt="Avatar">
+                <h3 id="profile-view-name">{{ nombre }}</h3>
+                <p id="profile-view-email">{{ codigo }}</p>
+                <p id="profile-view-role" class="welcome-text" style="margin-top:8px;font-size:13px;">Profesor</p>
             </div>
+            <div id="profile-info-list" class="profile-info-list"></div>
             <div class="dark-mode-row">
                 <label for="dark-mode-toggle">
                     <i class="fas fa-moon"></i> Modo Oscuro
@@ -155,14 +156,26 @@
 
 <!-- Modal editar perfil -->
 <div class="modal-overlay" id="edit-modal-overlay">
-    <div class="modal" style="max-width:440px;width:95%;">
+    <div class="modal" style="max-width:520px;width:95%;">
         <div class="modal-header">
             <h2 class="modal-title"><i class="fas fa-user-edit"></i> Editar Perfil</h2>
             <button type="button" class="modal-close" id="close-edit-modal" aria-label="Cerrar">
                 <i class="fas fa-times"></i>
             </button>
         </div>
-        <div class="modal-body">
+        <div class="modal-body" style="max-height:65vh;overflow-y:auto;">
+            <div class="edit-profile-avatar-section">
+                <div class="current-avatar">
+                    <img id="edit-profile-avatar" src="https://ui-avatars.com/api/?name={{ nombre|urlencode }}&background=003366&color=fff&size=120" alt="Avatar">
+                </div>
+                <div class="avatar-actions">
+                    <label class="btn-secondary change-photo-btn" style="cursor:pointer;">
+                        <i class="fas fa-camera"></i> Cambiar foto
+                        <input type="file" id="profile-photo-input" accept="image/png,image/jpeg,image/webp" hidden>
+                    </label>
+                    <p class="avatar-hint">PNG, JPG o WEBP. Máx. 2 MB.</p>
+                </div>
+            </div>
             <div class="form-group">
                 <label class="form-label" for="editName">Nombre completo</label>
                 <input type="text" id="editName" class="form-input" value="{{ nombre }}">
@@ -170,6 +183,34 @@
             <div class="form-group">
                 <label class="form-label" for="editEmail">Correo electrónico</label>
                 <input type="email" id="editEmail" class="form-input" placeholder="correo@ejemplo.com">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="edit-telefono">Teléfono</label>
+                <input type="tel" id="edit-telefono" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="edit-titulos">Títulos académicos</label>
+                <textarea id="edit-titulos" class="form-input" rows="2"></textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="edit-area">Área de especialidad</label>
+                <input type="text" id="edit-area" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="edit-experiencia">Años de experiencia</label>
+                <input type="number" id="edit-experiencia" class="form-input" min="0">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="edit-escalafon">Registro escalafón</label>
+                <input type="text" id="edit-escalafon" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="edit-entidad-salud">Entidad de salud</label>
+                <input type="text" id="edit-entidad-salud" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="edit-entidad-pension">Entidad de pensión</label>
+                <input type="text" id="edit-entidad-pension" class="form-input">
             </div>
         </div>
         <div class="modal-footer">
@@ -216,6 +257,7 @@
 
 <script src="{{ url_for('static', filename='script/panel-shell.js') }}"></script>
 <script src="{{ url_for('static', filename='script/panel-branding.js') }}"></script>
+<script src="{{ url_for('static', filename='script/profile-panel.js') }}"></script>
 <script src="{{ url_for('static', filename='script/profesor.js') }}"></script>
 </body>
 </html>

@@ -793,23 +793,65 @@ const AdminManager = {
     },
 
 
-async cargarAdministradores() {
+    _rolAdminLabel(rol) {
+        const map = { admin_lider: 'Líder', admin_colegio: 'Administrador', superadmin: 'Super admin' };
+        return map[rol] || rol || '–';
+    },
+
+    _initCrearAdminUI(meta) {
+        const form = document.getElementById('admin-crear-form');
+        const aviso = document.getElementById('admin-crear-aviso');
+        const esLider = meta?.es_lider;
+        if (form) form.style.display = esLider ? '' : 'none';
+        if (aviso) aviso.style.display = esLider ? 'none' : '';
+    },
+
+    async crearAdministrador() {
+        const body = {
+            nombre: document.getElementById('new-admin-nombre')?.value.trim(),
+            email: document.getElementById('new-admin-email')?.value.trim(),
+            password: document.getElementById('new-admin-pass')?.value,
+        };
+        const msgEl = document.getElementById('admin-crear-msg');
+        const res = await fetch('/admin/administradores', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (msgEl) {
+            msgEl.style.color = data.status === 'success' ? 'var(--success)' : 'var(--error)';
+            msgEl.textContent = data.message;
+        }
+        if (data.status === 'success') {
+            ['new-admin-nombre', 'new-admin-email', 'new-admin-pass'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
+            this.cargarAdministradores();
+        }
+    },
+
+    async cargarAdministradores() {
         const tbody = document.getElementById('tbody-administradores');
         if (!tbody) return;
         try {
             const res = await fetch('/admin/administradores');
             const data = await res.json();
+            this._initCrearAdminUI(data.meta);
             if (!data.data?.length) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--gray-500);">No hay administradores registrados</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:16px;color:var(--gray-500);">No hay administradores registrados</td></tr>';
                 return;
             }
+            const esLider = data.meta?.es_lider;
             tbody.innerHTML = data.data.map(a => `
                 <tr>
                     <td>${a.id_admin}</td>
                     <td><strong>${a.nombre_completo}</strong></td>
                     <td>${a.correo_electronico}</td>
-                    <td><span class="${a.email_verified ? 'tag-success' : 'tag-error'}">${a.email_verified ? 'Sí' : 'No'}</span></td>
-                    <td>${a.id_admin !== currentUserId ?
+                    <td><span class="table-badge ${a.rol === 'admin_lider' ? 'badge-primary' : ''}">${this._rolAdminLabel(a.rol)}</span></td>
+                    <td><span class="${a.email_verified ? 'tag-success' : 'tag-error'}">${a.email_verified ? 'Activo' : 'Pendiente'}</span></td>
+                    <td>${esLider && a.id_admin !== currentUserId ?
                         `<button class="btn-danger btn-sm" onclick="AdminManager.eliminarAdmin(${a.id_admin})"><i class="fas fa-trash"></i></button>`
                         : '–'}</td>
                 </tr>`).join('');
@@ -846,25 +888,18 @@ window.crearMateria = () => AdminManager.crearMateria();
 window.asignarProfesor = () => AdminManager.asignarProfesor();
 window.asignarEstudiante = () => AdminManager.asignarEstudiante();
 window.cargarEstudiantesGrupo = id => AdminManager.cargarEstudiantesGrupo(id);
-window.guardarPerfil = async () => {
-    const fullname = document.getElementById('profile-name')?.value;
-    const email = document.getElementById('profile-email')?.value;
-    const res = await fetch('/update-profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fullname, email }) });
-    const data = await res.json();
-    Utils.showToast(data.message, data.status === 'success' ? 'success' : 'error');
-    if (data.status === 'success') document.getElementById('profile-modal-overlay')?.classList.remove('active');
-};
-
-
 // UI MANAGER
 
 
 class UIManager {
     init() {
-        document.getElementById('profile-btn')?.addEventListener('click', () => document.getElementById('profile-modal-overlay')?.classList.add('active'));
-        document.getElementById('close-profile-modal')?.addEventListener('click', () => document.getElementById('profile-modal-overlay')?.classList.remove('active'));
-        document.getElementById('cancel-profile')?.addEventListener('click', () => document.getElementById('profile-modal-overlay')?.classList.remove('active'));
-        document.getElementById('profile-modal-overlay')?.addEventListener('click', e => { if (e.target === e.currentTarget) e.target.classList.remove('active'); });
+        ProfilePanel.init({
+            notify: (msg, ok) => Utils.showToast(msg, ok ? 'success' : 'error'),
+            onProfileOpen: () => {
+                const chk = document.getElementById('dark-mode-toggle');
+                if (chk) chk.checked = document.documentElement.classList.contains('dark-mode');
+            },
+        });
         const dateEl = document.getElementById('current-date');
         if (dateEl) dateEl.textContent = Utils.formatDate();
     }
@@ -1466,7 +1501,7 @@ const SuperAdminsAdmin = {
             const data = await res.json();
             if (data.status !== 'success') return;
             const supers = (data.data || []).filter(a => a.rol === 'superadmin');
-            const colegio = (data.data || []).filter(a => a.rol === 'admin_colegio');
+            const colegio = (data.data || []).filter(a => a.rol === 'admin_colegio' || a.rol === 'admin_lider');
             if (tbodySa) {
                 tbodySa.innerHTML = supers.length
                     ? supers.map(a => `<tr><td>${a.id_admin}</td><td>${a.nombre_completo}</td><td>${a.correo_electronico}</td><td>${a.email_verified ? 'Sí' : 'No'}</td></tr>`).join('')
@@ -1474,8 +1509,23 @@ const SuperAdminsAdmin = {
             }
             if (tbodyAc) {
                 tbodyAc.innerHTML = colegio.length
-                    ? colegio.map(a => `<tr><td>${a.colegio || '-'} <small>(${a.codigo_colegio || ''})</small></td><td>${a.nombre_completo}</td><td>${a.correo_electronico}</td><td>${a.email_verified ? 'Sí' : 'No'}</td></tr>`).join('')
-                    : '<tr><td colspan="4" style="text-align:center;">No hay admins de colegio</td></tr>';
+                    ? colegio.map(a => {
+                        const esLider = a.rol === 'admin_lider';
+                        const rolLabel = esLider ? 'Líder' : 'Administrador';
+                        return `<tr>
+                            <td>${a.colegio || '-'} <small>(${a.codigo_colegio || ''})</small></td>
+                            <td>${a.nombre_completo}</td>
+                            <td>${a.correo_electronico}</td>
+                            <td><span class="table-badge ${esLider ? 'badge-primary' : ''}">${rolLabel}</span></td>
+                            <td>
+                                <button type="button" class="btn-sm ${esLider ? 'btn-secondary' : 'btn-primary'}"
+                                    onclick="SuperAdminsAdmin.toggleLider(${a.id_admin}, ${!esLider})">
+                                    ${esLider ? 'Quitar líder' : 'Hacer líder'}
+                                </button>
+                            </td>
+                        </tr>`;
+                    }).join('')
+                    : '<tr><td colspan="5" style="text-align:center;">No hay admins de colegio</td></tr>';
             }
         } catch (e) {
             if (tbodySa) tbodySa.innerHTML = '<tr><td colspan="4">Error al cargar</td></tr>';
@@ -1495,6 +1545,19 @@ const SuperAdminsAdmin = {
             ['sa-nombre', 'sa-email', 'sa-pass'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
             this.cargar();
         }
+    },
+
+    async toggleLider(id_admin, es_lider) {
+        const accion = es_lider ? 'designar como administrador líder' : 'quitar el rol de líder';
+        if (!confirm(`¿Confirmas ${accion} a este usuario?`)) return;
+        const res = await fetch(`/admin/administradores/${id_admin}/lider`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ es_lider }),
+        });
+        const data = await res.json();
+        Utils.showToast(data.message, data.status === 'success' ? 'success' : 'error');
+        if (data.status === 'success') this.cargar();
     },
 };
 
@@ -1569,6 +1632,11 @@ const BulkImport = {
     },
 };
 
+function initAdminLiderUI() {
+    const meta = document.getElementById('current-user-data');
+    AdminManager._initCrearAdminUI({ es_lider: meta?.dataset.isAdminLider === 'true' });
+}
+
 function initSuperAdminUI() {
     const meta = document.getElementById('current-user-data');
     const isSuper = meta?.dataset.isSuperadmin === 'true';
@@ -1606,6 +1674,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initPasswordToggles();
     BulkImport.init();
     initSuperAdminUI();
+    initAdminLiderUI();
 });
 if (document.readyState !== 'loading') {
     EditarEstudiante.init();
@@ -1613,4 +1682,5 @@ if (document.readyState !== 'loading') {
     initPasswordToggles();
     BulkImport.init();
     initSuperAdminUI();
+    initAdminLiderUI();
 }

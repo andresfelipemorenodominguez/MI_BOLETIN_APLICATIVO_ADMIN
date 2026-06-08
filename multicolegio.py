@@ -10,6 +10,7 @@ DEFAULT_COLOR_PRIMARIO = '#003366'
 DEFAULT_COLOR_SECUNDARIO = '#3182ce'
 
 _multicolegio_ready = False
+MAX_ADMIN_LIDERES = 2
 
 
 def _column_exists(cur, table, column):
@@ -167,6 +168,18 @@ def ensure_profile_schema(get_db_connection):
         if not _column_exists(cur, 'profesores', col):
             cur.execute(f'ALTER TABLE profesores ADD COLUMN {col} {col_type}')
 
+    for table in ('estudiantes', 'profesores', 'administradores'):
+        if not _column_exists(cur, table, 'foto_perfil'):
+            cur.execute(f'ALTER TABLE {table} ADD COLUMN foto_perfil VARCHAR(500)')
+
+    admin_cols = {
+        'telefono': 'VARCHAR(20)',
+        'cargo': 'VARCHAR(100)',
+    }
+    for col, col_type in admin_cols.items():
+        if not _column_exists(cur, 'administradores', col):
+            cur.execute(f'ALTER TABLE administradores ADD COLUMN {col} {col_type}')
+
     if not _table_exists(cur, 'acudientes'):
         cur.execute("""
             CREATE TABLE acudientes (
@@ -206,6 +219,10 @@ def get_admin_from_session(session):
 
 def is_superadmin(admin):
     return admin and admin.get('rol') == 'superadmin'
+
+
+def is_admin_lider(admin):
+    return admin and admin.get('rol') == 'admin_lider'
 
 
 def colegio_filter_sql(admin, column='id_colegio', alias=''):

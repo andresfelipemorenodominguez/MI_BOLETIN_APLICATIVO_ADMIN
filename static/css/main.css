@@ -3183,6 +3183,40 @@ li {
     width: 100%;
 }
 
+.page-dashboard .profile-info-list {
+    width: 100%;
+    margin: var(--space-md) 0;
+    display: grid;
+    gap: 8px;
+}
+
+.page-dashboard .profile-info-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--gray-200, #e2e8f0);
+    font-size: 13px;
+}
+
+.page-dashboard .profile-info-label {
+    color: var(--gray-600, #718096);
+    flex-shrink: 0;
+}
+
+.page-dashboard .profile-info-value {
+    color: var(--gray-800, #2d3748);
+    text-align: right;
+    word-break: break-word;
+}
+
+.page-dashboard .profile-info-empty {
+    font-size: 13px;
+    color: var(--gray-500, #a0aec0);
+    text-align: center;
+    margin: 8px 0;
+}
+
 .page-dashboard .current-avatar {
     width: 100px;
     height: 100px;
