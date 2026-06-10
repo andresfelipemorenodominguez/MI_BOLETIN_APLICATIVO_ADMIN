@@ -2521,97 +2521,153 @@ def importar_profesores_csv():
         'data': {'registrados': registrados, 'errores': errores},
     })
 
-    
-###### PDF con branding del colegio (encabezado, escudo, marca de agua). ######
-#
-class ColegioBrandedPDF(FPDF):
-    def __init__(self, branding=None):
-        super().__init__()
-        branding = branding or {}
-        self._nombre = _pdf_sanitize(branding.get('nombre_oficial') or 'MiBoletin')
-        self._lema = _pdf_sanitize(branding.get('lema') or '')
-        self._primary = _hex_to_rgb(branding.get('color_primario'), (0, 51, 102))
-        self._escudo_path = _branding_file_path(branding.get('escudo_url'))
-        self._encabezado_path = _branding_file_path(branding.get('encabezado_pdf_url'))
-        self._marca_path = _branding_file_path(branding.get('marca_agua_url'))
-
-    def _draw_watermark(self):
-        if not self._marca_path or not os.path.isfile(self._marca_path):
-            return
-        try:
-            if hasattr(self, 'set_alpha'):
-                self.set_alpha(0.08)
-            w, h = 90, 90
-            self.image(self._marca_path, x=(self.w - w) / 2, y=(self.h - h) / 2, w=w)
-            if hasattr(self, 'set_alpha'):
-                self.set_alpha(1)
-        except Exception:
-            pass
-
-    def header(self):
-        self._draw_watermark()
-        y0 = self.get_y()
-        if self._encabezado_path and os.path.isfile(self._encabezado_path):
-            try:
-                self.image(self._encabezado_path, x=10, y=8, w=190)
-                self.ln(28)
-            except Exception:
-                self.set_y(y0)
-        if self._escudo_path and os.path.isfile(self._escudo_path):
-            try:
-                self.image(self._escudo_path, x=12, y=10, h=14)
-            except Exception:
-                pass
-        r, g, b = self._primary
-        self.set_font('helvetica', 'B', 14)
-        self.set_text_color(r, g, b)
-        self.cell(0, 8, _pdf_sanitize(self._nombre[:80]), 0, 1, 'C')
-        if self._lema:
-            self.set_font('helvetica', 'I', 9)
-            self.set_text_color(100, 100, 100)
-            self.cell(0, 6, _pdf_sanitize(self._lema[:120]), 0, 1, 'C')
-        self.set_font('helvetica', 'I', 8)
-        self.set_text_color(130, 130, 130)
-        self.cell(0, 5, f'Generado: {datetime.now().strftime("%d/%m/%Y %H:%M")}', 0, 1, 'C')
-        self.ln(4)
-
-    def footer(self):
-        self.set_y(-15)
-        self.set_font('helvetica', 'I', 8)
-        self.set_text_color(128, 128, 128)
-        self.cell(0, 10, _pdf_sanitize(f'{self._nombre[:40]} - Pagina {self.page_no()}'), 0, 0, 'C')
 
 
-def _pdf_for_colegio(id_colegio):
-    branding = _fetch_colegio_branding(id_colegio) if id_colegio else None
-    return ColegioBrandedPDF(branding)
 
 
-MiBoletinPDF = ColegioBrandedPDF
+
+
+
+# ================= CLASE PDF CON DISEÑO PROFESIONAL DE ALTA CALIDAD =================
+class MiBoletinPDF(FPDF):
+    def __init__(self, orientation='P', unit='mm', format='A4'):
+        super().__init__(orientation, unit, format)
+        self.set_left_margin(12)
+        self.set_right_margin(12)
+        self.set_top_margin(20)
+        self.set_auto_page_break(True, margin=25)
+        # Colores institucionales (ajústalos a los tuyos)
+        self.primary = (0, 51, 102)       # Azul marino
+        self.secondary = (70, 130, 180)   # Acero
+        self.light_bg = (245, 248, 250)   # Gris muy claro
+        self.accent = (255, 215, 0)       # Dorado (detalles)
+        self.text_dark = (33, 33, 33)
         
-#########Genera y descarga un PDF con la lista de estudiantes, permitiendo filtrar por grado y grupo, y mostrando la información en formato de tabla.######
+    def header(self):
+        # --- Logo (opcional) ---
+        #try:
+        #    self.image('logo.png', x=12, y=10, w=18)
+        #except:
+        #     pass
+        
+        # --- Nombre de la institución (grande, negrita) ---
+        self.set_font('helvetica', 'B', 20)
+        self.set_text_color(*self.primary)
+        self.cell(0, 10, 'MY_BOLETIN', 0, 1, 'C')
+        
+        # --- Lema o subtítulo ---
+        self.set_font('helvetica', '', 10)
+        self.set_text_color(*self.secondary)
+        self.cell(0, 6, 'Comprometidos con la excelencia académica', 0, 1, 'C')
+        
+        # --- Línea gruesa decorativa con color secundario ---
+        self.set_draw_color(*self.secondary)
+        self.set_line_width(1.2)
+        self.line(12, 30, 198, 30)
+        
+        # --- Fecha de generación a la derecha ---
+        self.set_y(34)
+        self.set_font('helvetica', 'I', 8)
+        self.set_text_color(100, 100, 100)
+        fecha_str = f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+        self.cell(0, 5, fecha_str, 0, 1, 'R')
+        self.ln(8)
+    
+    def footer(self):
+        self.set_y(-22)
+        self.set_draw_color(180, 180, 180)
+        self.set_line_width(0.5)
+        self.line(12, self.get_y(), 198, self.get_y())
+        self.set_line_width(0.2)
+        self.line(12, self.get_y()+1, 198, self.get_y()+1)
+        self.set_y(self.get_y()+3)
+        self.set_font('helvetica', 'I', 8)
+        self.set_text_color(120, 120, 120)
+        self.cell(0, 5, f'Página {self.page_no()}', 0, 0, 'C')
+        self.set_y(self.get_y()+3)
+        self.set_font('helvetica', 'I', 7)
+        self.cell(0, 4, 'Documento generado automáticamente por el sistema - Confidencial', 0, 0, 'C')
+    
+    def section_title(self, title):
+        self.set_font('helvetica', 'B', 13)
+        self.set_fill_color(*self.primary)
+        self.set_text_color(255, 255, 255)
+        self.set_draw_color(*self.primary)
+        self.cell(0, 10, f' {title} ', 1, 1, 'L', fill=True)
+        self.ln(3)
+    
+    def table_header(self, headers, widths):
+        self.set_font('helvetica', 'B', 9)
+        self.set_fill_color(*self.primary)
+        self.set_text_color(255, 255, 255)
+        self.set_draw_color(0, 0, 0)
+        for i, header in enumerate(headers):
+            self.cell(widths[i], 9, header, 1, 0, 'C', fill=True)
+        self.ln()
+    
+    def table_row(self, row_data, widths, fill=False):
+        self.set_font('helvetica', '', 9)
+        self.set_text_color(*self.text_dark)
+        self.set_fill_color(*self.light_bg)
+        for i, cell in enumerate(row_data):
+            cell_str = str(cell)
+            max_len = int(widths[i] / 2.5)
+            if len(cell_str) > max_len:
+                cell_str = cell_str[:max_len-3] + '...'
+            self.cell(widths[i], 8, cell_str, 'LTRB', 0, 'L', fill)
+        self.ln()
+    
+    def total_box(self, text):
+        """Recuadro para totales"""
+        self.set_font('helvetica', 'B', 10)
+        self.set_text_color(*self.primary)
+        self.set_fill_color(240, 248, 255)
+        self.set_draw_color(*self.secondary)
+        self.cell(0, 10, f' {text} ', 1, 1, 'R', fill=True)
+        self.ln(5)
+
+    # ---------- NUEVO: LOGO AL FINAL DEL PDF ----------
+    def add_logo(self, logo_path, width_mm=50):
+        """Inserta un logo centrado al final del documento"""
+        try:
+            x_center = (210 - width_mm) / 2
+            self.image(logo_path, x=x_center, y=self.get_y(), w=width_mm)
+            self.ln(width_mm + 5)
+        except Exception as e:
+            self.set_font('helvetica', 'I', 8)
+            self.set_text_color(150, 150, 150)
+            self.cell(0, 5, f'[Logo no encontrado: {logo_path}]', 0, 1, 'C')
+            self.ln(2)
+            
+            
+            
+# ========================== RUTAS DE REPORTES CON NUEVO ESTILO ==========================
+#####ESTUDIANTES#####
 #
 @app.route("/reporte/estudiantes/pdf", methods=["GET"])
 def reporte_estudiantes_pdf():
-    id_colegio, err = _require_colegio_admin_pdf()
-    if err:
-        return err
-
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "Debes iniciar sesión primero."})
+    
     grado = request.args.get('grado', '')
     grupo = request.args.get('grupo', '')
 
-    query = "SELECT codigo_estudiante, nombre_completo, correo_electronico, grado, grupo, estado FROM estudiantes WHERE id_colegio = %s"
-    params = [id_colegio]
-
+    query = "SELECT codigo_estudiante, nombre_completo, correo_electronico, grado, grupo, estado FROM estudiantes"
+    conditions = []
+    params = []
+    
     if grado:
-        query += " AND grado = %s"
+        conditions.append("grado = %s")
         params.append(grado)
     if grupo:
-        query += " AND grupo = %s"
+        conditions.append("grupo = %s")
         params.append(grupo)
-
+        
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+        
     query += " ORDER BY grado, grupo, nombre_completo"
-
+    
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -2620,283 +2676,221 @@ def reporte_estudiantes_pdf():
         cur.close()
         conn.close()
 
-        pdf = _pdf_for_colegio(id_colegio)
+        pdf = MiBoletinPDF()
         pdf.add_page()
         
-        pdf.set_font('helvetica', 'B', 14)
-        pdf.set_text_color(0, 0, 0)
+        # Título
         titulo = "Reporte de Estudiantes"
-        if grado: titulo += f" - Grado: {grado}"
-        if grupo: titulo += f" Grupo: {grupo}"
-        pdf.cell(0, 10, titulo, 0, 1, 'C')
-        pdf.ln(5)
+        if grado: titulo += f" - Grado {grado}"
+        if grupo: titulo += f" - Grupo {grupo}"
+        pdf.section_title(titulo)
         
-        # Tabla Header
-        pdf.set_font('helvetica', 'B', 10)
-        pdf.set_fill_color(0, 51, 102)
-        pdf.set_text_color(255, 255, 255)
-        pdf.cell(30, 10, 'Código', 1, 0, 'C', fill=True)
-        pdf.cell(70, 10, 'Nombre Completo', 1, 0, 'C', fill=True)
-        pdf.cell(50, 10, 'Email', 1, 0, 'C', fill=True)
-        pdf.cell(20, 10, 'Grado/Grupo', 1, 0, 'C', fill=True)
-        pdf.cell(20, 10, 'Estado', 1, 1, 'C', fill=True)
+        # Definir anchos de columna (en mm)
+        widths = [25, 65, 51, 25, 20]
+        headers = ['Código', 'Nombre Completo', 'Email', 'Grado/Grupo', 'Estado']
+        pdf.table_header(headers, widths)
         
-        # Tabla Body
-        pdf.set_font('helvetica', '', 9)
-        pdf.set_text_color(0, 0, 0)
+        # Filas
         fill = False
-        pdf.set_fill_color(240, 248, 255)
-        
         for e in estudiantes:
-            pdf.cell(30, 8, str(e['codigo_estudiante']), 1, 0, 'L', fill=fill)
-            # Truncate text if it's too long
-            nombre = e['nombre_completo'][:35] + '...' if len(e['nombre_completo']) > 38 else e['nombre_completo']
-            pdf.cell(70, 8, nombre, 1, 0, 'L', fill=fill)
-            email = e['correo_electronico'][:25] + '...' if len(e['correo_electronico']) > 28 else e['correo_electronico']
-            pdf.cell(50, 8, email, 1, 0, 'L', fill=fill)
-            pdf.cell(20, 8, f"{e['grado']}-{e['grupo']}", 1, 0, 'C', fill=fill)
-            pdf.cell(20, 8, str(e['estado']).capitalize(), 1, 1, 'C', fill=fill)
+            row = [
+                e['codigo_estudiante'],
+                e['nombre_completo'],
+                e['correo_electronico'],
+                f"{e['grado']}-{e['grupo']}",
+                e['estado'].capitalize()
+            ]
+            pdf.table_row(row, widths, fill)
             fill = not fill
-            
-        pdf.ln(10)
-        pdf.set_font('helvetica', 'B', 10)
-        pdf.cell(0, 10, f"Total Estudiantes: {len(estudiantes)}", 0, 1, 'R')
-
-        # Output to memory
-        return send_file(
-            _pdf_to_bytesio(pdf),
-            as_attachment=True,
-            download_name='reporte_estudiantes.pdf',
-            mimetype='application/pdf'
-        )
+        
+        pdf.total_box(f"Total estudiantes: {len(estudiantes)}")
+        pdf.add_logo('static/img/Logo.01.png', width_mm=50)   # <--- llama al método
+        
+        
+        pdf_bytes = pdf.output(dest='S').encode('latin-1')
+        buffer = io.BytesIO(pdf_bytes)
+        buffer.seek(0)
+        return send_file(buffer, as_attachment=True, download_name='reporte_estudiantes.pdf', mimetype='application/pdf')
         
     except Exception as e:
         print(f"Error generando PDF de estudiantes: {e}")
         return jsonify({"status": "error", "message": "Error generando el reporte PDF."})
     
-##########Genera y descarga un PDF con el listado de profesores, mostrando sus datos en formato de tabla.########
+#######PROFESORES#####
 #
 @app.route("/reporte/profesores/pdf", methods=["GET"])
 def reporte_profesores_pdf():
-    id_colegio, err = _require_colegio_admin_pdf()
-    if err:
-        return err
-
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "Debes iniciar sesión primero."})
+    
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute(
-            "SELECT codigo_profesor, nombre_completo, correo_electronico, telefono, estado "
-            "FROM profesores WHERE id_colegio = %s ORDER BY nombre_completo",
-            (id_colegio,),
-        )
+        cur.execute("SELECT codigo_profesor, nombre_completo, correo_electronico, telefono, estado FROM profesores ORDER BY nombre_completo")
         profesores = cur.fetchall()
         cur.close()
         conn.close()
 
-        pdf = _pdf_for_colegio(id_colegio)
+        pdf = MiBoletinPDF()
         pdf.add_page()
+        pdf.section_title("Directorio de Profesores")
         
-        pdf.set_font('helvetica', 'B', 14)
-        pdf.set_text_color(0, 0, 0)
-        pdf.cell(0, 10, "Directorio de Profesores", 0, 1, 'C')
-        pdf.ln(5)
+        widths = [26, 65, 50, 30, 15]  # Ajustados para mejor visualización
+        headers = ['Código', 'Nombre Completo', 'Email', 'Teléfono', 'Estado']
+        pdf.table_header(headers, widths)
         
-        # Tabla Header
-        pdf.set_font('helvetica', 'B', 10)
-        pdf.set_fill_color(0, 51, 102)
-        pdf.set_text_color(255, 255, 255)
-        pdf.cell(30, 10, 'Código', 1, 0, 'C', fill=True)
-        pdf.cell(70, 10, 'Nombre Completo', 1, 0, 'C', fill=True)
-        pdf.cell(50, 10, 'Email', 1, 0, 'C', fill=True)
-        pdf.cell(25, 10, 'Teléfono', 1, 0, 'C', fill=True)
-        pdf.cell(15, 10, 'Estado', 1, 1, 'C', fill=True)
-        
-        # Tabla Body
-        pdf.set_font('helvetica', '', 9)
-        pdf.set_text_color(0, 0, 0)
         fill = False
-        pdf.set_fill_color(240, 248, 255)
-        
         for p in profesores:
-            pdf.cell(30, 8, str(p['codigo_profesor']), 1, 0, 'L', fill=fill)
-            nombre = p['nombre_completo'][:35] + '...' if len(p['nombre_completo']) > 38 else p['nombre_completo']
-            pdf.cell(70, 8, nombre, 1, 0, 'L', fill=fill)
-            email = p['correo_electronico'][:25] + '...' if len(p['correo_electronico']) > 28 else p['correo_electronico']
-            pdf.cell(50, 8, email, 1, 0, 'L', fill=fill)
             telefono = str(p['telefono']) if p['telefono'] else 'N/A'
-            pdf.cell(25, 8, telefono, 1, 0, 'C', fill=fill)
-            pdf.cell(15, 8, str(p['estado']).capitalize(), 1, 1, 'C', fill=fill)
+            row = [
+                p['codigo_profesor'],
+                p['nombre_completo'],
+                p['correo_electronico'],
+                telefono,
+                p['estado'].capitalize()
+            ]
+            pdf.table_row(row, widths, fill)
             fill = not fill
-            
-        pdf.ln(10)
-        pdf.set_font('helvetica', 'B', 10)
-        pdf.cell(0, 10, f"Total Profesores: {len(profesores)}", 0, 1, 'R')
-
-        return send_file(
-            _pdf_to_bytesio(pdf),
-            as_attachment=True,
-            download_name='directorio_profesores.pdf',
-            mimetype='application/pdf'
-        )
+        
+        pdf.total_box(f"Total profesores: {len(profesores)}")
+        pdf.cell(0, 6, f"Generado por: {session.get('user_name', 'Administrador')}", 0, 1, 'L')
+        
+        pdf.add_logo('static/img/Logo.01.png', width_mm=50)   # <--- llama al método
+        
+        pdf_bytes = pdf.output(dest='S').encode('latin-1')
+        buffer = io.BytesIO(pdf_bytes)
+        buffer.seek(0)
+        return send_file(buffer, as_attachment=True, download_name='directorio_profesores.pdf', mimetype='application/pdf')
         
     except Exception as e:
         print(f"Error generando PDF de profesores: {e}")
         return jsonify({"status": "error", "message": "Error generando el reporte PDF."})
     
-########Genera y descarga un PDF con estadísticas generales del sistema, incluyendo estudiantes, profesores y solicitudes.########
+
+####RESUMENES#####
 #
 @app.route("/reporte/resumen/pdf", methods=["GET"])
 def reporte_resumen_pdf():
-    id_colegio, err = _require_colegio_admin_pdf()
-    if err:
-        return err
-
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "Debes iniciar sesión primero."})
+    
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-
-        cur.execute(
-            "SELECT COUNT(*) FROM estudiantes WHERE estado = 'activo' AND id_colegio = %s",
-            (id_colegio,),
-        )
+        cur.execute("SELECT COUNT(*) FROM estudiantes WHERE estado = 'activo'")
         estudiantes_activos = cur.fetchone()[0]
-        cur.execute(
-            "SELECT COUNT(*) FROM estudiantes WHERE estado != 'activo' AND id_colegio = %s",
-            (id_colegio,),
-        )
+        cur.execute("SELECT COUNT(*) FROM estudiantes WHERE estado != 'activo'")
         estudiantes_inactivos = cur.fetchone()[0]
-        cur.execute(
-            "SELECT COUNT(*) FROM profesores WHERE estado = 'activo' AND id_colegio = %s",
-            (id_colegio,),
-        )
+        cur.execute("SELECT COUNT(*) FROM profesores WHERE estado = 'activo'")
         profesores_activos = cur.fetchone()[0]
-        cur.execute("""
-            SELECT COUNT(*) FROM solicitudes_cambio_contrasena s
-            JOIN estudiantes e ON s.tipo_usuario = 'estudiante' AND s.id_usuario = e.id_estudiante
-            WHERE e.id_colegio = %s
-        """, (id_colegio,))
-        sol_est = cur.fetchone()[0]
-        cur.execute("""
-            SELECT COUNT(*) FROM solicitudes_cambio_contrasena s
-            JOIN profesores p ON s.tipo_usuario = 'profesor' AND s.id_usuario = p.id_profesor
-            WHERE p.id_colegio = %s
-        """, (id_colegio,))
-        sol_prof = cur.fetchone()[0]
-        total_solicitudes = sol_est + sol_prof
-
+        cur.execute("SELECT COUNT(*) FROM solicitudes_cambio_contrasena")
+        total_solicitudes = cur.fetchone()[0]
         cur.close()
         conn.close()
 
-        pdf = _pdf_for_colegio(id_colegio)
+        pdf = MiBoletinPDF()
         pdf.add_page()
+        pdf.section_title("Resumen General del Sistema")
         
-        pdf.set_font('helvetica', 'B', 16)
-        pdf.set_text_color(0, 0, 0)
-        pdf.cell(0, 10, "Resumen General del Sistema", 0, 1, 'C')
-        pdf.ln(10)
+        # Estadísticas (usando guión en lugar de viñeta)
+        pdf.set_font('helvetica', 'B', 11)
+        pdf.set_text_color(*pdf.primary)
+        pdf.cell(0, 8, "Estadísticas de Estudiantes", 0, 1, 'L')
+        pdf.set_font('helvetica', '', 10)
+        pdf.set_text_color(*pdf.text_dark)
+        pdf.cell(0, 7, f"  - Activos: {estudiantes_activos}", 0, 1, 'L')
+        pdf.cell(0, 7, f"  - Inactivos: {estudiantes_inactivos}", 0, 1, 'L')
+        pdf.ln(3)
         
-        # Bloques de resumen
-        pdf.set_font('helvetica', 'B', 12)
-        pdf.set_fill_color(240, 248, 255)
-        pdf.cell(0, 10, ' Estadísticas de Estudiantes', 1, 1, 'L', fill=True)
-        pdf.set_font('helvetica', '', 11)
-        pdf.cell(0, 10, f' Estudiantes Activos: {estudiantes_activos}', 'LR', 1, 'L')
-        pdf.cell(0, 10, f' Estudiantes Inactivos: {estudiantes_inactivos}', 'LRB', 1, 'L')
-        pdf.ln(5)
+        pdf.set_font('helvetica', 'B', 11)
+        pdf.set_text_color(*pdf.primary)
+        pdf.cell(0, 8, "Profesores", 0, 1, 'L')
+        pdf.set_font('helvetica', '', 10)
+        pdf.set_text_color(*pdf.text_dark)
+        pdf.cell(0, 7, f"  - Activos: {profesores_activos}", 0, 1, 'L')
+        pdf.ln(3)
         
-        pdf.set_font('helvetica', 'B', 12)
-        pdf.cell(0, 10, ' Estadísticas de Profesores', 1, 1, 'L', fill=True)
-        pdf.set_font('helvetica', '', 11)
-        pdf.cell(0, 10, f' Profesores Activos: {profesores_activos}', 'LRB', 1, 'L')
-        pdf.ln(5)
+        pdf.set_font('helvetica', 'B', 11)
+        pdf.set_text_color(*pdf.primary)
+        pdf.cell(0, 8, "Soporte", 0, 1, 'L')
+        pdf.set_font('helvetica', '', 10)
+        pdf.cell(0, 7, f"  - Solicitudes cambio contraseña: {total_solicitudes}", 0, 1, 'L')
+        pdf.ln(8)
         
-        pdf.set_font('helvetica', 'B', 12)
-        pdf.cell(0, 10, ' Soporte y Sistema', 1, 1, 'L', fill=True)
-        pdf.set_font('helvetica', '', 11)
-        pdf.cell(0, 10, f' Total de solicitudes de cambio de contraseña: {total_solicitudes}', 'LRB', 1, 'L')
-        pdf.ln(10)
         
-        # Admin info
-        pdf.set_font('helvetica', 'I', 10)
-        pdf.cell(0, 10, f"Reporte generado por: {session.get('user_name', 'Administrador')}", 0, 1, 'L')
-
-        return send_file(
-            _pdf_to_bytesio(pdf),
-            as_attachment=True,
-            download_name='resumen_sistema.pdf',
-            mimetype='application/pdf'
-        )
+        
+        pdf.cell(0, 6, f"Generado por: {session.get('user_name', 'Administrador')}", 0, 1, 'L')
+        # Logo al final
+        pdf.add_logo('static/img/Logo.01.png', width_mm=50)   # Asegúrate de renombrar el logo
+        
+        pdf_bytes = pdf.output(dest='S').encode('latin-1')   # Sigue siendo latin-1 porque ya no hay caracteres especiales
+        buffer = io.BytesIO(pdf_bytes)
+        buffer.seek(0)
+        return send_file(buffer, as_attachment=True, download_name='resumen_sistema.pdf', mimetype='application/pdf')
         
     except Exception as e:
         print(f"Error generando PDF de estadisticas: {e}")
-        return jsonify({"status": "error", "message": "Error generando el reporte PDF."})
+        return jsonify({"status": "error", "message": str(e)})
 
-##########Genera y descarga un PDF con el listado de administradores, mostrando ID, nombre, correo y estado de verificación.########
+    
+#### ADMINISTRADORES#####
 #
 @app.route("/reporte/administradores/pdf", methods=["GET"])
 def reporte_administradores_pdf():
-    id_colegio, err = _require_colegio_admin_pdf()
-    if err:
-        return err
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "Debes iniciar sesión primero."})
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute(
-            """SELECT id_admin, nombre_completo, correo_electronico, email_verified, rol
-               FROM administradores WHERE id_colegio = %s ORDER BY id_admin""",
-            (id_colegio,),
-        )
+        cur.execute("SELECT id_admin, nombre_completo, correo_electronico, email_verified FROM administradores ORDER BY id_admin")
         admins = cur.fetchall()
         cur.close()
         conn.close()
 
-        pdf = _pdf_for_colegio(id_colegio)
+        pdf = MiBoletinPDF()
         pdf.add_page()
-
-        pdf.set_font('helvetica', 'B', 14)
-        pdf.set_text_color(0, 0, 0)
-        pdf.cell(0, 10, "Directorio de Administradores", 0, 1, 'C')
-        pdf.ln(5)
-
-        pdf.set_font('helvetica', 'B', 10)
-        pdf.set_fill_color(0, 51, 102)
-        pdf.set_text_color(255, 255, 255)
-        pdf.cell(15, 10, 'ID', 1, 0, 'C', fill=True)
-        pdf.cell(75, 10, 'Nombre Completo', 1, 0, 'C', fill=True)
-        pdf.cell(75, 10, 'Correo Electrónico', 1, 0, 'C', fill=True)
-        pdf.cell(25, 10, 'Verificado', 1, 1, 'C', fill=True)
-
-        pdf.set_font('helvetica', '', 9)
-        pdf.set_text_color(0, 0, 0)
+        pdf.section_title("Directorio de Administradores")
+        
+        widths = [21, 70, 65, 30]
+        headers = ['ID', 'Nombre Completo', 'Correo Electrónico', 'Verificado']
+        pdf.table_header(headers, widths)
+        
         fill = False
-        pdf.set_fill_color(240, 248, 255)
-
         for a in admins:
-            pdf.cell(15, 8, str(a['id_admin']), 1, 0, 'C', fill=fill)
-            nombre = a['nombre_completo'][:38] + '...' if len(a['nombre_completo']) > 40 else a['nombre_completo']
-            pdf.cell(75, 8, nombre, 1, 0, 'L', fill=fill)
-            email = a['correo_electronico'][:35] + '...' if len(a['correo_electronico']) > 38 else a['correo_electronico']
-            pdf.cell(75, 8, email, 1, 0, 'L', fill=fill)
-            pdf.cell(25, 8, 'Sí' if a['email_verified'] else 'No', 1, 1, 'C', fill=fill)
+            row = [
+                a['id_admin'],
+                a['nombre_completo'],
+                a['correo_electronico'],
+                'Sí' if a['email_verified'] else 'No'
+            ]
+            pdf.table_row(row, widths, fill)
             fill = not fill
-
-        pdf.ln(10)
-        pdf.set_font('helvetica', 'B', 10)
-        pdf.cell(0, 10, f"Total Administradores: {len(admins)}", 0, 1, 'R')
-        pdf.set_font('helvetica', 'I', 9)
-        pdf.cell(0, 8, f"Reporte generado por: {session.get('user_name', 'Administrador')}", 0, 1, 'L')
-
-        return send_file(
-            _pdf_to_bytesio(pdf),
-            as_attachment=True,
-            download_name='directorio_administradores.pdf',
-            mimetype='application/pdf',
-        )
+        
+        pdf.total_box(f"Total administradores: {len(admins)}")
+        pdf.cell(0, 6, f"Generado por: {session.get('user_name', 'Administrador')}", 0, 1, 'L')
+        pdf.add_logo('static/img/Logo.01.png', width_mm=50)
+        pdf.set_font('helvetica', 'I', 8)
+        
+        
+        pdf_bytes = pdf.output(dest='S').encode('latin-1')
+        buffer = io.BytesIO(pdf_bytes)
+        buffer.seek(0)
+        return send_file(buffer, as_attachment=True, download_name='directorio_administradores.pdf', mimetype='application/pdf')
 
     except Exception as e:
         print(f"Error generando PDF de administradores: {e}")
         return jsonify({"status": "error", "message": "Error generando el reporte PDF."})
+
+{"message":"Error generando el reporte PDF.","status":"error"}
+
+
+
+
+
+
+
+
+
 
 
 # RUTAS DEL PROFESOR
