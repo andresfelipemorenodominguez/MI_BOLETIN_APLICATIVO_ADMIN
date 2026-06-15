@@ -85,6 +85,14 @@
                         <span class="nav-text">Agenda</span>
                     </a>
                 </li>
+
+                <!-- Opción Votaciones (visible para profesores) -->
+                <li class="nav-item">
+                    <a href="#" class="nav-link" data-section="votaciones-section">
+                        <i class="fa-solid fa-chart-bar nav-icon"></i>
+                        <span class="nav-text">Votaciones</span>
+                    </a>
+                </li>
             </ul>
         </nav>
 
@@ -106,9 +114,87 @@
         </div>
     </aside>
 
+<!---------------------------->
+<!--------inicio votacion------->
+<!---------------------------->
     <main class="main-content">
-        <div id="panel-content" class="content-wrapper"></div>
+        <div id="panel-content" class="content-wrapper">
+            <!-- ================= SECCIÓN DE VOTACIÓN PARA DOCENTES ================= -->
+            <section id="votaciones-section" class="content-section">
+                <div class="content-wrapper">
+                    {% set v_step = request.args.get('v_step', 'identificacion') %}
+
+                    <div class="form-header">
+                        <h1>Votación Personero y Contralor</h1>
+                        {% if sesion_votacion and sesion_votacion.cierra_en %}
+                            <p>⏳ La votación finaliza: {{ sesion_votacion.cierra_en.strftime('%d/%m/%Y %H:%M') }}</p>
+                        {% endif %}
+                    </div>
+
+                    {% if v_step == 'identificacion' %}
+                        <div class="mgmt-card">
+                            <h3>Validar estudiante</h3>
+                            <form method="post" action="{{ url_for('docente_validar_estudiante') }}">
+                                <div class="form-group">
+                                    <label>Tarjeta de identidad:</label>
+                                    <input type="text" name="tarjeta_identidad" required>
+                                </div>
+                                <input type="hidden" name="redirect" value="profesor">
+                                <button type="submit" class="btn-primary">Validar</button>
+                            </form>
+                        </div>
+
+                    {% elif v_step == 'cargo' %}
+                        <div class="mgmt-card">
+                            <h3>Estudiante: {{ session['votacion_estudiante_nombre'] }}</h3>
+                            <p>¿Para qué cargo desea votar?</p>
+                            <form method="post" action="{{ url_for('docente_seleccionar_cargo') }}">
+                                <input type="hidden" name="estudiante_id" value="{{ session['votacion_estudiante_id'] }}">
+                                <input type="hidden" name="redirect" value="profesor">
+                                <button type="submit" name="cargo" value="personero" class="btn-primary">Personero</button>
+                                <button type="submit" name="cargo" value="contralor" class="btn-primary">Contralor</button>
+                            </form>
+                            <a href="{{ url_for('profesor_dashboard') }}">Cancelar</a>
+                        </div>
+
+                    {% elif v_step == 'candidatos' %}
+                        <div class="mgmt-card">
+                            <h3>Votación para {{ session['votacion_cargo'] }} - Estudiante: {{ session['votacion_estudiante_nombre'] }}</h3>
+                            <div style="display: flex; flex-wrap: wrap; gap: 16px;">
+                                {% for candidato in candidatos_cargo %}
+                                    <div style="border:1px solid #ccc; padding: 10px; width: 200px;">
+                                        {% if candidato.imagen_url %}<img src="{{ candidato.imagen_url }}" style="max-width:100px;">{% endif %}
+                                        <p><strong>{{ candidato.nombre }}</strong><br>N° {{ candidato.numero_campana }}</p>
+                                        <form method="post" action="{{ url_for('docente_registrar_voto') }}">
+                                            <input type="hidden" name="candidato_id" value="{{ candidato.id }}">
+                                            <input type="hidden" name="cargo" value="{{ session['votacion_cargo'] }}">
+                                            <input type="hidden" name="estudiante_id" value="{{ session['votacion_estudiante_id'] }}">
+                                            <input type="hidden" name="redirect" value="profesor">
+                                            <button type="submit" class="btn-primary">Votar</button>
+                                        </form>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            <a href="{{ url_for('profesor_dashboard') }}">Cancelar</a>
+                        </div>
+                    {% endif %}
+
+                    <!-- Mostrar mensajes flash -->
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }}">{{ message }}</div>
+                        {% endfor %}
+                    {% endwith %}
+                </div>
+            </section>
+           
+    
+        </div>
     </main>
+
+    <!---------------------------->
+    <!--------fin votacion--------->
+    <!---------------------------->
 </div>
 
 <!-- Modal perfil -->
@@ -254,6 +340,7 @@
         </div>
     </div>
 </div>
+
 
 <script src="{{ url_for('static', filename='script/panel-shell.js') }}"></script>
 <script src="{{ url_for('static', filename='script/panel-branding.js') }}"></script>

@@ -1,6 +1,6 @@
 #Importa las funciones principales de Flask para crear la app, manejar rutas, sesiones, peticiones y respuestas.
 #
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file, flash, send_from_directory
 from fpdf import FPDF
 import io
 import psycopg2
@@ -48,6 +48,10 @@ UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'static', 'uploads_mater
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'txt', 'png', 'jpg', 'jpeg', 'zip'}
 
+
+# Carpeta para imágenes de candidatos (votaciones)
+UPLOAD_FOLDER_CANDIDATOS = os.path.join(os.path.dirname(__file__), 'static', 'uploads_candidatos')
+os.makedirs(UPLOAD_FOLDER_CANDIDATOS, exist_ok=True)
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -1449,6 +1453,29 @@ def dashboard():
             cur2.close()
             conn2.close()
 
+        # ========== INICIO BLOQUE PARA VOTACIONES ==========
+        from datetime import datetime
+        # Variables por defecto en caso de que las tablas no existan o haya error
+        sesion_votacion = None
+        candidatos = []
+        candidatos_cargo = []
+        now = datetime.utcnow()
+        try:
+            # Importar modelos dentro de la función para evitar errores si no existen
+            from models import VotacionSesion, Candidato
+            sesion_votacion = VotacionSesion.query.first()
+            if admin_rol != 'superadmin':
+                candidatos = Candidato.query.all()
+            v_step = request.args.get('v_step')
+            if v_step == 'candidatos':
+                cargo = session.get('votacion_cargo')
+                if cargo:
+                    candidatos_cargo = Candidato.query.filter_by(cargo=cargo).all()
+        except Exception as e:
+            # Si hay error (por ejemplo, las tablas no existen), no interrumpimos el dashboard
+            print(f"Error al cargar datos de votaciones: {e}")
+        # ========== FIN BLOQUE ==========
+
         if user:
             return render_template('administrador/dashboard.html',
                                    user_name=user['nombre_completo'],
@@ -1457,7 +1484,12 @@ def dashboard():
                                    id_colegio=id_colegio or '',
                                    colegio_nombre=colegio_nombre,
                                    is_superadmin=(admin_rol == 'superadmin'),
-                                   is_admin_lider=(admin_rol == 'admin_lider'))
+                                   is_admin_lider=(admin_rol == 'admin_lider'),
+                                   # Variables nuevas de votaciones
+                                   sesion_votacion=sesion_votacion,
+                                   candidatos=candidatos,
+                                   candidatos_cargo=candidatos_cargo,
+                                   now=now)
         else:
             return render_template('administrador/dashboard.html',
                                    user_name=session.get('user_name', 'Usuario'),
@@ -1466,12 +1498,22 @@ def dashboard():
                                    id_colegio=id_colegio or '',
                                    colegio_nombre=colegio_nombre,
                                    is_superadmin=(admin_rol == 'superadmin'),
-                                   is_admin_lider=(admin_rol == 'admin_lider'))
+                                   is_admin_lider=(admin_rol == 'admin_lider'),
+                                   # Variables nuevas de votaciones
+                                   sesion_votacion=sesion_votacion,
+                                   candidatos=candidatos,
+                                   candidatos_cargo=candidatos_cargo,
+                                   now=now)
     except Exception as e:
         print(f"Error al obtener datos del usuario: {e}")
+        # En caso de error general, también pasamos variables por defecto
         return render_template('administrador/dashboard.html',
                                user_name=session.get('user_name', 'Usuario'),
-                               user_email=session.get('user_email', 'usuario@ejemplo.com'))
+                               user_email=session.get('user_email', 'usuario@ejemplo.com'),
+                               sesion_votacion=None,
+                               candidatos=[],
+                               candidatos_cargo=[],
+                               now=datetime.utcnow())
 
 #######Esta ruta permite cerrar sesión completamente y volver al login del sistema.########
 #
@@ -5165,8 +5207,238 @@ def admin_upload_colegio_branding():
         return jsonify({"status": "success", "message": "Archivo subido.", "data": dict(row)})
     except Exception as e:
         return _api_error_response(e)
+    
+    
+    
+    
 
+  # -----------------------------------------------------------------------------
+# RUTAS PARA ADMINISTRADOR (votaciones) - SIN REDIRECCIONES
+# -----------------------------------------------------------------------------
 
+@app.route('/admin/votaciones/abrir', methods=['POST'])
+def admin_abrir_votacion():
+    duracion_dias = float(request.form.get('duracion_dias', 1))
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT id, activa, cierra_en FROM votacion_sesion ORDER BY id LIMIT 1")
+    sesion = cur.fetchone()
+    if not sesion:
+        cur.execute("INSERT INTO votacion_sesion (activa, cierra_en) VALUES (FALSE, NULL) RETURNING id")
+        sesion_id = cur.fetchone()[0]
+    else:
+        sesion_id = sesion[0]
+    cierra_en = datetime.utcnow() + timedelta(days=duracion_dias)
+    cur.execute(
+        "UPDATE votacion_sesion SET activa = TRUE, cierra_en = %s WHERE id = %s",
+        (cierra_en, sesion_id)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({'status': 'success', 'message': 'Votación abierta', 'cierra_en': cierra_en.isoformat()})
+
+@app.route('/admin/votaciones/cerrar', methods=['POST'])
+def admin_cerrar_votacion():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("UPDATE votacion_sesion SET activa = FALSE, cierra_en = NULL WHERE activa = TRUE")
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({'status': 'success', 'message': 'Votación cerrada'})
+
+@app.route('/admin/candidatos/listar', methods=['GET'])
+def admin_listar_candidatos():
+    """Endpoint para obtener la lista de candidatos en JSON."""
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute("SELECT id, nombre, numero_campana, cargo, imagen_url FROM candidato ORDER BY creado_en DESC")
+    candidatos = [dict(row) for row in cur.fetchall()]
+    cur.close()
+    conn.close()
+    return jsonify({'status': 'success', 'candidatos': candidatos})
+
+@app.route('/admin/candidatos/agregar', methods=['POST'])
+def admin_agregar_candidato():
+    nombre = request.form.get('nombre')
+    numero_campana = request.form.get('numero_campana')
+    cargo = request.form.get('cargo')
+    imagen = request.files.get('imagen')
+    imagen_url = None
+    if imagen and imagen.filename:
+        filename = secure_filename(f"{datetime.utcnow().timestamp()}_{imagen.filename}")
+        imagen.save(os.path.join(UPLOAD_FOLDER_CANDIDATOS, filename))
+        imagen_url = f"/uploads_candidatos/{filename}"
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO candidato (nombre, numero_campana, cargo, imagen_url) VALUES (%s, %s, %s, %s) RETURNING id",
+        (nombre, numero_campana, cargo, imagen_url)
+    )
+    new_id = cur.fetchone()[0]
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({
+        'status': 'success',
+        'message': 'Candidato agregado',
+        'candidato': {
+            'id': new_id,
+            'nombre': nombre,
+            'numero_campana': numero_campana,
+            'cargo': cargo,
+            'imagen_url': imagen_url
+        }
+    })
+
+@app.route('/admin/candidatos/editar/<int:id>', methods=['POST'])
+def admin_editar_candidato(id):
+    nombre = request.form.get('nombre')
+    numero_campana = request.form.get('numero_campana')
+    cargo = request.form.get('cargo')
+    imagen = request.files.get('imagen')
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT imagen_url FROM candidato WHERE id = %s", (id,))
+    row = cur.fetchone()
+    imagen_anterior = row[0] if row else None
+    imagen_url = imagen_anterior
+    if imagen and imagen.filename:
+        filename = secure_filename(f"{datetime.utcnow().timestamp()}_{imagen.filename}")
+        imagen.save(os.path.join(UPLOAD_FOLDER_CANDIDATOS, filename))
+        imagen_url = f"/uploads_candidatos/{filename}"
+        if imagen_anterior:
+            ruta_anterior = os.path.join(UPLOAD_FOLDER_CANDIDATOS, imagen_anterior.replace('/uploads_candidatos/', ''))
+            if os.path.exists(ruta_anterior):
+                os.remove(ruta_anterior)
+    cur.execute(
+        "UPDATE candidato SET nombre=%s, numero_campana=%s, cargo=%s, imagen_url=%s WHERE id=%s",
+        (nombre, numero_campana, cargo, imagen_url, id)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({
+        'status': 'success',
+        'message': 'Candidato actualizado',
+        'candidato': {
+            'id': id,
+            'nombre': nombre,
+            'numero_campana': numero_campana,
+            'cargo': cargo,
+            'imagen_url': imagen_url
+        }
+    })
+
+@app.route('/admin/candidatos/eliminar/<int:id>', methods=['POST'])
+def admin_eliminar_candidato(id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT imagen_url FROM candidato WHERE id = %s", (id,))
+    row = cur.fetchone()
+    if row and row[0]:
+        ruta = os.path.join(UPLOAD_FOLDER_CANDIDATOS, row[0].replace('/uploads_candidatos/', ''))
+        if os.path.exists(ruta):
+            os.remove(ruta)
+    cur.execute("DELETE FROM candidato WHERE id = %s", (id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({'status': 'success', 'message': 'Candidato eliminado', 'id': id})
+
+# -----------------------------------------------------------------------------
+# RUTAS PARA DOCENTE (votación) - SIN REDIRECCIONES
+# -----------------------------------------------------------------------------
+
+@app.route('/docente/votacion/validar', methods=['POST'])
+def docente_validar_estudiante():
+    tarjeta = request.form.get('tarjeta_identidad')
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute(
+        "SELECT id_estudiante, nombre_completo FROM estudiantes WHERE numero_documento = %s",
+        (tarjeta,)
+    )
+    estudiante = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not estudiante:
+        return jsonify({'status': 'error', 'message': 'Estudiante no encontrado'})
+    return jsonify({
+        'status': 'success',
+        'estudiante_id': estudiante['id_estudiante'],
+        'nombre': estudiante['nombre_completo']
+    })
+
+@app.route('/docente/votacion/cargo', methods=['POST'])
+def docente_seleccionar_cargo():
+    estudiante_id = request.form.get('estudiante_id')
+    cargo = request.form.get('cargo')
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id, activa, cierra_en FROM votacion_sesion WHERE activa = TRUE AND cierra_en > NOW() ORDER BY id LIMIT 1"
+    )
+    sesion = cur.fetchone()
+    if not sesion:
+        cur.close()
+        conn.close()
+        return jsonify({'status': 'error', 'message': 'No hay votación activa'})
+    sesion_id = sesion[0]
+    cur.execute(
+        "SELECT id FROM voto WHERE estudiante_id = %s AND cargo = %s AND sesion_id = %s",
+        (estudiante_id, cargo, sesion_id)
+    )
+    if cur.fetchone():
+        cur.close()
+        conn.close()
+        return jsonify({'status': 'error', 'message': f'Este estudiante ya votó para {cargo}'})
+    cur.close()
+    conn.close()
+    return jsonify({'status': 'success', 'message': 'Cargo válido', 'cargo': cargo})
+
+@app.route('/docente/votacion/votar', methods=['POST'])
+def docente_registrar_voto():
+    estudiante_id = request.form.get('estudiante_id')
+    candidato_id = request.form.get('candidato_id')
+    cargo = request.form.get('cargo')
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id FROM votacion_sesion WHERE activa = TRUE AND cierra_en > NOW() ORDER BY id LIMIT 1"
+    )
+    sesion = cur.fetchone()
+    if not sesion:
+        cur.close()
+        conn.close()
+        return jsonify({'status': 'error', 'message': 'La votación ya no está activa'})
+    sesion_id = sesion[0]
+    cur.execute(
+        "SELECT id FROM voto WHERE estudiante_id = %s AND cargo = %s AND sesion_id = %s",
+        (estudiante_id, cargo, sesion_id)
+    )
+    if cur.fetchone():
+        cur.close()
+        conn.close()
+        return jsonify({'status': 'error', 'message': 'Este estudiante ya votó para este cargo'})
+    cur.execute(
+        "INSERT INTO voto (estudiante_id, candidato_id, cargo, sesion_id) VALUES (%s, %s, %s, %s)",
+        (estudiante_id, candidato_id, cargo, sesion_id)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({'status': 'success', 'message': 'Voto registrado exitosamente'})
+
+# -----------------------------------------------------------------------------
+# RUTA PARA SERVIR IMÁGENES DE CANDIDATOS (sin cambios)
+# -----------------------------------------------------------------------------
+@app.route('/uploads_candidatos/<filename>')
+def candidatos_uploads(filename):
+    return send_from_directory(UPLOAD_FOLDER_CANDIDATOS, filename)
+
+##########fin votaciones#######
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5005"))
     app.run(host="0.0.0.0", port=port)
