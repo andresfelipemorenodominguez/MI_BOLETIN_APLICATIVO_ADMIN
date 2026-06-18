@@ -1,5 +1,3 @@
-#Importa las funciones principales de Flask para crear la app, manejar rutas, sesiones, peticiones y respuestas.
-#
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file, flash, send_from_directory
 from fpdf import FPDF
 import io
@@ -1444,17 +1442,20 @@ def dashboard():
         session['id_colegio'] = id_colegio
 
         colegio_nombre = ''
+        colegio_lema = ''
+        colegio_escudo = ''
         if id_colegio:
             conn2 = get_db_connection()
             cur2 = conn2.cursor()
-            cur2.execute("SELECT nombre_oficial FROM colegios WHERE id_colegio = %s", (id_colegio,))
+            cur2.execute("SELECT nombre_oficial, lema, escudo_url FROM colegios WHERE id_colegio = %s", (id_colegio,))
             row = cur2.fetchone()
             colegio_nombre = row[0] if row else ''
+            colegio_lema = row[1] if row and row[1] else ''
+            colegio_escudo = row[2] if row and row[2] else ''
             cur2.close()
             conn2.close()
 
         # ========== INICIO BLOQUE PARA VOTACIONES ==========
-        from datetime import datetime
         # Variables por defecto en caso de que las tablas no existan o haya error
         sesion_votacion = None
         candidatos = []
@@ -1483,9 +1484,10 @@ def dashboard():
                                    admin_rol=admin_rol,
                                    id_colegio=id_colegio or '',
                                    colegio_nombre=colegio_nombre,
+                                   colegio_lema=colegio_lema,
+                                   colegio_escudo=colegio_escudo,
                                    is_superadmin=(admin_rol == 'superadmin'),
                                    is_admin_lider=(admin_rol == 'admin_lider'),
-                                   # Variables nuevas de votaciones
                                    sesion_votacion=sesion_votacion,
                                    candidatos=candidatos,
                                    candidatos_cargo=candidatos_cargo,
@@ -1497,9 +1499,10 @@ def dashboard():
                                    admin_rol=admin_rol,
                                    id_colegio=id_colegio or '',
                                    colegio_nombre=colegio_nombre,
+                                   colegio_lema=colegio_lema,
+                                   colegio_escudo=colegio_escudo,
                                    is_superadmin=(admin_rol == 'superadmin'),
                                    is_admin_lider=(admin_rol == 'admin_lider'),
-                                   # Variables nuevas de votaciones
                                    sesion_votacion=sesion_votacion,
                                    candidatos=candidatos,
                                    candidatos_cargo=candidatos_cargo,
@@ -1522,6 +1525,443 @@ def logout():
     """Cierra sesión tanto de usuarios como de administradores"""
     session.clear()
     return redirect(url_for('loginuser'))
+
+
+def _get_chat_participant():
+    admin = get_admin_from_session(session)
+    if not admin:
+        return None
+
+    user_id = admin.get('id')
+    nombre = admin.get('nombre')
+    rol = 'admin' if admin.get('rol') in ('superadmin', 'admin_colegio', 'admin_lider') else 'docente'
+
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    participante = None
+    if user_id is not None:
+        try:
+            cur.execute(
+                "SELECT id_participante, room_id, user_id, rol_usuario, nombre_usuario "
+                "FROM chat_participants WHERE user_id = %s AND rol_usuario = %s LIMIT 1",
+                (str(user_id), rol)
+            )
+            participante = cur.fetchone()
+        except Exception:
+            participante = None
+
+    if not participante and nombre:
+        cur.execute(
+            "SELECT id_participante, room_id, user_id, rol_usuario, nombre_usuario "
+            "FROM chat_participants WHERE nombre_usuario = %s AND rol_usuario = %s LIMIT 1",
+            (nombre, rol)
+        )
+        participante = cur.fetchone()
+
+    cur.close()
+    conn.close()
+    
+    if not participante and user_id is not None and nombre:
+        return {
+            'user_id': str(user_id),
+            'rol_usuario': rol,
+            'nombre_usuario': nombre
+        }
+        
+    return participante
+
+
+@app.route('/chat/contacts', methods=['GET'])
+def chat_contacts():
+    admin = get_admin_from_session(session)
+    if not admin:
+        return jsonify({"status": "error", "message": "No estás registrado."}), 404
+        
+    id_colegio = admin.get('id_colegio')
+    if not id_colegio:
+        return jsonify({"status": "error", "message": "Sin colegio asignado."}), 403
+
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    
+    cur.execute(
+        "SELECT id_admin as id, nombre_completo, rol, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_active)) as inactive_seconds FROM administradores "
+        "WHERE id_colegio = %s",
+        (id_colegio,)
+    )
+    admins = cur.fetchall()
+    
+    cur.execute(
+        "SELECT id_profesor as id, nombre_completo, 'docente' as rol, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_active)) as inactive_seconds FROM profesores "
+        "WHERE id_colegio = %s",
+        (id_colegio,)
+    )
+    docentes = cur.fetchall()
+    
+    contacts = []
+    for a in admins:
+        if str(a['id']) == str(admin.get('id')) and admin.get('rol') in ('superadmin', 'admin_colegio', 'admin_lider'):
+            continue
+        inactive = a['inactive_seconds']
+        is_online = inactive is not None and inactive < 30
+        contacts.append({
+            'user_id': str(a['id']),
+            'rol_usuario': 'admin',
+            'nombre_usuario': a['nombre_completo'],
+            'is_online': is_online
+        })
+        
+    for d in docentes:
+        if str(d['id']) == str(admin.get('id')) and admin.get('rol') not in ('superadmin', 'admin_colegio', 'admin_lider'):
+            continue
+        inactive = d['inactive_seconds']
+        is_online = inactive is not None and inactive < 30
+        contacts.append({
+            'user_id': str(d['id']),
+            'rol_usuario': 'docente',
+            'nombre_usuario': d['nombre_completo'],
+            'is_online': is_online
+        })
+
+    cur.close()
+    conn.close()
+    return jsonify({"status": "success", "data": contacts})
+
+
+@app.route('/chat/start', methods=['POST'])
+def chat_start():
+    participante = _get_chat_participant()
+    if not participante:
+        return jsonify({"status": "error", "message": "No estás registrado."}), 404
+
+    payload = request.get_json() or {}
+    target_user_id = str(payload.get('target_user_id', '')).strip()
+    target_rol = payload.get('target_rol', '').strip()
+    target_nombre = payload.get('target_nombre', '').strip()
+
+    if not target_user_id or not target_rol or not target_nombre:
+        return jsonify({"status": "error", "message": "Faltan datos del contacto."}), 400
+
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    
+    cur.execute("""
+        SELECT p1.room_id 
+        FROM chat_participants p1
+        JOIN chat_participants p2 ON p1.room_id = p2.room_id
+        WHERE p1.user_id = %s AND p1.rol_usuario = %s
+          AND p2.user_id = %s AND p2.rol_usuario = %s
+        LIMIT 1
+    """, (participante['user_id'], participante['rol_usuario'], target_user_id, target_rol))
+    
+    existing = cur.fetchone()
+    if existing:
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "data": {"room_id": str(existing['room_id'])}})
+
+    cur.execute("INSERT INTO chat_rooms DEFAULT VALUES RETURNING id_sala")
+    new_room = cur.fetchone()['id_sala']
+    
+    cur.execute("""
+        INSERT INTO chat_participants (room_id, user_id, rol_usuario, nombre_usuario)
+        VALUES (%s, %s, %s, %s) ON CONFLICT DO NOTHING
+    """, (new_room, participante['user_id'], participante['rol_usuario'], participante['nombre_usuario']))
+    
+    cur.execute("""
+        INSERT INTO chat_participants (room_id, user_id, rol_usuario, nombre_usuario)
+        VALUES (%s, %s, %s, %s) ON CONFLICT DO NOTHING
+    """, (new_room, target_user_id, target_rol, target_nombre))
+    
+    conn.commit()
+    cur.close()
+    conn.close()
+    
+    return jsonify({"status": "success", "data": {"room_id": str(new_room)}})
+
+
+@app.route('/chat/rooms', methods=['GET'])
+def chat_rooms():
+    participante = _get_chat_participant()
+    if not participante:
+        return jsonify({"status": "error", "message": "No estás registrado como participante de chat."}), 404
+
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    
+    # Actualizar la actividad del usuario actual
+    admin = get_admin_from_session(session)
+    if admin:
+        if admin.get('rol') in ('superadmin', 'admin_colegio', 'admin_lider'):
+            cur.execute("UPDATE administradores SET last_active = CURRENT_TIMESTAMP WHERE id_admin = %s", (admin.get('id'),))
+        else:
+            cur.execute("UPDATE profesores SET last_active = CURRENT_TIMESTAMP WHERE id_profesor = %s", (admin.get('id'),))
+        conn.commit()
+
+    cur.execute(
+        "SELECT r.id_sala, r.fecha_creacion, "
+        "COALESCE(array_agg(DISTINCT p.nombre_usuario) FILTER (WHERE p.user_id != %s OR p.rol_usuario != %s), ARRAY[]::text[]) AS partner_names, "
+        "COALESCE(array_agg(DISTINCT p.rol_usuario) FILTER (WHERE p.user_id != %s OR p.rol_usuario != %s), ARRAY[]::text[]) AS partner_roles, "
+        "m.contenido AS last_message, m.sender_id AS last_sender_id, m.fecha_registro AS last_time, "
+        "COALESCE(u.unread_count, 0) AS unread_count "
+        "FROM chat_rooms r "
+        "JOIN chat_participants p0 ON p0.room_id = r.id_sala AND p0.user_id = %s AND p0.rol_usuario = %s "
+        "LEFT JOIN chat_participants p ON p.room_id = r.id_sala AND (p.user_id != %s OR p.rol_usuario != %s) "
+        "LEFT JOIN LATERAL ( "
+        "  SELECT contenido, sender_id, fecha_registro "
+        "  FROM chat_messages "
+        "  WHERE room_id = r.id_sala "
+        "  ORDER BY fecha_registro DESC LIMIT 1 "
+        ") m ON TRUE "
+        "LEFT JOIN LATERAL ( "
+        "  SELECT COUNT(*) AS unread_count "
+        "  FROM chat_messages "
+        "  WHERE room_id = r.id_sala AND leido = FALSE AND sender_id != %s "
+        ") u ON TRUE "
+        "GROUP BY r.id_sala, r.fecha_creacion, m.contenido, m.sender_id, m.fecha_registro, u.unread_count "
+        "ORDER BY r.fecha_creacion DESC",
+        (participante['user_id'], participante['rol_usuario'], 
+         participante['user_id'], participante['rol_usuario'], 
+         participante['user_id'], participante['rol_usuario'], 
+         participante['user_id'], participante['rol_usuario'], 
+         participante['user_id'])
+    )
+
+    rooms = []
+    for row in cur.fetchall():
+        partner_names = row['partner_names'] or []
+        partner_roles = row['partner_roles'] or []
+        if len(partner_names) > 2:
+            partner_title = 'Chat de grupo'
+        elif len(partner_names) == 1:
+            partner_title = partner_names[0]
+        elif len(partner_names) == 2:
+            partner_title = f"{partner_names[0]}, {partner_names[1]}"
+        else:
+            partner_title = 'Sala de chat'
+
+        rooms.append({
+            'room_id': str(row['id_sala']),
+            'title': partner_title,
+            'subtitle': row['last_message'] or '',
+            'latest_sender_is_me': bool(row['last_sender_id'] == participante['user_id']),
+            'latest_time': (row['last_time'].isoformat() + 'Z' if row['last_time'].tzinfo is None else row['last_time'].isoformat()) if row['last_time'] else None,
+            'unread_count': row['unread_count'],
+            'partner_names': partner_names,
+            'partner_roles': partner_roles,
+        })
+
+    cur.close()
+    conn.close()
+    return jsonify({"status": "success", "data": rooms})
+
+
+@app.route('/chat/rooms/<room_id>/messages', methods=['GET'])
+def chat_room_messages(room_id):
+    participante = _get_chat_participant()
+    if not participante:
+        return jsonify({"status": "error", "message": "No estás registrado como participante de chat."}), 404
+
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute(
+        "SELECT cleared_at FROM chat_participants WHERE room_id = %s AND user_id = %s AND rol_usuario = %s",
+        (room_id, participante['user_id'], participante['rol_usuario'])
+    )
+    row = cur.fetchone()
+    if not row:
+        cur.close()
+        conn.close()
+        return jsonify({"status": "error", "message": "No tienes acceso a esta sala de chat."}), 403
+
+    cleared_at = row['cleared_at']
+
+    if cleared_at:
+        cur.execute(
+            "SELECT id_mensaje, sender_id, contenido, leido, fecha_registro "
+            "FROM chat_messages "
+            "WHERE room_id = %s AND fecha_registro > %s "
+            "ORDER BY fecha_registro ASC",
+            (room_id, cleared_at)
+        )
+    else:
+        cur.execute(
+            "SELECT id_mensaje, sender_id, contenido, leido, fecha_registro "
+            "FROM chat_messages "
+            "WHERE room_id = %s "
+            "ORDER BY fecha_registro ASC",
+            (room_id,)
+        )
+    messages = [
+        {
+            'message_id': str(m['id_mensaje']),
+            'sender_id': str(m['sender_id']),
+            'content': m['contenido'],
+            'is_mine': str(m['sender_id']) == str(participante['user_id']),
+            'read': m['leido'],
+            'created_at': (m['fecha_registro'].isoformat() + 'Z' if m['fecha_registro'].tzinfo is None else m['fecha_registro'].isoformat()) if m['fecha_registro'] else None
+        }
+        for m in cur.fetchall()
+    ]
+
+    cur.execute(
+        "UPDATE chat_messages SET leido = TRUE "
+        "WHERE room_id = %s AND leido = FALSE AND sender_id != %s",
+        (room_id, participante['user_id'])
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({"status": "success", "data": messages})
+
+
+@app.route('/chat/rooms/<room_id>/send', methods=['POST'])
+def chat_room_send(room_id):
+    participante = _get_chat_participant()
+    if not participante:
+        return jsonify({"status": "error", "message": "No estás registrado como participante de chat."}), 404
+
+    payload = request.get_json() or {}
+    contenido = (payload.get('content') or '').strip()
+    if not contenido:
+        return jsonify({"status": "error", "message": "El mensaje no puede estar vacío."}), 400
+
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute(
+        "SELECT 1 FROM chat_participants WHERE room_id = %s AND user_id = %s AND rol_usuario = %s",
+        (room_id, participante['user_id'], participante['rol_usuario'])
+    )
+    if not cur.fetchone():
+        cur.close()
+        conn.close()
+        return jsonify({"status": "error", "message": "No tienes acceso a esta sala de chat."}), 403
+
+    cur.execute(
+        "INSERT INTO chat_messages (room_id, sender_id, contenido, leido) "
+        "VALUES (%s, %s, %s, TRUE) RETURNING id_mensaje, fecha_registro",
+        (room_id, participante['user_id'], contenido)
+    )
+    inserted = cur.fetchone()
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return jsonify({
+        "status": "success",
+        "data": {
+            "message_id": str(inserted['id_mensaje']),
+            "sender_id": str(participante['user_id']),
+            "content": contenido,
+            "created_at": inserted['fecha_registro'].isoformat(),
+            "is_mine": True,
+        }
+    })
+
+@app.route('/chat/messages/<message_id>', methods=['DELETE'])
+def chat_message_delete(message_id):
+    participante = _get_chat_participant()
+    if not participante:
+        return jsonify({"status": "error", "message": "No estás registrado como participante de chat."}), 404
+
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    
+    cur.execute(
+        "SELECT m.id_mensaje, m.sender_id, m.room_id FROM chat_messages m "
+        "JOIN chat_participants p ON m.room_id = p.room_id "
+        "WHERE m.id_mensaje = %s AND p.user_id = %s AND p.rol_usuario = %s",
+        (message_id, participante['user_id'], participante['rol_usuario'])
+    )
+    msg = cur.fetchone()
+    
+    if not msg:
+        cur.close()
+        conn.close()
+        return jsonify({"status": "error", "message": "Mensaje no encontrado o sin acceso."}), 404
+        
+    if str(msg['sender_id']) != str(participante['user_id']):
+        cur.close()
+        conn.close()
+        return jsonify({"status": "error", "message": "Solo puedes eliminar tus propios mensajes."}), 403
+        
+    cur.execute("DELETE FROM chat_messages WHERE id_mensaje = %s", (message_id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    
+    return jsonify({"status": "success", "message": "Mensaje eliminado exitosamente."})
+
+@app.route('/chat/messages/<message_id>', methods=['PUT'])
+def chat_message_edit(message_id):
+    participante = _get_chat_participant()
+    if not participante:
+        return jsonify({"status": "error", "message": "No estás registrado como participante de chat."}), 404
+
+    data = request.get_json()
+    new_content = data.get('content', '').strip()
+    if not new_content:
+        return jsonify({"status": "error", "message": "El contenido no puede estar vacío."}), 400
+
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    
+    cur.execute(
+        "SELECT m.id_mensaje, m.sender_id, m.room_id FROM chat_messages m "
+        "JOIN chat_participants p ON m.room_id = p.room_id "
+        "WHERE m.id_mensaje = %s AND p.user_id = %s AND p.rol_usuario = %s",
+        (message_id, participante['user_id'], participante['rol_usuario'])
+    )
+    msg = cur.fetchone()
+    
+    if not msg:
+        cur.close()
+        conn.close()
+        return jsonify({"status": "error", "message": "Mensaje no encontrado o sin acceso."}), 404
+        
+    if str(msg['sender_id']) != str(participante['user_id']):
+        cur.close()
+        conn.close()
+        return jsonify({"status": "error", "message": "Solo puedes editar tus propios mensajes."}), 403
+        
+    cur.execute("UPDATE chat_messages SET contenido = %s WHERE id_mensaje = %s", (new_content, message_id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({"status": "success", "message": "Mensaje actualizado"})
+
+@app.route('/chat/rooms/<room_id>/clear', methods=['DELETE'])
+def chat_room_clear(room_id):
+    try:
+        participante = _get_chat_participant()
+        if not participante:
+            return jsonify({"status": "error", "message": "No estás registrado como participante de chat."}), 404
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Check access to the room
+        cur.execute(
+            "SELECT 1 FROM chat_participants WHERE room_id = %s AND user_id = %s AND rol_usuario = %s",
+            (room_id, participante['user_id'], participante['rol_usuario'])
+        )
+        if not cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify({"status": "error", "message": "No tienes acceso a esta sala de chat."}), 403
+
+        # Actualizar cleared_at para ocultar mensajes pasados solo para este usuario
+        cur.execute(
+            "UPDATE chat_participants SET cleared_at = NOW() WHERE room_id = %s AND user_id = %s AND rol_usuario = %s",
+            (room_id, participante['user_id'], participante['rol_usuario'])
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "message": "Chat vaciado con éxito"})
+    except Exception as e:
+        print(f"Error en chat_room_clear: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 # -------------------------
@@ -4172,6 +4612,34 @@ def upload_profile_photo():
         return jsonify({"status": "success", "message": "Foto actualizada.", "foto_perfil": url})
     except Exception as e:
         return _api_error_response(e)
+
+
+@app.route('/remove-profile-photo', methods=['POST'])
+def remove_profile_photo():
+    user_info = session.get('user_info')
+    user_id = session.get('user_id')
+    try:
+        if user_info:
+            tipo = user_info.get('tipo')
+            uid = user_info['id']
+            table = 'estudiantes' if tipo == 'estudiante' else 'profesores'
+            id_col = 'id_estudiante' if tipo == 'estudiante' else 'id_profesor'
+        elif user_id:
+            tipo = 'admin'
+            uid = user_id
+            table = 'administradores'
+            id_col = 'id_admin'
+        else:
+            return jsonify({"status": "error", "message": "No autorizado"}), 401
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(f"UPDATE {table} SET foto_perfil = NULL WHERE {id_col} = %s", (uid,))
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({"status": "success", "message": "Foto eliminada."})
+    except Exception as e:
+        return _api_error_response(e)
+
 
 
 ###########permite a estudiantes, profesores o administradores actualizar su perfil########

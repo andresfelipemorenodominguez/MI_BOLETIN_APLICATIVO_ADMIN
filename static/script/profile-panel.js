@@ -56,14 +56,24 @@ const ProfilePanel = {
   },
 
   updateAvatars(data) {
-    const url = data.foto_perfil || data.avatar_url;
+    const fallbackUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(data.nombre_completo || '')}&background=003366&color=fff&size=120`;
+    const url = data.foto_perfil || data.avatar_url || fallbackUrl;
+    
     ['profile-avatar-img', 'edit-profile-avatar'].forEach(id => {
       const img = document.getElementById(id);
-      if (img && url) img.src = url;
+      if (img) img.src = url;
     });
-    document.querySelectorAll('.user-avatar img').forEach(img => {
-      if (url) img.src = url;
-    });
+    
+    const sbAvatarContainer = document.querySelector('[data-sb-footer] .user-avatar');
+    if (sbAvatarContainer) {
+      if (data.foto_perfil || data.avatar_url) {
+        sbAvatarContainer.innerHTML = `<img src="${data.foto_perfil || data.avatar_url}" style="width: 100%; height: 100%; object-fit: cover;">`;
+      } else {
+        const names = (data.nombre_completo || '').trim().split(' ');
+        const initials = names.length > 0 ? names[0][0].toUpperCase() + (names.length > 1 ? names[1][0].toUpperCase() : '') : '';
+        sbAvatarContainer.innerHTML = `<div style="width: 100%; height: 100%; background: linear-gradient(135deg, #003366 0%, #4A90E2 100%); color: #fff; display: flex; align-items: center; justify-content: center;">${initials}</div>`;
+      }
+    }
   },
 
   renderView(data) {
@@ -181,6 +191,15 @@ const ProfilePanel = {
     return data;
   },
 
+  async removePhoto() {
+    const res = await fetch('/remove-profile-photo', { method: 'POST' });
+    const data = await res.json();
+    if (data.status === 'success') {
+      await this.load();
+    }
+    return data;
+  },
+
   init(options = {}) {
     const overlays = ['profile-modal-overlay', 'edit-modal-overlay', 'password-modal-overlay'];
     const toggle = (id, show) => {
@@ -224,7 +243,7 @@ const ProfilePanel = {
         const data = await this.save();
         const notify = options.notify || ((msg, ok) => alert(msg));
         notify(data.message, data.status === 'success');
-        if (data.status === 'success') toggle('edit-modal-overlay', false);
+        if (data.status === 'success') toggle('profile-modal-overlay', false);
       });
     }
 
@@ -238,6 +257,17 @@ const ProfilePanel = {
         const notify = options.notify || ((msg, ok) => alert(msg));
         notify(data.message, data.status === 'success');
         e.target.value = '';
+      });
+    }
+
+    const removePhotoBtn = document.getElementById('remove-photo-btn');
+    if (removePhotoBtn && !removePhotoBtn.dataset.profileBound) {
+      removePhotoBtn.dataset.profileBound = '1';
+      removePhotoBtn.addEventListener('click', async () => {
+        if (!confirm('¿Estás seguro de que deseas quitar tu foto de perfil?')) return;
+        const data = await this.removePhoto();
+        const notify = options.notify || ((msg, ok) => alert(msg));
+        notify(data.message, data.status === 'success');
       });
     }
 

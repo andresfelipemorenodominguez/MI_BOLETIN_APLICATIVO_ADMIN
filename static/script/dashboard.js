@@ -85,6 +85,101 @@ const Utils = {
         if (score === 4) return { percentage: 100, color: 'var(--success)', label: 'Fuerte' };
         if (score >= 2) return { percentage: 66, color: 'var(--warning)', label: 'Moderada' };
         return { percentage: 33, color: 'var(--error)', label: 'Débil' };
+    },
+    confirmDialog(title, message, iconClass = 'fas fa-exclamation-triangle', confirmBtnText = 'Eliminar', confirmBtnColor = 'var(--error)') {
+        return new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.2s ease;';
+            const modal = document.createElement('div');
+            const isDark = document.body.classList.contains('dark-mode');
+            const bg = isDark ? '#1e293b' : '#ffffff';
+            const color = isDark ? '#ffffff' : '#333333';
+            const cancelColor = isDark ? '#cbd5e1' : '#64748b';
+            
+            modal.style.cssText = `background:${bg};border-radius:12px;padding:30px 24px;width:90%;max-width:380px;box-shadow:0 10px 25px rgba(0,0,0,0.2);transform:scale(0.95);transition:transform 0.2s ease;text-align:center;color:${color};`;
+            
+            modal.innerHTML = `
+                <div style="font-size:48px;color:${confirmBtnColor};margin-bottom:16px;">
+                    <i class="${iconClass}"></i>
+                </div>
+                <h3 style="margin:0 0 12px 0;font-size:20px;font-weight:600;">${title}</h3>
+                <p style="margin:0 0 24px 0;color:var(--gray-500);font-size:14px;line-height:1.5;">${message}</p>
+                <div style="display:flex;gap:12px;justify-content:center;">
+                    <button id="confirm-cancel-btn" style="padding:10px 20px;border-radius:8px;border:1px solid var(--gray-300);background:transparent;color:${cancelColor};cursor:pointer;font-weight:500;flex:1;transition:all 0.2s;">Cancelar</button>
+                    <button id="confirm-accept-btn" style="padding:10px 20px;border-radius:8px;border:none;background:${confirmBtnColor};color:white;cursor:pointer;font-weight:500;flex:1;transition:all 0.2s;">${confirmBtnText}</button>
+                </div>
+            `;
+            
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+            
+            requestAnimationFrame(() => {
+                overlay.style.opacity = '1';
+                modal.style.transform = 'scale(1)';
+            });
+            
+            const close = (result) => {
+                overlay.style.opacity = '0';
+                modal.style.transform = 'scale(0.95)';
+                setTimeout(() => {
+                    document.body.removeChild(overlay);
+                    resolve(result);
+                }, 200);
+            };
+            
+            modal.querySelector('#confirm-cancel-btn').onclick = () => close(false);
+            modal.querySelector('#confirm-accept-btn').onclick = () => close(true);
+        });
+    },
+    promptDialog(title, defaultValue = '', iconClass = 'fas fa-edit', confirmBtnText = 'Guardar') {
+        return new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.2s ease;';
+            const modal = document.createElement('div');
+            const isDark = document.body.classList.contains('dark-mode');
+            const bg = isDark ? '#1e293b' : '#ffffff';
+            const color = isDark ? '#ffffff' : '#333333';
+            const inputBg = isDark ? '#0f172a' : '#f8f9fa';
+            const inputBorder = isDark ? '#334155' : '#e2e8f0';
+            const cancelColor = isDark ? '#cbd5e1' : '#64748b';
+            
+            modal.style.cssText = `background:${bg};border-radius:12px;padding:30px 24px;width:90%;max-width:400px;box-shadow:0 10px 25px rgba(0,0,0,0.2);transform:scale(0.95);transition:transform 0.2s ease;text-align:center;color:${color};`;
+            
+            modal.innerHTML = `
+                <div style="font-size:40px;color:var(--primary);margin-bottom:16px;">
+                    <i class="${iconClass}"></i>
+                </div>
+                <h3 style="margin:0 0 16px 0;font-size:20px;font-weight:600;">${title}</h3>
+                <textarea id="prompt-input" style="width:100%;padding:12px;border-radius:8px;border:1px solid ${inputBorder};background:${inputBg};color:${color};margin-bottom:24px;resize:vertical;min-height:80px;font-family:inherit;">${defaultValue}</textarea>
+                <div style="display:flex;gap:12px;justify-content:center;">
+                    <button id="prompt-cancel-btn" style="padding:10px 20px;border-radius:8px;border:1px solid var(--gray-300);background:transparent;color:${cancelColor};cursor:pointer;font-weight:500;flex:1;transition:all 0.2s;">Cancelar</button>
+                    <button id="prompt-accept-btn" style="padding:10px 20px;border-radius:8px;border:none;background:var(--primary);color:white;cursor:pointer;font-weight:500;flex:1;transition:all 0.2s;">${confirmBtnText}</button>
+                </div>
+            `;
+            
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+            
+            requestAnimationFrame(() => {
+                overlay.style.opacity = '1';
+                modal.style.transform = 'scale(1)';
+                modal.querySelector('#prompt-input').focus();
+            });
+            
+            const close = (result) => {
+                overlay.style.opacity = '0';
+                modal.style.transform = 'scale(0.95)';
+                setTimeout(() => {
+                    document.body.removeChild(overlay);
+                    resolve(result);
+                }, 200);
+            };
+            
+            modal.querySelector('#prompt-cancel-btn').onclick = () => close(null);
+            modal.querySelector('#prompt-accept-btn').onclick = () => {
+                close(modal.querySelector('#prompt-input').value);
+            };
+        });
     }
 };
 
@@ -234,6 +329,529 @@ class StatsManager {
                 });
             }
         } catch (e) {}
+    }
+}
+
+
+class ChatManager {
+    constructor() {
+        this.chatSection = document.getElementById('chat-section');
+        this.contactList = document.getElementById('chat-contact-list');
+        this.searchInput = document.getElementById('chat-search');
+        this.filterSelect = document.getElementById('chat-filter');
+        this.placeholder = document.getElementById('chat-placeholder');
+        this.activePanel = document.getElementById('chat-active');
+        this.activeName = document.getElementById('chat-active-name');
+        this.activeStatus = document.getElementById('chat-active-status');
+        this.activeInitials = document.getElementById('chat-active-initials');
+        this.messagesContainer = document.getElementById('chat-messages');
+        this.messageInput = document.getElementById('chat-msg-input');
+        this.sendBtn = document.getElementById('chat-send-btn');
+        this.contacts = [];
+        this.filteredContacts = [];
+        this.activeRoomId = null;
+        this.pollInterval = null;
+        this.currentFilter = 'all';
+    }
+
+    init() {
+        if (!this.chatSection) return;
+
+        this.searchInput?.addEventListener('input', Utils.debounce(() => this.filterContacts(), 200));
+        this.filterSelect?.addEventListener('change', () => {
+            this.currentFilter = this.filterSelect.value || 'all';
+            this.filterContacts();
+        });
+        
+        const chatInput = document.getElementById('chat-msg-input');
+        const sendBtn = document.getElementById('chat-send-btn');
+        const clearBtn = document.getElementById('chat-clear-btn');
+        
+        if (chatInput && sendBtn) {
+            sendBtn.addEventListener('click', () => this.sendMessage());
+            chatInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.sendMessage();
+                }
+            });
+        }
+
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => this.clearChat());
+        }
+
+        // ── Emoji Picker ──────────────────────────────────────────
+        this.initEmojiPicker();
+
+        this.loadContacts();
+        this.pollInterval = setInterval(() => {
+            if (this.activeRoomId) {
+                this.loadMessages(this.activeRoomId);
+            }
+        }, 10000);
+    }
+
+    initEmojiPicker() {
+        const emojiBtn = document.getElementById('chat-emoji-btn');
+        const emojiPicker = document.getElementById('chat-emoji-picker');
+        const input = document.getElementById('chat-msg-input');
+        if (!emojiBtn || !emojiPicker || !input) return;
+
+        const EMOJIS = [
+            // Caras
+            '😀','😁','😂','🤣','😊','😍','🥰','😘','😎','🤩','🥳','😏','😒','😞','😢','😭',
+            '😤','😡','🤯','😱','😴','🥴','🤒','😷','🤧','🥺','😔','😌','🙄','😬','🤫','🤔',
+            // Gestos / manos
+            '👍','👎','👏','🙌','🤝','✌️','🤞','🤘','👌','🤌','🙏','💪','🫡','👋','🫶','❤️',
+            // Objetos / misc
+            '🎉','🎊','🎁','🔥','💥','⚡','✨','💫','🌟','🏆','💡','📌','📎','🔔','📢','💬',
+            '🚀','🌈','☀️','🌙','⭐','💯','✅','❌','⚠️','🚨','🛑','📞','💌','📧','🔒','🔓',
+            // Comida / naturaleza
+            '🍎','🍕','🍔','🍜','☕','🍺','🌸','🌺','🌻','🌹','🐶','🐱','🐧','🦋','🌊','🏔️',
+        ];
+
+        // Populate picker
+        emojiPicker.innerHTML = EMOJIS.map(e =>
+            `<button style="font-size:22px;padding:4px 5px;border:none;background:none;cursor:pointer;border-radius:6px;transition:background 0.15s;line-height:1;" title="${e}" onmouseover="this.style.background='var(--gray-200)'" onmouseout="this.style.background='none'">${e}</button>`
+        ).join('');
+
+        // Click on emoji → insert at cursor position in input
+        emojiPicker.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const emoji = btn.textContent;
+                const start = input.selectionStart;
+                const end = input.selectionEnd;
+                const val = input.value;
+                input.value = val.slice(0, start) + emoji + val.slice(end);
+                input.setSelectionRange(start + emoji.length, start + emoji.length);
+                input.focus();
+            });
+        });
+
+        // Toggle picker
+        emojiBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isHidden = emojiPicker.style.display === 'none' || emojiPicker.style.display === '';
+            emojiPicker.style.display = isHidden ? 'flex' : 'none';
+        });
+
+        // Close picker when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!emojiPicker.contains(e.target) && e.target !== emojiBtn) {
+                emojiPicker.style.display = 'none';
+            }
+        });
+    }
+
+    async loadContacts() {
+        try {
+            if (this.contactList && this.contacts.length === 0) {
+                this.contactList.innerHTML = `
+                    <div style="padding: 30px 20px; text-align: center; color: var(--gray-500);">
+                        <i class="fas fa-circle-notch fa-spin" style="font-size: 24px; margin-bottom: 12px;"></i>
+                        <p style="font-size: 14px;">Cargando chats...</p>
+                    </div>`;
+            }
+            const [contactsRes, roomsRes] = await Promise.all([
+                fetch('/chat/contacts'),
+                fetch('/chat/rooms')
+            ]);
+            
+            let contactsData = await contactsRes.json().catch(() => null);
+            let roomsData = await roomsRes.json().catch(() => null);
+            
+            const rawContacts = (contactsData && contactsData.status === 'success') ? contactsData.data : [];
+            const rawRooms = (roomsData && roomsData.status === 'success') ? roomsData.data : [];
+            
+            this.contacts = rawContacts.map(c => {
+                const room = rawRooms.find(r => r.partner_names && r.partner_names.includes(c.nombre_usuario));
+                return {
+                    ...c,
+                    room_id: room ? room.room_id : null,
+                    subtitle: room && room.subtitle ? room.subtitle : 'Haz clic para iniciar chat',
+                    unread_count: room ? room.unread_count : 0,
+                    latest_time: room ? room.latest_time : null
+                };
+            });
+            
+            rawRooms.forEach(r => {
+                if (r.partner_names && r.partner_names.length > 1) {
+                    this.contacts.push({
+                        user_id: 'group_' + r.room_id,
+                        rol_usuario: 'grupo',
+                        nombre_usuario: r.title,
+                        room_id: r.room_id,
+                        subtitle: r.subtitle || 'Sin mensajes aún',
+                        unread_count: r.unread_count || 0,
+                        latest_time: r.latest_time || null
+                    });
+                }
+            });
+            
+            this.filteredContacts = [...this.contacts];
+            this.filterContacts();
+            
+            if (this.activeRoomId) {
+                const activeContact = this.contacts.find(c => c.room_id === this.activeRoomId);
+                if (activeContact) {
+                    this.showActivePanel(activeContact);
+                }
+            } else if (this.contacts.length && this.contacts.some(c => c.room_id)) {
+                const firstWithRoom = this.contacts.find(c => c.room_id);
+                if (firstWithRoom) this.startChat(firstWithRoom);
+            }
+        } catch (e) {
+            console.error('Error cargando contactos y salas', e);
+            if (this.contactList) this.contactList.innerHTML = '<div class="chat-empty">Error cargando chats.</div>';
+        }
+    }
+
+    filterContacts() {
+        const term = this.searchInput?.value?.trim().toLowerCase() || '';
+        this.filteredContacts = this.contacts.filter(c => {
+            const matchesSearch = !term || c.nombre_usuario.toLowerCase().includes(term);
+            let matchesFilter = true;
+            if (this.currentFilter === 'docente') {
+                matchesFilter = c.rol_usuario === 'docente';
+            } else if (this.currentFilter === 'admin' || this.currentFilter === 'administradores') {
+                matchesFilter = c.rol_usuario === 'admin';
+            }
+            return matchesSearch && matchesFilter;
+        });
+        
+        this.filteredContacts.sort((a, b) => {
+            if (a.latest_time && b.latest_time) {
+                return new Date(b.latest_time) - new Date(a.latest_time);
+            }
+            if (a.latest_time) return -1;
+            if (b.latest_time) return 1;
+            return a.nombre_usuario.localeCompare(b.nombre_usuario);
+        });
+        
+        this.renderContacts();
+    }
+
+    renderContacts() {
+        if (!this.contactList) return;
+        if (!this.filteredContacts.length) {
+            this.contactList.innerHTML = '<div class="chat-empty">No hay contactos que coincidan.</div>';
+            return;
+        }
+        
+        this.contactList.innerHTML = this.filteredContacts.map(contact => {
+            const activeClass = contact.room_id && contact.room_id === this.activeRoomId ? 'active' : '';
+            const badge = contact.unread_count > 0 ? `<span class="chat-badge">${contact.unread_count}</span>` : '';
+            const roleBadge = contact.rol_usuario === 'admin' ? '(Admin)' : (contact.rol_usuario === 'docente' ? '(Docente)' : '');
+            return `
+                <button class="chat-contact-item ${activeClass}" data-user-id="${contact.user_id}">
+                    <div class="chat-contact-info">
+                        <strong>${contact.nombre_usuario} <small style="color:var(--gray-500);font-weight:normal;">${roleBadge}</small></strong>
+                        <span>${contact.subtitle}</span>
+                    </div>
+                    <div class="chat-contact-meta">
+                        ${badge}
+                    </div>
+                </button>
+            `;
+        }).join('');
+
+        this.contactList.querySelectorAll('.chat-contact-item').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const userId = btn.dataset.userId;
+                const contact = this.contacts.find(c => String(c.user_id) === String(userId));
+                if (contact) this.startChat(contact);
+            });
+        });
+    }
+
+    async startChat(contact) {
+        try {
+            // Feedback UI inmediato
+            this.showActivePanel(contact);
+            if (this.messagesContainer) {
+                this.messagesContainer.innerHTML = `
+                    <div style="padding: 20px; text-align: center; color: var(--gray-500); width: 100%;">
+                        <i class="fas fa-circle-notch fa-spin" style="font-size: 20px; margin-bottom: 8px;"></i>
+                        <p style="font-size: 13px;">Cargando mensajes...</p>
+                    </div>`;
+            }
+
+            // Resaltar el contacto seleccionado inmediatamente
+            this.activeRoomId = contact.room_id || 'loading'; 
+            this.filterContacts(); // Re-renderiza para ponerle la clase 'active'
+
+            let roomId = contact.room_id;
+
+            // Si no hay sala creada, hacemos el POST para iniciarla
+            if (!roomId) {
+                const res = await fetch('/chat/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        target_user_id: contact.user_id,
+                        target_rol: contact.rol_usuario,
+                        target_nombre: contact.nombre_usuario
+                    })
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    roomId = data.data.room_id;
+                    contact.room_id = roomId;
+                } else {
+                    Utils.showToast(data.message || 'Error iniciando chat', 'error');
+                    if (this.messagesContainer) this.messagesContainer.innerHTML = '<div class="chat-empty">Error al iniciar chat.</div>';
+                    return;
+                }
+            }
+
+            // Ya tenemos la sala, cargamos los mensajes
+            this.activeRoomId = roomId;
+            this.filterContacts(); // Actualizar clase 'active' con el ID real
+            await this.loadMessages(roomId);
+
+        } catch (e) {
+            console.error('Error iniciando chat', e);
+            Utils.showToast('Error de red al iniciar chat', 'error');
+            if (this.messagesContainer) this.messagesContainer.innerHTML = '<div class="chat-empty">Error de conexión.</div>';
+        }
+    }
+
+    showActivePanel(contact) {
+        if (this.placeholder) this.placeholder.style.display = 'none';
+        if (this.activePanel) this.activePanel.style.display = 'flex';
+        if (this.activeName) this.activeName.textContent = contact.nombre_usuario;
+        if (this.activeStatus) {
+            if (contact.rol_usuario === 'grupo') {
+                this.activeStatus.textContent = 'Grupo';
+            } else {
+                this.activeStatus.textContent = contact.is_online ? 'En línea' : 'Desconectado';
+                this.activeStatus.style.color = contact.is_online ? 'var(--success)' : 'var(--gray-500)';
+            }
+        }
+        if (this.activeInitials) {
+            const initials = contact.nombre_usuario.split(' ').slice(0, 2).map(w => w[0]?.toUpperCase()).join('');
+            this.activeInitials.textContent = initials || 'C';
+        }
+    }
+
+    async loadMessages(roomId) {
+        if (!roomId || roomId === 'loading') return;
+        try {
+            const res = await fetch(`/chat/rooms/${encodeURIComponent(roomId)}/messages`);
+            const data = await res.json();
+            if (data.status === 'success') {
+                this.renderMessages(data.data || []);
+            }
+        } catch (e) {
+            console.error('Error cargando mensajes de chat', e);
+            if (this.messagesContainer) this.messagesContainer.innerHTML = '<div class="chat-empty">Error cargando mensajes.</div>';
+        }
+    }
+
+    renderMessages(messages) {
+        if (!this.messagesContainer) return;
+        if (!messages.length) {
+            this.messagesContainer.innerHTML = '<div class="chat-empty">Inicia la conversación enviando un mensaje.</div>';
+            return;
+        }
+
+        const now = Date.now();
+        const tenMinutes = 10 * 60 * 1000;
+
+        this.messagesContainer.innerHTML = messages.map((message, index) => {
+            const isLastMessage = index === messages.length - 1;
+            const msgTime = new Date(message.created_at).getTime();
+            const canEditOrDelete = message.is_mine && isLastMessage && (now - msgTime <= tenMinutes);
+
+            let optionsMenu = '';
+            if (canEditOrDelete) {
+                optionsMenu = `
+                    <div class="msg-options-wrapper" style="position: relative; display: inline-block; margin-left: 8px;">
+                        <button class="msg-options-btn" style="background:none; border:none; color:var(--gray-400); cursor:pointer; padding:2px; font-size:14px;" title="Opciones">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                        <div class="msg-options-dropdown" style="display:none; position:absolute; right:0; top:100%; background:var(--gray-50); border:1px solid var(--gray-200); border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.15); z-index:10000 !important; min-width:110px; padding:4px 0; overflow:hidden;">
+                            <button class="edit-msg-btn" data-msg-id="${message.message_id}" style="display:block; width:100%; text-align:left; padding:8px 12px; background:none; border:none; cursor:pointer; color:var(--gray-800); font-size:13px;" onmouseover="this.style.background='var(--gray-200)'" onmouseout="this.style.background='none'">
+                                <i class="fas fa-edit" style="margin-right:6px; width:14px; text-align:center;"></i> Editar
+                            </button>
+                            <button class="delete-msg-btn" data-msg-id="${message.message_id}" style="display:block; width:100%; text-align:left; padding:8px 12px; background:none; border:none; cursor:pointer; color:var(--error); font-size:13px;" onmouseover="this.style.background='var(--gray-200)'" onmouseout="this.style.background='none'">
+                                <i class="fas fa-trash" style="margin-right:6px; width:14px; text-align:center;"></i> Eliminar
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="chat-bubble ${message.is_mine ? 'mine' : 'other'}">
+                    <div class="chat-bubble-content" style="display: flex; align-items: center; gap: 4px;">
+                        <span class="msg-text" data-msg-id="${message.message_id}" style="word-break: break-word;">${message.content}</span>
+                        ${optionsMenu}
+                    </div>
+                    <div class="chat-bubble-meta">${this.formatDate(message.created_at)}</div>
+                </div>
+            `;
+        }).join('');
+        
+        this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+        
+        // Manejar el toggle del menú
+        this.messagesContainer.querySelectorAll('.msg-options-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                // Cerrar todos los demás
+                this.messagesContainer.querySelectorAll('.msg-options-dropdown').forEach(dropdown => {
+                    dropdown.style.display = 'none';
+                });
+                // Abrir este
+                const dropdown = btn.nextElementSibling;
+                dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+            });
+        });
+
+        // Cerrar al hacer clic fuera
+        document.addEventListener('click', () => {
+            this.messagesContainer.querySelectorAll('.msg-options-dropdown').forEach(dropdown => {
+                dropdown.style.display = 'none';
+            });
+        });
+
+        // Eliminar mensaje
+        this.messagesContainer.querySelectorAll('.delete-msg-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (!await Utils.confirmDialog('Eliminar mensaje', '¿Seguro que deseas eliminar este mensaje?')) return;
+                try {
+                    const res = await fetch(`/chat/messages/${btn.dataset.msgId}`, { method: 'DELETE' });
+                    const data = await res.json();
+                    if (data.status === 'success') {
+                        this.loadMessages(this.activeRoomId);
+                    } else {
+                        Utils.showToast(data.message, 'error');
+                    }
+                } catch (err) {
+                    Utils.showToast('Error al eliminar', 'error');
+                }
+            });
+        });
+
+        // Editar mensaje
+        this.messagesContainer.querySelectorAll('.edit-msg-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                btn.closest('.msg-options-dropdown').style.display = 'none';
+                const msgId = btn.dataset.msgId;
+                const msgEl = this.messagesContainer.querySelector(`.msg-text[data-msg-id="${msgId}"]`);
+                if (!msgEl) return;
+                
+                const currentText = msgEl.textContent;
+                const newText = await Utils.promptDialog('Editar mensaje', currentText);
+                
+                if (newText && newText.trim() !== '' && newText !== currentText) {
+                    try {
+                        const res = await fetch(`/chat/messages/${msgId}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ content: newText })
+                        });
+                        const data = await res.json();
+                        if (data.status === 'success') {
+                            this.loadMessages(this.activeRoomId);
+                        } else {
+                            Utils.showToast(data.message, 'error');
+                        }
+                    } catch (err) {
+                        Utils.showToast('Error al editar', 'error');
+                    }
+                }
+            });
+        });
+    }
+
+    formatDate(value) {
+        if (!value) return '';
+        const date = new Date(value);
+        return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    }
+
+    async sendMessage() {
+        const content = this.messageInput?.value.trim();
+        if (!content || !this.activeRoomId) return;
+
+        // Guard against double-sends
+        if (this.isSending) return;
+        this.isSending = true;
+
+        const sendBtn = document.getElementById('chat-send-btn');
+        const originalHTML = sendBtn ? sendBtn.innerHTML : null;
+
+        // Disable button + show spinner while request is in-flight
+        if (sendBtn) {
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
+            sendBtn.style.opacity = '0.7';
+            sendBtn.title = 'Enviando...';
+        }
+
+        // Show "Enviando..." hint below the input
+        let hint = document.getElementById('chat-sending-hint');
+        if (!hint) {
+            hint = document.createElement('div');
+            hint.id = 'chat-sending-hint';
+            hint.style.cssText = 'font-size:12px;color:var(--gray-500);padding:4px 0 0 4px;display:flex;align-items:center;gap:6px;';
+            hint.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="font-size:11px;"></i> Enviando mensaje...';
+            sendBtn?.parentElement?.appendChild(hint);
+        }
+        hint.style.display = 'flex';
+
+        try {
+            const res = await fetch(`/chat/rooms/${encodeURIComponent(this.activeRoomId)}/send`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content }),
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+                this.messageInput.value = '';
+                await this.loadMessages(this.activeRoomId);
+                this.loadContacts();
+            } else {
+                Utils.showToast(data.message || 'Error enviando mensaje', 'error');
+            }
+        } catch (e) {
+            Utils.showToast('Error enviando mensaje', 'error');
+        } finally {
+            // Always restore button & hide hint
+            this.isSending = false;
+            if (sendBtn && originalHTML) {
+                sendBtn.innerHTML = originalHTML;
+                sendBtn.disabled = false;
+                sendBtn.style.opacity = '';
+                sendBtn.title = 'Enviar';
+            }
+            if (hint) hint.style.display = 'none';
+        }
+    }
+
+    async clearChat() {
+        if (!this.activeRoomId || this.activeRoomId === 'loading') return;
+        if (!await Utils.confirmDialog('Vaciar Chat', '¿Estás seguro de que deseas vaciar este chat? Todos los mensajes se eliminarán para ti.', 'fas fa-trash-alt')) return;
+        
+        try {
+            const res = await fetch(`/chat/rooms/${this.activeRoomId}/clear`, { method: 'DELETE' });
+            const data = await res.json();
+            if (data.status === 'success') {
+                Utils.showToast('Chat vaciado con éxito', 'success');
+                this.loadMessages(this.activeRoomId);
+            } else {
+                Utils.showToast(data.message || 'Error al vaciar chat', 'error');
+            }
+        } catch (e) {
+            console.error('Error vaciando chat', e);
+            Utils.showToast('Error de red al vaciar chat', 'error');
+        }
     }
 }
 
@@ -926,6 +1544,8 @@ class App {
                 profesores: new ProfesoresTableManager()
             };
         }
+        this.chat = new ChatManager();
+        this.chat.init();
         setTimeout(() => this.stats.refresh(), 100);
         console.log('✅ App inicializada');
     } catch(e) { console.error('Error iniciando app:', e); }
