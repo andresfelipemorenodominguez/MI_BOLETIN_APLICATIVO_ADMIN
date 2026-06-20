@@ -1528,6 +1528,7 @@
 
                 <div style="margin-top: 20px;">
                     <button id="btn-consultar-candidatos" class="btn-secondary">Consultar candidatos</button>
+                    <button id="btn-resumen-votaciones" class="btn-secondary">Resumen de votaciones</button>
                 </div>
 
                 <h4 style="margin-top: 20px;">Lista de candidatos</h4>
@@ -1595,11 +1596,23 @@
         <!-- Mostrar mensajes flash (estáticos, ya que las respuestas JSON no usan flash) -->
         <div id="mensajes-flash"></div>
     </div>
-</section>
 
+    <!-- Modal para resumen de votaciones -->
+    <div id="modal-resumen" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999;">
+        <div style="background:#fff; max-width:600px; margin:80px auto; padding:30px; border-radius:10px; max-height:80vh; overflow-y:auto;">
+            <h2>Resumen de votaciones</h2>
+            <div style="margin-bottom:20px;">
+                <label>Año: <input type="number" id="input-anio" value="{{ now.year }}" style="width:100px;"></label>
+                <button id="btn-generar-resumen" class="btn-primary">Generar</button>
+                <button id="btn-cerrar-modal" style="margin-left:10px;">Cerrar</button>
+            </div>
+            <div id="resultado-resumen"></div>
+        </div>
+    </div>
+    
 <script>
-    // JavaScript para manejar agregar, consultar y eliminar candidatos (sin redirecciones)
     document.addEventListener('DOMContentLoaded', function() {
+        // --- Elementos principales ---
         const formAgregar = document.getElementById('form-agregar-candidato');
         const btnConsultar = document.getElementById('btn-consultar-candidatos');
         const contenedor = document.getElementById('lista-candidatos');
@@ -1607,16 +1620,15 @@
         const formCerrar = document.getElementById('form-cerrar-votacion');
         const flashContainer = document.getElementById('mensajes-flash');
 
-        // Función para mostrar mensajes temporales (simulando flash)
-        function mostrarMensaje(mensaje, tipo) {
-            const flashDiv = document.createElement('div');
-            flashDiv.className = `alert alert-${tipo}`;
-            flashDiv.innerText = mensaje;
-            flashContainer.prepend(flashDiv);
-            setTimeout(() => flashDiv.remove(), 3000);
-        }
+        // --- Resumen de votaciones ---
+        const btnResumen = document.getElementById('btn-resumen-votaciones');
+        const modalResumen = document.getElementById('modal-resumen');
+        const btnCerrarModal = document.getElementById('btn-cerrar-modal');
+        const btnGenerar = document.getElementById('btn-generar-resumen');
+        const inputAnio = document.getElementById('input-anio');
+        const resultadoDiv = document.getElementById('resultado-resumen');
 
-        // Escapar HTML
+        // --- Utilidades ---
         function escapeHtml(str) {
             if (!str) return '';
             return str.replace(/[&<>]/g, function(m) {
@@ -1627,11 +1639,23 @@
             });
         }
 
-        // Cargar candidatos desde el servidor
+        function mostrarMensaje(mensaje, tipo) {
+            const flashDiv = document.createElement('div');
+            flashDiv.className = `alert alert-${tipo}`;
+            flashDiv.innerText = mensaje;
+            flashContainer.prepend(flashDiv);
+            setTimeout(() => flashDiv.remove(), 3000);
+        }
+
+        // --- Cargar candidatos ---
         async function cargarCandidatos() {
             try {
+                console.log('Cargando candidatos...');
                 const response = await fetch('/admin/candidatos/listar');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const data = await response.json();
+                console.log('Datos recibidos:', data);
+                
                 if (data.status === 'success') {
                     contenedor.innerHTML = '';
                     if (data.candidatos.length === 0) {
@@ -1681,12 +1705,14 @@
                     mostrarMensaje('Error al cargar candidatos', 'error');
                 }
             } catch (error) {
-                console.error(error);
+                console.error('Error en cargarCandidatos:', error);
                 mostrarMensaje('Error de conexión', 'error');
             }
         }
 
-        // Agregar candidato (envío asíncrono)
+        // --- Eventos ---
+
+        // Agregar candidato
         if (formAgregar) {
             formAgregar.addEventListener('submit', async function(e) {
                 e.preventDefault();
@@ -1700,7 +1726,6 @@
                     if (data.status === 'success') {
                         mostrarMensaje(data.message, 'success');
                         formAgregar.reset();
-                        // NO mostrar el candidato automáticamente; esperar a que el usuario consulte
                     } else {
                         mostrarMensaje(data.message, 'error');
                     }
@@ -1710,7 +1735,7 @@
             });
         }
 
-        // Abrir votación (asíncrono)
+        // Abrir votación
         if (formAbrir) {
             formAbrir.addEventListener('submit', async function(e) {
                 e.preventDefault();
@@ -1723,7 +1748,6 @@
                     const data = await response.json();
                     if (data.status === 'success') {
                         mostrarMensaje(data.message, 'success');
-                        // Recargar la página o actualizar el estado manualmente
                         location.reload();
                     } else {
                         mostrarMensaje(data.message, 'error');
@@ -1734,7 +1758,7 @@
             });
         }
 
-        // Cerrar votación (asíncrono)
+        // Cerrar votación
         if (formCerrar) {
             formCerrar.addEventListener('submit', async function(e) {
                 e.preventDefault();
@@ -1757,10 +1781,107 @@
             });
         }
 
-        // Consultar candidatos al hacer clic
+        // Consultar candidatos
         if (btnConsultar) {
             btnConsultar.addEventListener('click', cargarCandidatos);
+            console.log('Botón consultar vinculado.');
+        } else {
+            console.error('No se encontró el botón #btn-consultar-candidatos');
         }
+
+        // --- Resumen de votaciones ---
+        if (btnResumen) {
+            btnResumen.addEventListener('click', function() {
+                modalResumen.style.display = 'block';
+                resultadoDiv.innerHTML = '';
+                inputAnio.value = new Date().getFullYear();
+            });
+        } else {
+            console.error('No se encontró el botón #btn-resumen-votaciones');
+        }
+
+        if (btnCerrarModal) {
+            btnCerrarModal.addEventListener('click', function() {
+                modalResumen.style.display = 'none';
+            });
+        }
+
+        if (modalResumen) {
+            modalResumen.addEventListener('click', function(e) {
+                if (e.target === modalResumen) {
+                    modalResumen.style.display = 'none';
+                }
+            });
+        }
+
+        if (btnGenerar) {
+            btnGenerar.addEventListener('click', async function() {
+                const anio = inputAnio.value.trim();
+                if (!anio || isNaN(anio) || anio.length !== 4) {
+                    resultadoDiv.innerHTML = '<p style="color:red;">Ingresa un año válido (ej. 2026)</p>';
+                    return;
+                }
+                resultadoDiv.innerHTML = '<p>Cargando...</p>';
+                try {
+                    const formData = new FormData();
+                    formData.append('anio', anio);
+                    const response = await fetch('/admin/votaciones/resumen', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await response.json();
+                    if (data.status !== 'success') {
+                        resultadoDiv.innerHTML = `<p style="color:red;">Error: ${data.message}</p>`;
+                        return;
+                    }
+                    let html = `<p><strong>Resultados para el año ${data.anio}</strong></p>`;
+                    const cargos = ['personero', 'contralor'];
+                    const labels = { personero: 'Personero', contralor: 'Contralor' };
+                    let totalVotos = 0;
+                    Object.values(data.resumen).forEach(candidatos => {
+                        candidatos.forEach(c => totalVotos += c.votos);
+                    });
+                    if (totalVotos === 0) {
+                        html += '<p>No hay votos registrados para este año.</p>';
+                        resultadoDiv.innerHTML = html;
+                        return;
+                    }
+                    for (const cargo of cargos) {
+                        if (data.resumen[cargo] && data.resumen[cargo].length > 0) {
+                            html += `<h3>${labels[cargo]}</h3>`;
+                            html += `<table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
+                                        <tr style="background:#003366; color:#fff;">
+                                            <th style="padding:8px; border:1px solid #ddd;">Foto</th>
+                                            <th style="padding:8px; border:1px solid #ddd;">Candidato</th>
+                                            <th style="padding:8px; border:1px solid #ddd;">N° Campaña</th>
+                                            <th style="padding:8px; border:1px solid #ddd;">Votos</th>
+                                        </tr>`;
+                            data.resumen[cargo].forEach(c => {
+                                const fotoHtml = c.imagen_url ? `<img src="${c.imagen_url}" style="width:50px; height:50px; object-fit:cover; border-radius:4px;">` : 'Sin foto';
+                                html += `<tr>
+                                            <td style="padding:8px; border:1px solid #ddd; text-align:center;">${fotoHtml}</td>
+                                            <td style="padding:8px; border:1px solid #ddd;">${c.nombre}</td>
+                                            <td style="padding:8px; border:1px solid #ddd; text-align:center;">${c.numero_campana}</td>
+                                            <td style="padding:8px; border:1px solid #ddd; text-align:center;">${c.votos}</td>
+                                        </tr>`;
+                            });
+                            html += `</table>`;
+                        } else {
+                            html += `<p><em>No hay candidatos para ${labels[cargo]}</em></p>`;
+                        }
+                    }
+                    resultadoDiv.innerHTML = html;
+                } catch (error) {
+                    console.error('Error en resumen:', error);
+                    resultadoDiv.innerHTML = `<p style="color:red;">Error de conexión: ${error.message}</p>`;
+                }
+            });
+        } else {
+            console.error('No se encontró el botón #btn-generar-resumen');
+        }
+
+        // Inicialmente cargar candidatos (opcional)
+        // cargarCandidatos(); // Puedes descomentar si quieres que cargue automáticamente al cargar la página
     });
 </script>
     </main>

@@ -5689,22 +5689,22 @@ def admin_abrir_votacion():
     duracion_dias = float(request.form.get('duracion_dias', 1))
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT id, activa, cierra_en FROM votacion_sesion ORDER BY id LIMIT 1")
-    sesion = cur.fetchone()
-    if not sesion:
-        cur.execute("INSERT INTO votacion_sesion (activa, cierra_en) VALUES (FALSE, NULL) RETURNING id")
-        sesion_id = cur.fetchone()[0]
-    else:
-        sesion_id = sesion[0]
+    
+    # Cerrar cualquier sesión activa previa (por si quedó abierta)
+    cur.execute("UPDATE votacion_sesion SET activa = FALSE, cierra_en = NULL WHERE activa = TRUE")
+    
+    # Crear nueva sesión
     cierra_en = datetime.utcnow() + timedelta(days=duracion_dias)
     cur.execute(
-        "UPDATE votacion_sesion SET activa = TRUE, cierra_en = %s WHERE id = %s",
-        (cierra_en, sesion_id)
+        "INSERT INTO votacion_sesion (activa, cierra_en) VALUES (TRUE, %s) RETURNING id",
+        (cierra_en,)
     )
+    new_id = cur.fetchone()[0]
     conn.commit()
     cur.close()
     conn.close()
-    return jsonify({'status': 'success', 'message': 'Votación abierta', 'cierra_en': cierra_en.isoformat()})
+    
+    return jsonify({'status': 'success', 'message': 'Votación abierta (nueva sesión)', 'cierra_en': cierra_en.isoformat()})
 
 @app.route('/admin/votaciones/cerrar', methods=['POST'])
 def admin_cerrar_votacion():
@@ -5815,13 +5815,126 @@ def admin_eliminar_candidato(id):
     conn.close()
     return jsonify({'status': 'success', 'message': 'Candidato eliminado', 'id': id})
 
+@app.route('/admin/votaciones/resumen', methods=['POST'])
+def admin_resumen_votaciones():
+    try:
+        anio = request.form.get('anio')
+        if not anio or not anio.isdigit():
+            return jsonify({'status': 'error', 'message': 'Ingresa un año válido (ej. 2026)'}), 400
+        
+        anio = int(anio)
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        
+        # Consulta corregida: filtra los votos por año antes de unirlos
+        cur.execute("""
+            SELECT 
+                c.id,
+                c.nombre AS candidato_nombre,
+                c.numero_campana,
+                c.imagen_url,
+                c.cargo,
+                COALESCE(COUNT(v.voto_id), 0) AS total_votos
+            FROM candidato c
+            LEFT JOIN (
+                SELECT v.id AS voto_id, v.candidato_id
+                FROM voto v
+                JOIN votacion_sesion vs ON v.sesion_id = vs.id
+                WHERE EXTRACT(YEAR FROM vs.creada_en) = %s
+            ) v ON c.id = v.candidato_id
+            GROUP BY c.id, c.nombre, c.numero_campana, c.imagen_url, c.cargo
+            ORDER BY c.cargo, total_votos ASC
+        """, (anio,))
+        
+        resultados = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        # Agrupar por cargo
+        resumen = {}
+        for row in resultados:
+            cargo = row['cargo']
+            if cargo not in resumen:
+                resumen[cargo] = []
+            resumen[cargo].append({
+                'nombre': row['candidato_nombre'],
+                'numero_campana': row['numero_campana'],
+                'imagen_url': row['imagen_url'],
+                'votos': row['total_votos']
+            })
+        
+        return jsonify({
+            'status': 'success',
+            'anio': anio,
+            'resumen': resumen
+        })
+        
+    except Exception as e:
+        print(f"Error en resumen votaciones: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'message': 'Error al obtener el resumen'}), 500
+
 # -----------------------------------------------------------------------------
-# RUTAS PARA DOCENTE (votación) - SIN REDIRECCIONES
+# RUTAS PARA DOCENTE (votación) - CON REDIRECCIONES Y FLASH
 # -----------------------------------------------------------------------------
 
-@app.route('/docente/votacion/validar', methods=['POST'])
+@app.route('/profesor/votaciones')
+def profesor_votaciones():
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return redirect(url_for('loginuser'))
+    
+    # Obtener parámetros de URL
+    v_step = request.args.get('v_step', 'identificacion')
+    
+    # Inicializar variables
+    sesion_votacion = None
+    candidatos_cargo = []
+    now = datetime.utcnow()
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        
+        # Obtener la sesión ACTIVA (no la primera por ID)
+        cur.execute("SELECT id, activa, cierra_en FROM votacion_sesion WHERE activa = TRUE ORDER BY id LIMIT 1")
+        row = cur.fetchone()
+        if row:
+            sesion_votacion = dict(row)
+        
+        # Si estamos en el paso de candidatos, cargar la lista del cargo elegido
+        if v_step == 'candidatos':
+            cargo = session.get('votacion_cargo')
+            if cargo:
+                cur.execute(
+                    "SELECT id, nombre, numero_campana, cargo, imagen_url FROM candidato WHERE cargo = %s",
+                    (cargo,)
+                )
+                candidatos_cargo = [dict(r) for r in cur.fetchall()]
+                print(f"Candidatos encontrados para {cargo}: {len(candidatos_cargo)}")
+            else:
+                print("No hay cargo en sesión")
+        
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"Error en profesor_votaciones: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    return render_template('profesor/profesor_votaciones.html',
+                           nombre=user_info['nombre'],
+                           codigo=user_info['codigo'],
+                           sesion_votacion=sesion_votacion,
+                           candidatos_cargo=candidatos_cargo,
+                           now=now)
+
+@app.route('/profesor/votacion/validar', methods=['POST'])
 def docente_validar_estudiante():
     tarjeta = request.form.get('tarjeta_identidad')
+    redirect_to = request.form.get('redirect', 'profesor_votaciones')  # Cambiado
+    
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     cur.execute(
@@ -5831,18 +5944,21 @@ def docente_validar_estudiante():
     estudiante = cur.fetchone()
     cur.close()
     conn.close()
+    
     if not estudiante:
-        return jsonify({'status': 'error', 'message': 'Estudiante no encontrado'})
-    return jsonify({
-        'status': 'success',
-        'estudiante_id': estudiante['id_estudiante'],
-        'nombre': estudiante['nombre_completo']
-    })
+        flash('Estudiante no encontrado', 'error')
+        return redirect(url_for(redirect_to))
+    
+    session['votacion_estudiante_id'] = estudiante['id_estudiante']
+    session['votacion_estudiante_nombre'] = estudiante['nombre_completo']
+    return redirect(url_for(redirect_to, v_step='cargo'))
 
-@app.route('/docente/votacion/cargo', methods=['POST'])
+@app.route('/profesor/votacion/cargo', methods=['POST'])
 def docente_seleccionar_cargo():
     estudiante_id = request.form.get('estudiante_id')
     cargo = request.form.get('cargo')
+    redirect_to = request.form.get('redirect', 'profesor_votaciones')  # Cambiado
+    
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute(
@@ -5852,7 +5968,9 @@ def docente_seleccionar_cargo():
     if not sesion:
         cur.close()
         conn.close()
-        return jsonify({'status': 'error', 'message': 'No hay votación activa'})
+        flash('No hay votación activa', 'error')
+        return redirect(url_for(redirect_to))
+    
     sesion_id = sesion[0]
     cur.execute(
         "SELECT id FROM voto WHERE estudiante_id = %s AND cargo = %s AND sesion_id = %s",
@@ -5861,16 +5979,21 @@ def docente_seleccionar_cargo():
     if cur.fetchone():
         cur.close()
         conn.close()
-        return jsonify({'status': 'error', 'message': f'Este estudiante ya votó para {cargo}'})
+        flash(f'Este estudiante ya votó para {cargo}', 'error')
+        return redirect(url_for(redirect_to))
+    
     cur.close()
     conn.close()
-    return jsonify({'status': 'success', 'message': 'Cargo válido', 'cargo': cargo})
+    session['votacion_cargo'] = cargo
+    return redirect(url_for(redirect_to, v_step='candidatos'))
 
-@app.route('/docente/votacion/votar', methods=['POST'])
+@app.route('/profesor/votacion/votar', methods=['POST'])
 def docente_registrar_voto():
     estudiante_id = request.form.get('estudiante_id')
     candidato_id = request.form.get('candidato_id')
     cargo = request.form.get('cargo')
+    redirect_to = request.form.get('redirect', 'profesor_votaciones')  # Cambiado
+    
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute(
@@ -5880,7 +6003,9 @@ def docente_registrar_voto():
     if not sesion:
         cur.close()
         conn.close()
-        return jsonify({'status': 'error', 'message': 'La votación ya no está activa'})
+        flash('La votación ya no está activa', 'error')
+        return redirect(url_for(redirect_to))
+    
     sesion_id = sesion[0]
     cur.execute(
         "SELECT id FROM voto WHERE estudiante_id = %s AND cargo = %s AND sesion_id = %s",
@@ -5889,7 +6014,9 @@ def docente_registrar_voto():
     if cur.fetchone():
         cur.close()
         conn.close()
-        return jsonify({'status': 'error', 'message': 'Este estudiante ya votó para este cargo'})
+        flash('Este estudiante ya votó para este cargo', 'error')
+        return redirect(url_for(redirect_to))
+    
     cur.execute(
         "INSERT INTO voto (estudiante_id, candidato_id, cargo, sesion_id) VALUES (%s, %s, %s, %s)",
         (estudiante_id, candidato_id, cargo, sesion_id)
@@ -5897,8 +6024,13 @@ def docente_registrar_voto():
     conn.commit()
     cur.close()
     conn.close()
-    return jsonify({'status': 'success', 'message': 'Voto registrado exitosamente'})
-
+    
+    flash('Voto registrado exitosamente', 'success')
+    session.pop('votacion_estudiante_id', None)
+    session.pop('votacion_estudiante_nombre', None)
+    session.pop('votacion_cargo', None)
+    return redirect(url_for(redirect_to))
+    
 # -----------------------------------------------------------------------------
 # RUTA PARA SERVIR IMÁGENES DE CANDIDATOS (sin cambios)
 # -----------------------------------------------------------------------------
