@@ -8,6 +8,16 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/panel-dynamic.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/branding-panel.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Tema oscuro aplicado ANTES de pintar para evitar flash blanco -->
+    <script>
+        (function(){
+            var saved = localStorage.getItem('miboletin_dark_mode');
+            var sysDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (saved === 'true' || (saved === null && sysDark)) {
+                document.documentElement.classList.add('dark-mode');
+            }
+        })();
+    </script>
 </head>
 <body>
 
@@ -84,17 +94,17 @@
             </ul>
         </nav>
 
-        <div class="sidebar-footer">
-            <div class="user-profile">
-                <div class="user-avatar">
-                    <img src="https://ui-avatars.com/api/?name={{ nombre|urlencode }}&background=003366&color=fff" alt="Avatar">
+        <div data-sb-footer class="sb-footer">
+            <div class="sb-footer-inner">
+                <div class="sb-avatar" id="sb-avatar">
+                    <img src="https://ui-avatars.com/api/?name={{ nombre|urlencode }}&background=003366&color=fff&size=64" class="sb-avatar-img" alt="avatar" id="sb-avatar-img">
                 </div>
-                <div class="user-info">
-                    <h3 class="user-name">{{ nombre }}</h3>
-                    <p class="user-email">{{ codigo }}</p>
+                <div class="sb-user-info">
+                    <span id="sb-user-name" class="sb-user-name">{{ nombre }}</span>
+                    <span id="sb-user-email" class="sb-user-email">{{ codigo }}</span>
                 </div>
                 <div class="profile-sidebar-actions">
-                    <button type="button" id="profile-btn" class="profile-btn" title="Ver perfil">
+                    <button type="button" id="profile-btn" class="sb-profile-btn" title="Ver perfil">
                         <i class="fas fa-chevron-right"></i>
                     </button>
                 </div>

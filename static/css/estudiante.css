@@ -341,9 +341,7 @@ html.dark-mode .form-group input { background: var(--dm-surface2); border-color:
 html.dark-mode .form-group input:focus { border-color: var(--dm-blue); }
 html.dark-mode .btn-cancel { background: var(--dm-surface2); color: var(--dm-text); }
 
-/* Scrollbar */
-html.dark-mode ::-webkit-scrollbar { width: 6px; }
-html.dark-mode ::-webkit-scrollbar-track { background: var(--dm-surface); }
+/* Scrollbar: ver bloque unificado en main.css */
 
 /* ==========================================================================
    RESPONSIVE — Hamburger & Overlay base
@@ -538,4 +536,4 @@ html.dark-mode ::-webkit-scrollbar-track { background: var(--dm-surface); }
         font-size: 13px;
     }
 }
-html.dark-mode ::-webkit-scrollbar-thumb { background: var(--dm-border); border-radius: 4px; }
+/* scrollbar-thumb: ver bloque unificado en main.css */

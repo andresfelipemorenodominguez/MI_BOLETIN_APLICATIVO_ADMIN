@@ -58,20 +58,24 @@ const ProfilePanel = {
   updateAvatars(data) {
     const fallbackUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(data.nombre_completo || '')}&background=003366&color=fff&size=120`;
     const url = data.foto_perfil || data.avatar_url || fallbackUrl;
-    
+
+    // Avatares del modal
     ['profile-avatar-img', 'edit-profile-avatar'].forEach(id => {
       const img = document.getElementById(id);
       if (img) img.src = url;
     });
-    
-    const sbAvatarContainer = document.querySelector('[data-sb-footer] .user-avatar');
-    if (sbAvatarContainer) {
+
+    // Avatar del footer del sidebar (nueva estructura .sb-avatar)
+    const sbAvatar = document.querySelector('[data-sb-footer] .sb-avatar');
+    if (sbAvatar) {
       if (data.foto_perfil || data.avatar_url) {
-        sbAvatarContainer.innerHTML = `<img src="${data.foto_perfil || data.avatar_url}" style="width: 100%; height: 100%; object-fit: cover;">`;
+        sbAvatar.innerHTML = `<img src="${data.foto_perfil || data.avatar_url}" class="sb-avatar-img" alt="avatar">`;
       } else {
         const names = (data.nombre_completo || '').trim().split(' ');
-        const initials = names.length > 0 ? names[0][0].toUpperCase() + (names.length > 1 ? names[1][0].toUpperCase() : '') : '';
-        sbAvatarContainer.innerHTML = `<div style="width: 100%; height: 100%; background: linear-gradient(135deg, #003366 0%, #4A90E2 100%); color: #fff; display: flex; align-items: center; justify-content: center;">${initials}</div>`;
+        const initials = names.length > 0
+          ? names[0][0].toUpperCase() + (names.length > 1 ? names[1][0].toUpperCase() : '')
+          : '?';
+        sbAvatar.innerHTML = `<div class="sb-avatar-initials">${initials}</div>`;
       }
     }
   },
@@ -200,6 +204,24 @@ const ProfilePanel = {
     return data;
   },
 
+  // Carga silenciosa — solo actualiza el avatar del sidebar sin abrir modal
+  async _loadSidebarAvatar() {
+    try {
+      const res = await fetch('/api/profile');
+      const json = await res.json();
+      if (json.status === 'success') {
+        this._cache = json.data;
+        this.updateAvatars(json.data);
+        // Actualizar nombre/email del sidebar si ya están disponibles
+        const nameEl = document.getElementById('sb-user-name');
+        const emailEl = document.getElementById('sb-user-email');
+        if (nameEl && json.data.nombre_completo) nameEl.textContent = json.data.nombre_completo;
+        if (emailEl && (json.data.correo_electronico || json.data.codigo))
+          emailEl.textContent = json.data.correo_electronico || json.data.codigo;
+      }
+    } catch (_) { /* silencioso — el sidebar ya tiene los datos del servidor */ }
+  },
+
   init(options = {}) {
     const overlays = ['profile-modal-overlay', 'edit-modal-overlay', 'password-modal-overlay'];
     const toggle = (id, show) => {
@@ -207,6 +229,9 @@ const ProfilePanel = {
       if (el) el.classList.toggle('active', show);
     };
     const closeAll = () => overlays.forEach(id => toggle(id, false));
+
+    // Cargar avatar del sidebar al inicio sin abrir el modal
+    this._loadSidebarAvatar();
 
     document.getElementById('profile-btn')?.addEventListener('click', async () => {
       await this.load();

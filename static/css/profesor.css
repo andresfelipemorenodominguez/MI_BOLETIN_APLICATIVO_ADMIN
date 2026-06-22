@@ -756,11 +756,7 @@ html.dark-mode .profile-modal,
 html.dark-mode .edit-modal,
 html.dark-mode .password-modal { background: rgba(0,0,0,0.75) !important; }
 
-/* Scrollbar */
-html.dark-mode ::-webkit-scrollbar { width: 6px; }
-html.dark-mode ::-webkit-scrollbar-track { background: var(--dm-surface); }
-html.dark-mode ::-webkit-scrollbar-thumb { background: var(--dm-border); border-radius: 4px; }
-html.dark-mode ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+/* Scrollbar: ver bloque unificado en main.css */
 
 /* ══════════════════════════════════════════
    ESTILOS DINÁMICOS (antes en JS)
