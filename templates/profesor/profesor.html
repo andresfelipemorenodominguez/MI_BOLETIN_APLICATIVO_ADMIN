@@ -96,10 +96,10 @@
                     </a>
                 </li>
 
-                <!-- Opción Votaciones con onclick directo para forzar la navegación -->
+                <!-- Votaciones integrada en el dashboard -->
                 <li class="nav-item">
-                    <a href="{{ url_for('profesor_votaciones') }}" class="nav-link">
-                        <i class="fa-solid fa-chart-bar nav-icon"></i>
+                    <a href="#" class="nav-link" data-section="votaciones">
+                        <i class="fas fa-vote-yea nav-icon"></i>
                         <span class="nav-text">Votaciones</span>
                     </a>
                 </li>
@@ -124,115 +124,294 @@
         </div>
     </aside>
 
+    <!-- Contenido principal -->
+    <main class="main-content">
+        <div id="panel-content" class="content-wrapper content-section active" data-section-id="inicio"></div>
+
+        <!-- ── SECCIÓN VOTACIONES ── -->
+        <section id="votaciones" class="content-section">
+            <div class="content-wrapper">
+                <div class="form-header">
+                    <h1><i class="fas fa-vote-yea"></i> Votaciones</h1>
+                    <p class="form-subtitle">Registra el voto de los estudiantes para Personero y Contralor.</p>
+                </div>
+
+                {% if sesion_votacion and sesion_votacion.cierra_en > now %}
+                    <div class="mgmt-card" style="display:flex;align-items:center;gap:10px;padding:14px 18px;margin-bottom:20px;">
+                        <i class="fas fa-circle" style="color:var(--success);font-size:10px;"></i>
+                        <span style="font-size:13px;font-weight:600;color:var(--success);">Votación activa</span>
+                        <span style="font-size:12px;color:var(--gray-500);margin-left:auto;">
+                            Finaliza: {{ sesion_votacion.cierra_en.strftime('%d/%m/%Y %H:%M') }}
+                        </span>
+                    </div>
+                {% else %}
+                    <div class="mgmt-card" style="display:flex;align-items:center;gap:10px;padding:14px 18px;margin-bottom:20px;">
+                        <i class="fas fa-circle" style="color:var(--error);font-size:10px;"></i>
+                        <span style="font-size:13px;font-weight:600;color:var(--error);">No hay votación activa</span>
+                    </div>
+                {% endif %}
+
+                <!-- Mensajes flash -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% for category, message in messages %}
+                        <div class="message {{ 'success' if category == 'success' else 'error' }}" style="position:static;margin-bottom:12px;animation:none;">
+                            <span>{{ message }}</span>
+                        </div>
+                    {% endfor %}
+                {% endwith %}
+
+                <!-- PASO 1: Identificación -->
+                {% if v_step == 'identificacion' %}
+                <div class="mgmt-card">
+                    <h3 style="margin-bottom:16px;"><i class="fas fa-id-card"></i> Validar estudiante</h3>
+                    <form method="post" action="{{ url_for('docente_validar_estudiante') }}">
+                        <div class="form-group">
+                            <label class="form-label">Número de documento (tarjeta de identidad)</label>
+                            <input type="text" name="tarjeta_identidad" class="form-input" placeholder="Ingresa el número de documento" required autofocus>
+                        </div>
+                        <input type="hidden" name="redirect" value="profesor_dashboard">
+                        <button type="submit" class="btn-primary">
+                            <i class="fas fa-search"></i> Validar
+                        </button>
+                    </form>
+                </div>
+
+                <!-- PASO 2: Selección de cargo -->
+                {% elif v_step == 'cargo' %}
+                <div class="mgmt-card">
+                    <h3 style="margin-bottom:6px;"><i class="fas fa-user-check"></i> Estudiante identificado</h3>
+                    <p style="font-size:14px;color:var(--gray-500);margin-bottom:20px;">
+                        {{ session.get('votacion_estudiante_nombre', '') }}
+                    </p>
+                    <p style="font-size:14px;font-weight:600;margin-bottom:14px;">¿Para qué cargo desea votar?</p>
+                    <form method="post" action="{{ url_for('docente_seleccionar_cargo') }}" style="display:flex;gap:10px;flex-wrap:wrap;">
+                        <input type="hidden" name="estudiante_id" value="{{ session.get('votacion_estudiante_id','') }}">
+                        <input type="hidden" name="redirect" value="profesor_dashboard">
+                        <button type="submit" name="cargo" value="personero" class="btn-primary">
+                            <i class="fas fa-star"></i> Personero
+                        </button>
+                        <button type="submit" name="cargo" value="contralor" class="btn-secondary">
+                            <i class="fas fa-shield-alt"></i> Contralor
+                        </button>
+                    </form>
+                    <a href="{{ url_for('profesor_dashboard', v_step='identificacion') }}"
+                       style="display:inline-block;margin-top:14px;font-size:13px;color:var(--gray-500);">
+                        <i class="fas fa-arrow-left"></i> Cancelar
+                    </a>
+                </div>
+
+                <!-- PASO 3: Candidatos -->
+                {% elif v_step == 'candidatos' %}
+                <div class="mgmt-card">
+                    <h3 style="margin-bottom:6px;">
+                        <i class="fas fa-list"></i>
+                        Candidatos — {{ session.get('votacion_cargo','') | capitalize }}
+                    </h3>
+                    <p style="font-size:13px;color:var(--gray-500);margin-bottom:20px;">
+                        Estudiante: <strong>{{ session.get('votacion_estudiante_nombre','') }}</strong>
+                    </p>
+                    <div style="display:flex;flex-wrap:wrap;gap:16px;">
+                        {% for candidato in candidatos_cargo %}
+                        <div class="mgmt-card" style="width:180px;text-align:center;padding:16px;margin:0;">
+                            {% if candidato.imagen_url %}
+                            <img src="{{ candidato.imagen_url }}" style="width:80px;height:80px;object-fit:cover;border-radius:50%;margin-bottom:10px;border:2px solid var(--gray-200);">
+                            {% else %}
+                            <div style="width:80px;height:80px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;margin:0 auto 10px;font-size:28px;color:#fff;">
+                                <i class="fas fa-user"></i>
+                            </div>
+                            {% endif %}
+                            <p style="font-weight:700;font-size:13px;margin:0 0 3px;">{{ candidato.nombre }}</p>
+                            <p style="font-size:11px;color:var(--gray-500);margin:0 0 12px;">N° {{ candidato.numero_campana }}</p>
+                            <form method="post" action="{{ url_for('docente_registrar_voto') }}">
+                                <input type="hidden" name="candidato_id" value="{{ candidato.id }}">
+                                <input type="hidden" name="cargo" value="{{ session.get('votacion_cargo','') }}">
+                                <input type="hidden" name="estudiante_id" value="{{ session.get('votacion_estudiante_id','') }}">
+                                <input type="hidden" name="redirect" value="profesor_dashboard">
+                                <button type="submit" class="btn-primary" style="width:100%;padding:7px;">
+                                    <i class="fas fa-check"></i> Votar
+                                </button>
+                            </form>
+                        </div>
+                        {% else %}
+                        <p style="color:var(--gray-500);font-size:14px;">No hay candidatos registrados para este cargo.</p>
+                        {% endfor %}
+                    </div>
+                    <a href="{{ url_for('profesor_dashboard', v_step='identificacion') }}"
+                       style="display:inline-block;margin-top:18px;font-size:13px;color:var(--gray-500);">
+                        <i class="fas fa-arrow-left"></i> Cancelar
+                    </a>
+                </div>
+                {% endif %}
+
+            </div>
+        </section>
+    </main>
 </div>
 
-<!-- Modal perfil -->
+<!-- Modal perfil — diseño split igual que admin -->
+<style>
+/* Reutiliza las mismas clases del admin: profile-split-body, profile-split-grid,
+   profile-left-col, profile-right-col, profile-avatar-img, profile-action-btn, etc.
+   definidas en el <style> del dashboard de admin y en main.css */
+#profile-modal-overlay { z-index: 1000; }
+#profile-modal {
+    position: relative;
+    max-width: 760px;
+    width: 95%;
+    padding: 0;
+    border-radius: 16px;
+    border: 1px solid var(--gray-200);
+    box-shadow: 0 16px 48px rgba(0,0,0,0.12);
+    background: #fff;
+    overflow: visible;
+    max-height: 92vh;
+}
+html.dark-mode #profile-modal {
+    background: var(--dm-surface);
+    border-color: var(--dm-border);
+    box-shadow: 0 16px 48px rgba(0,0,0,0.45);
+}
+#close-profile-modal {
+    position: absolute;
+    top: 14px; right: 14px;
+    z-index: 10;
+    background: var(--gray-100);
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    border: none;
+    color: var(--gray-500);
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.15s, color 0.15s;
+}
+html.dark-mode #close-profile-modal { background: var(--dm-surface2); color: var(--dm-text-muted); }
+#close-profile-modal:hover { background: var(--error); color: #fff; }
+.profile-split-body  { padding:0; margin:0; overflow:hidden; border-radius:16px; max-height:92vh; overflow-y:auto; }
+.profile-split-grid  { display:grid; grid-template-columns: 1fr 240px; }
+@media(max-width:680px){ .profile-split-grid { display:flex; flex-direction:column-reverse; } }
+.profile-left-col    { padding:28px; border-right:1px solid var(--gray-200); display:flex; flex-direction:column; background:#fff; overflow-y:auto; }
+html.dark-mode .profile-left-col { background:var(--dm-surface); border-right-color:var(--dm-border); }
+.profile-title-custom{ margin:0 0 20px!important; font-size:17px; font-weight:700; color:var(--accent); display:flex; align-items:center; gap:8px; background:transparent!important; border:none!important; }
+.profile-right-col   { display:flex; flex-direction:column; align-items:center; padding:24px 18px; background:var(--gray-50); border-left:1px solid var(--gray-200); }
+html.dark-mode .profile-right-col { background:var(--dm-surface2); border-left-color:var(--dm-border); }
+.profile-avatar-img  { width:80px; height:80px; border-radius:50%; object-fit:cover; border:3px solid var(--gray-200); display:block; }
+html.dark-mode .profile-avatar-img { border-color:var(--dm-border); }
+.profile-info-name   { margin:10px 0 2px; font-size:.92rem; font-weight:700; color:var(--gray-800); text-align:center; }
+html.dark-mode .profile-info-name  { color:var(--dm-text); }
+.profile-info-email  { margin:0 0 3px; color:var(--gray-500); font-size:.76rem; text-align:center; }
+html.dark-mode .profile-info-email { color:var(--dm-text-muted); }
+.profile-info-role   { margin:0; color:var(--accent); font-size:.73rem; font-weight:600; text-align:center; }
+.profile-dark-mode-row { width:100%; display:flex; justify-content:space-between; align-items:center; padding:10px 0; margin:12px 0; border-top:1px solid var(--gray-200); border-bottom:1px solid var(--gray-200); }
+html.dark-mode .profile-dark-mode-row { border-color:var(--dm-border); }
+.profile-dark-mode-label { font-size:.82rem; font-weight:500; color:var(--gray-700); display:flex; align-items:center; gap:6px; }
+html.dark-mode .profile-dark-mode-label { color:var(--dm-text-muted); }
+.profile-action-btn  { width:100%; display:flex; align-items:center; justify-content:center; gap:7px; padding:8px 12px; border-radius:8px; font-size:12px; font-weight:500; cursor:pointer; border:1px solid var(--gray-300); background:#fff; color:var(--gray-700); transition:background .15s,border-color .15s,color .15s; }
+.profile-action-btn:hover { background:var(--gray-100); border-color:var(--gray-400); color:var(--gray-900); }
+html.dark-mode .profile-action-btn { background:var(--dm-surface); border-color:var(--dm-border); color:var(--dm-text-muted); }
+html.dark-mode .profile-action-btn:hover { background:var(--dm-surface2); border-color:#475569; color:var(--dm-text); }
+.profile-action-btn.btn-logout { color:#fff; background:var(--error); border-color:var(--error); }
+.profile-action-btn.btn-logout:hover { background:var(--error-dark); border-color:var(--error-dark); }
+</style>
+
 <div class="modal-overlay" id="profile-modal-overlay">
     <div class="modal" id="profile-modal">
-        <div class="modal-header">
-            <h2 class="modal-title"><i class="fas fa-user-circle"></i> Mi Perfil</h2>
-            <button type="button" class="modal-close" id="close-profile-modal" aria-label="Cerrar">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-        <div class="modal-body">
-            <div class="avatar-wrapper">
-                <img id="profile-avatar-img" src="https://ui-avatars.com/api/?name={{ nombre|urlencode }}&background=003366&color=fff&size=80" alt="Avatar">
-                <h3 id="profile-view-name">{{ nombre }}</h3>
-                <p id="profile-view-email">{{ codigo }}</p>
-                <p id="profile-view-role" class="welcome-text" style="margin-top:8px;font-size:13px;">Profesor</p>
-            </div>
-            <div id="profile-info-list" class="profile-info-list"></div>
-            <div class="dark-mode-row">
-                <label for="dark-mode-toggle">
-                    <i class="fas fa-moon"></i> Modo Oscuro
-                </label>
-                <label class="dark-toggle-switch">
-                    <input type="checkbox" id="dark-mode-toggle">
-                    <span class="dark-toggle-track"></span>
-                </label>
-            </div>
-        </div>
-        <div class="modal-footer" style="flex-direction:column;gap:8px;">
-            <button type="button" class="btn-secondary" id="open-edit-profile" style="width:100%;">
-                <i class="fas fa-user-edit"></i> Editar Perfil
-            </button>
-            <button type="button" class="btn-secondary" id="open-password-modal" style="width:100%;">
-                <i class="fas fa-key"></i> Cambiar Contraseña
-            </button>
-        </div>
-        <div class="logout-section">
-            <button type="button" class="btn-danger" style="width:100%;" onclick="window.location.href='/logout'">
-                <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
-            </button>
-        </div>
-    </div>
-</div>
+        <button id="close-profile-modal"><i class="fas fa-times"></i></button>
+        <div class="modal-body profile-split-body">
+            <div class="profile-split-grid">
 
-<!-- Modal editar perfil -->
-<div class="modal-overlay" id="edit-modal-overlay">
-    <div class="modal" style="max-width:520px;width:95%;">
-        <div class="modal-header">
-            <h2 class="modal-title"><i class="fas fa-user-edit"></i> Editar Perfil</h2>
-            <button type="button" class="modal-close" id="close-edit-modal" aria-label="Cerrar">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-        <div class="modal-body" style="max-height:65vh;overflow-y:auto;">
-            <div class="edit-profile-avatar-section">
-                <div class="current-avatar">
-                    <img id="edit-profile-avatar" src="https://ui-avatars.com/api/?name={{ nombre|urlencode }}&background=003366&color=fff&size=120" alt="Avatar">
+                <!-- LEFT: info editable -->
+                <div class="profile-left-col">
+                    <h2 class="profile-title-custom">
+                        <i class="fas fa-user-circle"></i> Mi Perfil
+                    </h2>
+                    <div id="profile-info-list" class="profile-info-list"></div>
+
+                    <!-- Editar perfil inline -->
+                    <div id="prof-edit-form" style="display:none;margin-top:12px;">
+                        <div class="form-group">
+                            <label class="form-label" for="editName">Nombre completo</label>
+                            <input type="text" id="editName" class="form-input" value="{{ nombre }}">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="editEmail">Correo electrónico</label>
+                            <input type="email" id="editEmail" class="form-input" placeholder="correo@ejemplo.com">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="edit-telefono">Teléfono</label>
+                            <input type="tel" id="edit-telefono" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="edit-titulos">Títulos académicos</label>
+                            <textarea id="edit-titulos" class="form-input" rows="2"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="edit-area">Área de especialidad</label>
+                            <input type="text" id="edit-area" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="edit-experiencia">Años de experiencia</label>
+                            <input type="number" id="edit-experiencia" class="form-input" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="edit-escalafon">Registro escalafón</label>
+                            <input type="text" id="edit-escalafon" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="edit-entidad-salud">Entidad de salud</label>
+                            <input type="text" id="edit-entidad-salud" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="edit-entidad-pension">Entidad de pensión</label>
+                            <input type="text" id="edit-entidad-pension" class="form-input">
+                        </div>
+                        <div style="display:flex;gap:8px;margin-top:8px;">
+                            <button type="button" class="btn-secondary" id="cancel-profile" style="flex:1;">Cancelar</button>
+                            <button type="button" class="btn-primary" id="save-profile" style="flex:1;">
+                                <i class="fas fa-save"></i> Guardar
+                            </button>
+                        </div>
+                    </div>
                 </div>
-                <div class="avatar-actions">
-                    <label class="btn-secondary change-photo-btn" style="cursor:pointer;">
-                        <i class="fas fa-camera"></i> Cambiar foto
-                        <input type="file" id="profile-photo-input" accept="image/png,image/jpeg,image/webp" hidden>
-                    </label>
-                    <p class="avatar-hint">PNG, JPG o WEBP. Máx. 2 MB.</p>
+
+                <!-- RIGHT: avatar + acciones -->
+                <div class="profile-right-col">
+                    <img id="profile-avatar-img"
+                         src="https://ui-avatars.com/api/?name={{ nombre|urlencode }}&background=003366&color=fff&size=120"
+                         alt="Avatar" class="profile-avatar-img">
+
+                    <h3 id="profile-view-name" class="profile-info-name">{{ nombre }}</h3>
+                    <p id="profile-view-email" class="profile-info-email">{{ codigo }}</p>
+                    <p id="profile-view-role" class="profile-info-role">Profesor</p>
+
+                    <div class="profile-dark-mode-row">
+                        <label for="dark-mode-toggle" class="profile-dark-mode-label">
+                            <i class="fas fa-moon"></i> Modo Oscuro
+                        </label>
+                        <label class="dark-toggle-switch">
+                            <input type="checkbox" id="dark-mode-toggle">
+                            <span class="dark-toggle-track"></span>
+                        </label>
+                    </div>
+
+                    <div style="display:flex;flex-direction:column;width:100%;gap:7px;margin-top:4px;">
+                        <label class="profile-action-btn">
+                            <i class="fas fa-camera"></i> Cambiar foto
+                            <input type="file" id="profile-photo-input" accept="image/png,image/jpeg,image/webp" hidden>
+                        </label>
+                        <button type="button" class="profile-action-btn" id="open-edit-profile">
+                            <i class="fas fa-user-edit"></i> Editar perfil
+                        </button>
+                        <button type="button" class="profile-action-btn" id="open-password-modal">
+                            <i class="fas fa-key"></i> Cambiar contraseña
+                        </button>
+                        <button type="button" class="profile-action-btn btn-logout" onclick="window.location.href='/logout'">
+                            <i class="fas fa-sign-out-alt"></i> Cerrar sesión
+                        </button>
+                    </div>
                 </div>
+
             </div>
-            <div class="form-group">
-                <label class="form-label" for="editName">Nombre completo</label>
-                <input type="text" id="editName" class="form-input" value="{{ nombre }}">
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="editEmail">Correo electrónico</label>
-                <input type="email" id="editEmail" class="form-input" placeholder="correo@ejemplo.com">
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="edit-telefono">Teléfono</label>
-                <input type="tel" id="edit-telefono" class="form-input">
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="edit-titulos">Títulos académicos</label>
-                <textarea id="edit-titulos" class="form-input" rows="2"></textarea>
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="edit-area">Área de especialidad</label>
-                <input type="text" id="edit-area" class="form-input">
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="edit-experiencia">Años de experiencia</label>
-                <input type="number" id="edit-experiencia" class="form-input" min="0">
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="edit-escalafon">Registro escalafón</label>
-                <input type="text" id="edit-escalafon" class="form-input">
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="edit-entidad-salud">Entidad de salud</label>
-                <input type="text" id="edit-entidad-salud" class="form-input">
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="edit-entidad-pension">Entidad de pensión</label>
-                <input type="text" id="edit-entidad-pension" class="form-input">
-            </div>
-        </div>
-        <div class="modal-footer">
-            <button type="button" class="btn-secondary" id="cancel-edit-modal">Cancelar</button>
-            <button type="button" class="btn-primary" id="save-profile">
-                <i class="fas fa-save"></i> Guardar
-            </button>
         </div>
     </div>
 </div>
@@ -270,84 +449,40 @@
     </div>
 </div>
 
-<!-- Scripts existentes -->
+<!-- Scripts -->
 <script src="{{ url_for('static', filename='script/panel-shell.js') }}"></script>
 <script src="{{ url_for('static', filename='script/panel-branding.js') }}"></script>
 <script src="{{ url_for('static', filename='script/profile-panel.js') }}"></script>
 <script src="{{ url_for('static', filename='script/profesor.js') }}"></script>
 
-<!-- Script de navegación manual que fuerza la visibilidad -->
 <script>
-    // Función global para mostrar la sección de votaciones (se llama desde onclick)
-    function mostrarVotaciones(event) {
-        if (event) event.preventDefault();
-        // Ocultar todas las secciones
-        document.querySelectorAll('.content-section').forEach(function(section) {
-            section.style.display = 'none';
-        });
-        // Mostrar la sección de votaciones
-        var votaciones = document.getElementById('votaciones-section');
-        if (votaciones) {
-            votaciones.style.display = 'block';
-        } else {
-            console.error('No se encontró la sección de votaciones');
-        }
-        // Quitar clase active de todos los enlaces y ponerla en el de votaciones
-        document.querySelectorAll('.nav-link').forEach(function(link) {
-            link.classList.remove('active');
-        });
-        var link = document.querySelector('.nav-link[data-section="votaciones-section"]');
-        if (link) link.classList.add('active');
+// Abrir votaciones si hay v_step en la URL (después de un submit)
+document.addEventListener('DOMContentLoaded', function () {
+    var params = new URLSearchParams(window.location.search);
+    if (params.has('v_step')) {
+        var link = document.querySelector('.nav-link[data-section="votaciones"]');
+        if (link) link.click();
     }
 
-    // Función para mostrar la sección de inicio (se puede llamar desde otros enlaces si es necesario)
-    function mostrarInicio(event) {
-        if (event) event.preventDefault();
-        document.querySelectorAll('.content-section').forEach(function(section) {
-            section.style.display = 'none';
-        });
-        var inicio = document.getElementById('inicio');
-        if (inicio) {
-            inicio.style.display = 'block';
+    // El botón editar perfil muestra/oculta el formulario inline dentro del modal
+    document.getElementById('open-edit-profile')?.addEventListener('click', function () {
+        var form = document.getElementById('prof-edit-form');
+        var list = document.getElementById('profile-info-list');
+        if (form && list) {
+            form.style.display = 'block';
+            list.style.display = 'none';
+            this.style.display = 'none';
         }
-        document.querySelectorAll('.nav-link').forEach(function(link) {
-            link.classList.remove('active');
-        });
-        var link = document.querySelector('.nav-link[data-section="inicio"]');
-        if (link) link.classList.add('active');
-    }
-
-    // Al cargar la página, si hay parámetro v_step en la URL, mostrar votaciones
-    document.addEventListener('DOMContentLoaded', function() {
-        var params = new URLSearchParams(window.location.search);
-        if (params.has('v_step')) {
-            mostrarVotaciones(null);
-        }
-        // También podemos manejar los clics en otros enlaces que usan data-section
-        document.querySelectorAll('.nav-link[data-section]').forEach(function(link) {
-            link.addEventListener('click', function(e) {
-                var sectionId = this.getAttribute('data-section');
-                if (sectionId === 'votaciones-section') {
-                    // Ya lo maneja onclick directamente
-                    return;
-                }
-                // Para otros enlaces (inicio, notas, etc.) usar la navegación normal
-                // Pero dejamos que panel-shell.js los maneje, o lo forzamos aquí
-                e.preventDefault();
-                document.querySelectorAll('.content-section').forEach(function(s) {
-                    s.style.display = 'none';
-                });
-                var target = document.getElementById(sectionId);
-                if (target) {
-                    target.style.display = 'block';
-                }
-                document.querySelectorAll('.nav-link').forEach(function(l) {
-                    l.classList.remove('active');
-                });
-                this.classList.add('active');
-            });
-        });
     });
+    document.getElementById('cancel-profile')?.addEventListener('click', function () {
+        var form = document.getElementById('prof-edit-form');
+        var list = document.getElementById('profile-info-list');
+        var btn  = document.getElementById('open-edit-profile');
+        if (form) form.style.display = 'none';
+        if (list) list.style.display = 'block';
+        if (btn)  btn.style.display  = '';
+    });
+});
 </script>
 
 </body>

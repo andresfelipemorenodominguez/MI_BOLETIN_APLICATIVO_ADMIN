@@ -56,11 +56,22 @@
 
     const dateEl = document.getElementById('current-date');
     if (dateEl) {
-        dateEl.textContent = new Date().toLocaleDateString('es-ES', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-        });
+        function updateDateTime() {
+            const now = new Date();
+            const fecha = now.toLocaleDateString('es-ES', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+            });
+            const hora = now.toLocaleTimeString('es-ES', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+            });
+            dateEl.textContent = `${fecha} · ${hora}`;
+        }
+        updateDateTime();
+        setInterval(updateDateTime, 30000); // actualiza cada 30 s
     }
 })();

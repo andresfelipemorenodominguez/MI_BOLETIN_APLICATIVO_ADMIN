@@ -11,6 +11,8 @@ ProfilePanel.init({
   },
 });
 
+const PROF_SECTION_KEY = 'miboletin_last_section_profesor';
+
 function setActiveNav(section) {
   navLinks.forEach(link => link.classList.toggle('active', link.dataset.section === section));
 }
@@ -26,6 +28,22 @@ navLinks.forEach(link => {
 });
 
 async function renderSection(section) {
+  // Persistir sección para restaurar en F5
+  try { localStorage.setItem(PROF_SECTION_KEY, section); } catch (_) {}
+  // Votaciones usa una section HTML propia, no el panel-content dinámico
+  const votacionesSection = document.getElementById('votaciones');
+  const panelContent = document.getElementById('panel-content');
+
+  if (section === 'votaciones') {
+    if (panelContent) panelContent.style.display = 'none';
+    if (votacionesSection) votacionesSection.style.display = 'block';
+    return;
+  }
+
+  // Para todas las demás secciones, ocultar votaciones y mostrar panel-content
+  if (votacionesSection) votacionesSection.style.display = 'none';
+  if (panelContent) panelContent.style.display = 'block';
+
   switch(section) {
     case 'inicio':     renderInicio();           break;
     case 'notas':      await renderNotas();      break;
@@ -69,10 +87,20 @@ function renderInicio() {
       </div>
     </div>`;
   const dateEl = document.getElementById('current-date');
-  if (dateEl) {
-    dateEl.textContent = new Date().toLocaleDateString('es-ES', {
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-    });
+  if (dateEl && !dateEl._clockRunning) {
+    dateEl._clockRunning = true;
+    function updateProfDate() {
+      const now = new Date();
+      const fecha = now.toLocaleDateString('es-ES', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+      });
+      const hora = now.toLocaleTimeString('es-ES', {
+        hour: 'numeric', minute: '2-digit', hour12: true,
+      });
+      dateEl.textContent = `${fecha} · ${hora}`;
+    }
+    updateProfDate();
+    setInterval(updateProfDate, 30000);
   }
 }
 
@@ -1180,5 +1208,22 @@ window.cambiarEstado=async function(id_agenda,estado){
   renderCalendario();
 };
 
-// ── Inicialización ──
-renderInicio();
+// ── Inicialización — restaura última sección visitada o va a inicio ──
+(function restoreSection() {
+  try {
+    const saved = localStorage.getItem(PROF_SECTION_KEY);
+    if (saved) {
+      // votaciones se valida diferente (es un <section> HTML, no el panel-content)
+      const isVotaciones = saved === 'votaciones';
+      const exists = isVotaciones
+        ? !!document.getElementById('votaciones')
+        : navLinks.some(l => l.dataset.section === saved);
+      if (exists) {
+        setActiveNav(saved);
+        renderSection(saved);
+        return;
+      }
+    }
+  } catch (_) {}
+  renderInicio(); // fallback
+})();

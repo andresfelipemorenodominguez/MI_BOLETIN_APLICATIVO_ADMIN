@@ -256,6 +256,9 @@ class NavigationManager {
         if (section) section.classList.add('active');
         document.querySelectorAll(`[data-section="${sectionId}"]`).forEach(l => l.classList.add('active'));
 
+        // Persistir sección activa para restaurar en F5
+        try { localStorage.setItem('miboletin_last_section_admin', sectionId); } catch (_) {}
+
         const loaders = {
             'agregar-estudiante-section': () => window.app?.tables?.estudiantes?.loadData(),
             'agregar-profesor-section': () => window.app?.tables?.profesores?.loadData(),
@@ -271,6 +274,18 @@ class NavigationManager {
             'identidad-section': () => IdentidadAdmin.cargar(),
         };
         loaders[sectionId]?.();
+    }
+
+    restoreLastSection() {
+        try {
+            const saved = localStorage.getItem('miboletin_last_section_admin');
+            // Solo restaurar si existe la sección en el DOM
+            if (saved && document.getElementById(saved)) {
+                this.showSection(saved);
+                return true;
+            }
+        } catch (_) {}
+        return false;
     }
 }
 
@@ -449,9 +464,11 @@ class ChatManager {
         try {
             if (this.contactList && this.contacts.length === 0) {
                 this.contactList.innerHTML = `
-                    <div style="padding: 30px 20px; text-align: center; color: var(--gray-500);">
-                        <i class="fas fa-circle-notch fa-spin" style="font-size: 24px; margin-bottom: 12px;"></i>
-                        <p style="font-size: 14px;">Cargando chats...</p>
+                    <div style="padding:40px 20px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;">
+                        <div style="width:56px;height:56px;border-radius:50%;background:var(--accent-bg);display:flex;align-items:center;justify-content:center;">
+                            <i class="fas fa-circle-notch fa-spin" style="font-size:22px;color:var(--accent);"></i>
+                        </div>
+                        <p style="margin:0;font-size:13px;color:var(--gray-400);">Cargando chats...</p>
                     </div>`;
             }
             const [contactsRes, roomsRes] = await Promise.all([
@@ -533,26 +550,46 @@ class ChatManager {
         this.renderContacts();
     }
 
+    // Genera un color consistente (0-7) a partir del nombre
+    _avatarColor(name) {
+        let hash = 0;
+        for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+        return Math.abs(hash) % 8;
+    }
+
+    // Extrae las dos iniciales de un nombre
+    _initials(name) {
+        const parts = (name || '').trim().split(/\s+/);
+        return parts.length >= 2
+            ? (parts[0][0] + parts[1][0]).toUpperCase()
+            : (parts[0]?.[0] || '?').toUpperCase();
+    }
+
     renderContacts() {
         if (!this.contactList) return;
         if (!this.filteredContacts.length) {
             this.contactList.innerHTML = '<div class="chat-empty">No hay contactos que coincidan.</div>';
             return;
         }
-        
+
         this.contactList.innerHTML = this.filteredContacts.map(contact => {
             const activeClass = contact.room_id && contact.room_id === this.activeRoomId ? 'active' : '';
-            const badge = contact.unread_count > 0 ? `<span class="chat-badge">${contact.unread_count}</span>` : '';
-            const roleBadge = contact.rol_usuario === 'admin' ? '(Admin)' : (contact.rol_usuario === 'docente' ? '(Docente)' : '');
+            const hasUnread   = contact.unread_count > 0;
+            const unreadClass = hasUnread ? 'has-unread' : '';
+            const badge = hasUnread
+                ? `<span class="chat-badge">${contact.unread_count}</span>` : '';
+            const roleBadge = contact.rol_usuario === 'admin' ? '(Admin)'
+                : contact.rol_usuario === 'docente' ? '(Docente)' : '';
+            const initials = this._initials(contact.nombre_usuario);
+            const color = this._avatarColor(contact.nombre_usuario);
             return `
-                <button class="chat-contact-item ${activeClass}" data-user-id="${contact.user_id}">
+                <button class="chat-contact-item ${activeClass} ${unreadClass}" data-user-id="${contact.user_id}">
+                    <div class="chat-contact-avatar" data-color="${color}">${initials}</div>
                     <div class="chat-contact-info">
-                        <strong>${contact.nombre_usuario} <small style="color:var(--gray-500);font-weight:normal;">${roleBadge}</small></strong>
+                        <strong>${contact.nombre_usuario}${roleBadge ? ` <small style="color:var(--gray-400);font-weight:400;">${roleBadge}</small>` : ''}</strong>
                         <span>${contact.subtitle}</span>
                     </div>
-                    <div class="chat-contact-meta">
-                        ${badge}
-                    </div>
+                    <div class="chat-contact-meta">${badge}</div>
                 </button>
             `;
         }).join('');
@@ -572,9 +609,11 @@ class ChatManager {
             this.showActivePanel(contact);
             if (this.messagesContainer) {
                 this.messagesContainer.innerHTML = `
-                    <div style="padding: 20px; text-align: center; color: var(--gray-500); width: 100%;">
-                        <i class="fas fa-circle-notch fa-spin" style="font-size: 20px; margin-bottom: 8px;"></i>
-                        <p style="font-size: 13px;">Cargando mensajes...</p>
+                    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:40px 20px;text-align:center;">
+                        <div style="width:64px;height:64px;border-radius:50%;background:var(--accent-bg);display:flex;align-items:center;justify-content:center;">
+                            <i class="fas fa-circle-notch fa-spin" style="font-size:24px;color:var(--accent);"></i>
+                        </div>
+                        <p style="margin:0;font-size:13px;color:var(--gray-400);">Cargando mensajes...</p>
                     </div>`;
             }
 
@@ -622,17 +661,43 @@ class ChatManager {
         if (this.placeholder) this.placeholder.style.display = 'none';
         if (this.activePanel) this.activePanel.style.display = 'flex';
         if (this.activeName) this.activeName.textContent = contact.nombre_usuario;
-        if (this.activeStatus) {
+
+        // Dot + texto de estado
+        const statusEl = document.getElementById('chat-active-status');
+        const dotEl    = document.getElementById('chat-status-dot');
+        if (statusEl && dotEl) {
             if (contact.rol_usuario === 'grupo') {
-                this.activeStatus.textContent = 'Grupo';
+                statusEl.textContent = 'Grupo';
+                dotEl.className = 'chat-status-dot';
+            } else if (contact.is_online) {
+                statusEl.textContent = 'En línea';
+                statusEl.style.color = '#22c55e';
+                dotEl.className = 'chat-status-dot online';
             } else {
-                this.activeStatus.textContent = contact.is_online ? 'En línea' : 'Desconectado';
-                this.activeStatus.style.color = contact.is_online ? 'var(--success)' : 'var(--gray-500)';
+                statusEl.textContent = 'Desconectado';
+                statusEl.style.color = '#f87171';
+                dotEl.className = 'chat-status-dot offline';
             }
         }
+
         if (this.activeInitials) {
-            const initials = contact.nombre_usuario.split(' ').slice(0, 2).map(w => w[0]?.toUpperCase()).join('');
-            this.activeInitials.textContent = initials || 'C';
+            const initials = this._initials(contact.nombre_usuario);
+            const color    = this._avatarColor(contact.nombre_usuario);
+            this.activeInitials.textContent = initials;
+            const avatarEl = document.getElementById('chat-active-avatar');
+            if (avatarEl) avatarEl.dataset.color = color;
+        }
+
+        // Menú 3 puntos — toggle
+        const menuBtn  = document.getElementById('chat-menu-btn');
+        const menuDrop = document.getElementById('chat-menu-dropdown');
+        if (menuBtn && menuDrop && !menuBtn._bound) {
+            menuBtn._bound = true;
+            menuBtn.addEventListener('click', e => {
+                e.stopPropagation();
+                menuDrop.classList.toggle('open');
+            });
+            document.addEventListener('click', () => menuDrop.classList.remove('open'));
         }
     }
 
@@ -653,7 +718,15 @@ class ChatManager {
     renderMessages(messages) {
         if (!this.messagesContainer) return;
         if (!messages.length) {
-            this.messagesContainer.innerHTML = '<div class="chat-empty">Inicia la conversación enviando un mensaje.</div>';
+            this.messagesContainer.innerHTML = `
+                <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:40px 20px;text-align:center;">
+                    <div style="width:72px;height:72px;border-radius:50%;background:var(--accent-bg);display:flex;align-items:center;justify-content:center;">
+                        <i class="far fa-paper-plane" style="font-size:28px;color:var(--accent);"></i>
+                    </div>
+                    <p style="margin:0;font-size:15px;font-weight:600;color:var(--gray-600);">Sin mensajes aún</p>
+                    <p style="margin:0;font-size:13px;color:var(--gray-400);max-width:220px;line-height:1.5;">Sé el primero en escribir algo</p>
+                </div>
+            `;
             return;
         }
 
@@ -684,17 +757,40 @@ class ChatManager {
                 `;
             }
 
+            const isMine = message.is_mine;
+            const senderName = message.sender_name || '';
+            const initials = this._initials(senderName || (isMine ? 'Yo' : '?'));
+            const color = this._avatarColor(senderName || 'default');
+
+            // Mostrar avatar solo en el último mensaje consecutivo del mismo remitente
+            const nextMsg = messages[index + 1];
+            const isLastInGroup = !nextMsg || nextMsg.is_mine !== isMine;
+
+            const avatarHtml = (!isMine && isLastInGroup)
+                ? `<div class="chat-msg-avatar" data-color="${color}" title="${senderName}">${initials}</div>`
+                : (!isMine ? `<div style="width:28px;min-width:28px;"></div>` : '');
+
+            // Mostrar nombre solo en el primer mensaje del grupo
+            const prevMsg = messages[index - 1];
+            const isFirstInGroup = !prevMsg || prevMsg.is_mine !== isMine;
+            const senderLabel = (!isMine && isFirstInGroup && senderName)
+                ? `<div class="chat-bubble-sender">${senderName}</div>` : '';
+
             return `
-                <div class="chat-bubble ${message.is_mine ? 'mine' : 'other'}">
-                    <div class="chat-bubble-content" style="display: flex; align-items: center; gap: 4px;">
-                        <span class="msg-text" data-msg-id="${message.message_id}" style="word-break: break-word;">${message.content}</span>
-                        ${optionsMenu}
+                <div class="chat-bubble-row ${isMine ? 'mine' : 'other'}" style="align-self:${isMine ? 'flex-end' : 'flex-start'}; max-width: 72%;">
+                    ${avatarHtml}
+                    <div class="chat-bubble ${isMine ? 'mine' : 'other'}" style="max-width:100%;">
+                        ${senderLabel}
+                        <div class="chat-bubble-content" style="display: flex; align-items: center; gap: 4px;">
+                            <span class="msg-text" data-msg-id="${message.message_id}" style="word-break: break-word;">${message.content}</span>
+                            ${optionsMenu}
+                        </div>
+                        <div class="chat-bubble-meta">${this.formatDate(message.created_at)}</div>
                     </div>
-                    <div class="chat-bubble-meta">${this.formatDate(message.created_at)}</div>
                 </div>
             `;
         }).join('');
-        
+
         this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
         
         // Manejar el toggle del menú
@@ -837,19 +933,21 @@ class ChatManager {
 
     async clearChat() {
         if (!this.activeRoomId || this.activeRoomId === 'loading') return;
-        if (!await Utils.confirmDialog('Vaciar Chat', '¿Estás seguro de que deseas vaciar este chat? Todos los mensajes se eliminarán para ti.', 'fas fa-trash-alt')) return;
-        
+        // Cerrar el menú
+        document.getElementById('chat-menu-dropdown')?.classList.remove('open');
+        if (!await Utils.confirmDialog('Vaciar chat', '¿Seguro que deseas vaciar este chat? Los mensajes se eliminarán solo para ti.', 'fas fa-trash-alt')) return;
         try {
             const res = await fetch(`/chat/rooms/${this.activeRoomId}/clear`, { method: 'DELETE' });
             const data = await res.json();
             if (data.status === 'success') {
-                Utils.showToast('Chat vaciado con éxito', 'success');
-                this.loadMessages(this.activeRoomId);
+                Utils.showToast('Chat vaciado', 'success');
+                // Recargar mensajes Y contactos (para limpiar el subtitle)
+                await this.loadMessages(this.activeRoomId);
+                this.loadContacts();
             } else {
                 Utils.showToast(data.message || 'Error al vaciar chat', 'error');
             }
         } catch (e) {
-            console.error('Error vaciando chat', e);
             Utils.showToast('Error de red al vaciar chat', 'error');
         }
     }
@@ -1519,7 +1617,20 @@ class UIManager {
             },
         });
         const dateEl = document.getElementById('current-date');
-        if (dateEl) dateEl.textContent = Utils.formatDate();
+        if (dateEl) {
+            function updateDateTime() {
+                const now = new Date();
+                const fecha = now.toLocaleDateString('es-ES', {
+                    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+                });
+                const hora = now.toLocaleTimeString('es-ES', {
+                    hour: 'numeric', minute: '2-digit', hour12: true,
+                });
+                dateEl.textContent = `${fecha} · ${hora}`;
+            }
+            updateDateTime();
+            setInterval(updateDateTime, 30000);
+        }
     }
 }
 
@@ -1532,6 +1643,8 @@ class App {
     try {
         new UIManager().init();
         this.navigation = new NavigationManager();
+        // Restaurar última sección visitada (persiste tras F5)
+        this.navigation.restoreLastSection();
         this.stats = new StatsManager();
         this.forms = {
             student: new StudentFormHandler(),

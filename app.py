@@ -1093,9 +1093,39 @@ def profesor_dashboard():
     user_info = session.get('user_info')
     if not user_info or user_info.get('tipo') != 'profesor':
         return redirect(url_for('loginuser'))
+
+    # Datos de votaciones (para mostrar la sección integrada)
+    v_step = request.args.get('v_step', 'identificacion')
+    sesion_votacion = None
+    candidatos_cargo = []
+    now = datetime.utcnow()
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("SELECT id, activa, cierra_en FROM votacion_sesion WHERE activa = TRUE ORDER BY id LIMIT 1")
+        row = cur.fetchone()
+        if row:
+            sesion_votacion = dict(row)
+        if v_step == 'candidatos':
+            cargo = session.get('votacion_cargo')
+            if cargo:
+                cur.execute(
+                    "SELECT id, nombre, numero_campana, cargo, imagen_url FROM candidato WHERE cargo = %s",
+                    (cargo,)
+                )
+                candidatos_cargo = [dict(r) for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+    except Exception:
+        pass
+
     return render_template('profesor/profesor.html',
                            nombre=user_info['nombre'],
-                           codigo=user_info['codigo'])
+                           codigo=user_info['codigo'],
+                           v_step=v_step,
+                           sesion_votacion=sesion_votacion,
+                           candidatos_cargo=candidatos_cargo,
+                           now=now)
 
 def _get_admin_for_colegio(id_colegio):
     """Devuelve (id_admin, nombre, correo) del administrador del colegio."""
@@ -1709,9 +1739,10 @@ def chat_rooms():
         "LEFT JOIN chat_participants p ON p.room_id = r.id_sala AND (p.user_id != %s OR p.rol_usuario != %s) "
         "LEFT JOIN LATERAL ( "
         "  SELECT contenido, sender_id, fecha_registro "
-        "  FROM chat_messages "
-        "  WHERE room_id = r.id_sala "
-        "  ORDER BY fecha_registro DESC LIMIT 1 "
+        "  FROM chat_messages cm "
+        "  WHERE cm.room_id = r.id_sala "
+        "    AND (p0.cleared_at IS NULL OR cm.fecha_registro > p0.cleared_at) "
+        "  ORDER BY cm.fecha_registro DESC LIMIT 1 "
         ") m ON TRUE "
         "LEFT JOIN LATERAL ( "
         "  SELECT COUNT(*) AS unread_count "
@@ -1720,10 +1751,10 @@ def chat_rooms():
         ") u ON TRUE "
         "GROUP BY r.id_sala, r.fecha_creacion, m.contenido, m.sender_id, m.fecha_registro, u.unread_count "
         "ORDER BY r.fecha_creacion DESC",
-        (participante['user_id'], participante['rol_usuario'], 
-         participante['user_id'], participante['rol_usuario'], 
-         participante['user_id'], participante['rol_usuario'], 
-         participante['user_id'], participante['rol_usuario'], 
+        (participante['user_id'], participante['rol_usuario'],
+         participante['user_id'], participante['rol_usuario'],
+         participante['user_id'], participante['rol_usuario'],
+         participante['user_id'], participante['rol_usuario'],
          participante['user_id'])
     )
 
@@ -5881,59 +5912,17 @@ def admin_resumen_votaciones():
 
 @app.route('/profesor/votaciones')
 def profesor_votaciones():
+    """Redirige al dashboard del profesor con el v_step correspondiente."""
     user_info = session.get('user_info')
     if not user_info or user_info.get('tipo') != 'profesor':
         return redirect(url_for('loginuser'))
-    
-    # Obtener parámetros de URL
     v_step = request.args.get('v_step', 'identificacion')
-    
-    # Inicializar variables
-    sesion_votacion = None
-    candidatos_cargo = []
-    now = datetime.utcnow()
-    
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        
-        # Obtener la sesión ACTIVA (no la primera por ID)
-        cur.execute("SELECT id, activa, cierra_en FROM votacion_sesion WHERE activa = TRUE ORDER BY id LIMIT 1")
-        row = cur.fetchone()
-        if row:
-            sesion_votacion = dict(row)
-        
-        # Si estamos en el paso de candidatos, cargar la lista del cargo elegido
-        if v_step == 'candidatos':
-            cargo = session.get('votacion_cargo')
-            if cargo:
-                cur.execute(
-                    "SELECT id, nombre, numero_campana, cargo, imagen_url FROM candidato WHERE cargo = %s",
-                    (cargo,)
-                )
-                candidatos_cargo = [dict(r) for r in cur.fetchall()]
-                print(f"Candidatos encontrados para {cargo}: {len(candidatos_cargo)}")
-            else:
-                print("No hay cargo en sesión")
-        
-        cur.close()
-        conn.close()
-    except Exception as e:
-        print(f"Error en profesor_votaciones: {e}")
-        import traceback
-        traceback.print_exc()
-    
-    return render_template('profesor/profesor_votaciones.html',
-                           nombre=user_info['nombre'],
-                           codigo=user_info['codigo'],
-                           sesion_votacion=sesion_votacion,
-                           candidatos_cargo=candidatos_cargo,
-                           now=now)
+    return redirect(url_for('profesor_dashboard', v_step=v_step))
 
 @app.route('/profesor/votacion/validar', methods=['POST'])
 def docente_validar_estudiante():
     tarjeta = request.form.get('tarjeta_identidad')
-    redirect_to = request.form.get('redirect', 'profesor_votaciones')  # Cambiado
+    redirect_to = request.form.get('redirect', 'profesor_dashboard')  # Cambiado
     
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -5957,7 +5946,7 @@ def docente_validar_estudiante():
 def docente_seleccionar_cargo():
     estudiante_id = request.form.get('estudiante_id')
     cargo = request.form.get('cargo')
-    redirect_to = request.form.get('redirect', 'profesor_votaciones')  # Cambiado
+    redirect_to = request.form.get('redirect', 'profesor_dashboard')  # Cambiado
     
     conn = get_db_connection()
     cur = conn.cursor()
@@ -5992,7 +5981,7 @@ def docente_registrar_voto():
     estudiante_id = request.form.get('estudiante_id')
     candidato_id = request.form.get('candidato_id')
     cargo = request.form.get('cargo')
-    redirect_to = request.form.get('redirect', 'profesor_votaciones')  # Cambiado
+    redirect_to = request.form.get('redirect', 'profesor_dashboard')  # Cambiado
     
     conn = get_db_connection()
     cur = conn.cursor()

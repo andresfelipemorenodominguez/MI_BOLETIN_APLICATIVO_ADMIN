@@ -10,6 +10,8 @@ ProfilePanel.init({
   },
 });
 
+const EST_SECTION_KEY = 'miboletin_last_section_estudiante';
+
 function setActiveNav(section) {
   navLinks.forEach(link => link.classList.toggle('active', link.dataset.section === section));
 }
@@ -24,6 +26,7 @@ navLinks.forEach(link => {
 });
 
 async function renderSection(sec) {
+  try { localStorage.setItem(EST_SECTION_KEY, sec); } catch (_) {}
   switch(sec) {
     case 'inicio':     renderInicio();          break;
     case 'notas':      await renderNotas();     break;
@@ -67,10 +70,20 @@ function renderInicio() {
       </div>
     </div>`;
   const dateEl = document.getElementById('current-date');
-  if (dateEl) {
-    dateEl.textContent = new Date().toLocaleDateString('es-ES', {
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-    });
+  if (dateEl && !dateEl._clockRunning) {
+    dateEl._clockRunning = true;
+    function updateEstDate() {
+      const now = new Date();
+      const fecha = now.toLocaleDateString('es-ES', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+      });
+      const hora = now.toLocaleTimeString('es-ES', {
+        hour: 'numeric', minute: '2-digit', hour12: true,
+      });
+      dateEl.textContent = `${fecha} · ${hora}`;
+    }
+    updateEstDate();
+    setInterval(updateEstDate, 30000);
   }
 }
 
@@ -416,5 +429,15 @@ function emptyState(icon, msg) {
   return `<div class="empty-state"><i class="${icon}"></i><p>${msg}</p></div>`;
 }
 
-// ── Inicio ──
-renderInicio();
+// ── Inicio — restaura última sección visitada o va a inicio ──
+(function restoreSection() {
+  try {
+    const saved = localStorage.getItem(EST_SECTION_KEY);
+    if (saved && navLinks.some(l => l.dataset.section === saved)) {
+      setActiveNav(saved);
+      renderSection(saved);
+      return;
+    }
+  } catch (_) {}
+  renderInicio();
+})();
