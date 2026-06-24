@@ -10,7 +10,19 @@ ProfilePanel.init({
   },
 });
 
-const EST_SECTION_KEY = 'miboletin_last_section_estudiante';
+// Inline edit form toggle (split layout)
+document.getElementById('est-open-edit')?.addEventListener('click', async () => {
+  const form = document.getElementById('est-edit-form');
+  if (form) {
+    await ProfilePanel.load();
+    form.style.display = 'block';
+  }
+});
+document.getElementById('cancel-profile')?.addEventListener('click', () => {
+  const form = document.getElementById('est-edit-form');
+  if (form) form.style.display = 'none';
+});
+
 
 function setActiveNav(section) {
   navLinks.forEach(link => link.classList.toggle('active', link.dataset.section === section));
@@ -26,7 +38,7 @@ navLinks.forEach(link => {
 });
 
 async function renderSection(sec) {
-  try { localStorage.setItem(EST_SECTION_KEY, sec); } catch (_) {}
+
   switch(sec) {
     case 'inicio':     renderInicio();          break;
     case 'notas':      await renderNotas();     break;
@@ -35,6 +47,8 @@ async function renderSection(sec) {
     case 'material':   await renderMaterial();  break;
     case 'observador': await renderObservador();break;
     case 'agenda':     await renderAgenda();     break;
+    case 'chat':       renderChat();            break;
+    case 'votaciones': await renderVotaciones(); break;
     default:           renderInicio();
   }
 }
@@ -91,6 +105,102 @@ window.navTo = function (sec) {
   setActiveNav(sec);
   renderSection(sec);
 };
+
+
+// ══════════════════════════════════════════════════════
+//  CHAT INSTITUCIONAL
+// ══════════════════════════════════════════════════════
+
+let chatManagerEst = null;
+
+function renderChat() {
+  content.innerHTML = `
+    <div id="chat-section" class="chat-app" style="height:calc(100vh - 120px);min-height:500px;">
+      <div class="chat-sidebar">
+        <div class="chat-sidebar-header">
+          <h2 class="chat-sidebar-title"><i class="fas fa-comments"></i> Chats</h2>
+          <div class="chat-search-box">
+            <i class="fas fa-search chat-search-icon"></i>
+            <input type="text" class="chat-search-input" id="chat-search" placeholder="Buscar contacto..." autocomplete="off">
+          </div>
+          <div class="chat-filter-row">
+            <label for="chat-filter">Ver:</label>
+            <select id="chat-filter" class="chat-filter-select">
+              <option value="all">Todos</option>
+              <option value="admin">Solo admins</option>
+              <option value="profesor">Solo docentes</option>
+              <option value="estudiante">Solo estudiantes</option>
+            </select>
+          </div>
+        </div>
+        <div class="chat-contact-list" id="chat-contact-list">
+          <div style="padding:30px 20px;text-align:center;color:var(--gray-500);">
+            <i class="fas fa-circle-notch fa-spin" style="font-size:24px;margin-bottom:12px;"></i>
+            <p style="font-size:14px;">Cargando chats...</p>
+          </div>
+        </div>
+      </div>
+      <div class="chat-conversation">
+        <div class="chat-conversation-placeholder" id="chat-placeholder">
+          <div class="chat-placeholder-content">
+            <div class="chat-placeholder-icon"><i class="fas fa-comments"></i></div>
+            <h3>Tus mensajes</h3>
+            <p>Selecciona una conversación para empezar a chatear</p>
+          </div>
+        </div>
+        <div class="chat-conversation-active" id="chat-active" style="display:none;">
+  <div class="chat-conversation-header">
+    <button id="chat-back-btn" class="chat-back-btn" title="Volver a contactos"><i class="fas fa-arrow-left"></i></button>
+    <div class="chat-conversation-user">
+              <div class="chat-avatar" id="chat-active-avatar">
+                <span class="chat-avatar-initials" id="chat-active-initials">JD</span>
+              </div>
+              <div>
+                <h4 class="chat-conversation-name" id="chat-active-name">Juan Pérez</h4>
+                <div class="chat-status-row">
+                  <span class="chat-status-dot" id="chat-status-dot"></span>
+                  <span class="chat-conversation-status" id="chat-active-status">Desconectado</span>
+                </div>
+              </div>
+            </div>
+            <div class="chat-header-menu" style="position:relative;">
+              <button id="chat-menu-btn" class="chat-menu-btn" title="Opciones">
+                <i class="fas fa-ellipsis-v"></i>
+              </button>
+              <div class="chat-menu-dropdown" id="chat-menu-dropdown">
+                <button id="chat-clear-btn" class="chat-menu-item chat-menu-item--danger">
+                  <i class="fas fa-trash-alt"></i> Vaciar chat
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="chat-messages" id="chat-messages"></div>
+          <div class="chat-input-area">
+            <div id="chat-emoji-picker" style="display:none;flex-wrap:wrap;gap:2px;flex-direction:row;"></div>
+            <div class="chat-input-wrapper">
+              <button id="chat-emoji-btn" title="Emojis" class="chat-emoji-btn">
+                <i class="far fa-smile"></i>
+              </button>
+              <button id="chat-file-btn" title="Adjuntar archivo" class="chat-emoji-btn" style="margin-left:2px;">
+                <i class="fas fa-paperclip"></i>
+              </button>
+              <input type="file" id="chat-file-input" style="display:none" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.zip,.rar,.txt">
+              <input type="text" class="chat-input" id="chat-msg-input" placeholder="Escribe un mensaje..." autocomplete="off">
+              <button class="chat-send-btn" id="chat-send-btn" title="Enviar">
+                <i class="fas fa-paper-plane"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  if (chatManagerEst) chatManagerEst.destroy();
+  chatManagerEst = new ChatManager();
+  chatManagerEst.refreshElements();
+  chatManagerEst.init();
+}
+
 
 // ══════════════════════════════════════════════════════
 //  MIS NOTAS — tabla agrupada por materia
@@ -424,20 +534,143 @@ async function renderAgenda() {
     ${renderLista(otros, 'Anteriores o completados')}`;
 }
 
+// ══════════════════════════════════════════════════════
+//  VOTACIONES — Votar por Personero y Contralor
+// ══════════════════════════════════════════════════════
+async function renderVotaciones() {
+  content.innerHTML = `<div class="loading-state"><i class="fas fa-spinner fa-spin"></i> Cargando votaciones...</div>`;
+  const res = await fetch('/api/estudiante/votacion');
+  const data = await res.json();
+
+  if (data.status !== 'success') {
+    content.innerHTML = emptyState('fas fa-exclamation-triangle', 'Error al cargar votaciones.');
+    return;
+  }
+
+  if (!data.activa || !data.sesion) {
+    content.innerHTML = `
+      <div class="section-header-bar">
+        <h2 class="section-title"><i class="fas fa-vote-yea"></i> Votaciones</h2>
+      </div>
+      <div class="empty-state">
+        <i class="fas fa-clock"></i>
+        <p>No hay una votación activa en este momento.</p>
+      </div>`;
+    return;
+  }
+
+  const candidatos = data.candidatos || [];
+  const yaVoto = data.ya_voto || {};
+
+  if (!candidatos.length) {
+    content.innerHTML = `
+      <div class="section-header-bar">
+        <h2 class="section-title"><i class="fas fa-vote-yea"></i> Votaciones</h2>
+      </div>
+      <div class="mgmt-card" style="display:flex;align-items:center;gap:10px;padding:14px 18px;margin-bottom:20px;">
+        <i class="fas fa-circle" style="color:var(--success);font-size:10px;"></i>
+        <span style="font-size:13px;font-weight:600;color:var(--success);">Votación activa</span>
+        <span style="font-size:12px;color:var(--gray-500);margin-left:auto;">
+          Finaliza: ${data.sesion.cierra_en || ''}
+        </span>
+      </div>
+      <div class="empty-state"><i class="fas fa-users"></i><p>No hay candidatos registrados.</p></div>`;
+    return;
+  }
+
+  const personeros = candidatos.filter(c => c.cargo === 'personero');
+  const contralores = candidatos.filter(c => c.cargo === 'contralor');
+
+  const renderCargoSection = (cargoLabel, lista, cargoKey) => {
+    const yaVotaste = yaVoto[cargoKey];
+    return `
+      <div class="votacion-card" style="margin-bottom:24px;">
+        <div class="votacion-card-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <h3 style="margin:0;font-size:16px;display:flex;align-items:center;gap:8px;">
+            <i class="fas fa-${cargoKey === 'personero' ? 'star' : 'shield-alt'}"></i>
+            ${cargoLabel}
+          </h3>
+          ${yaVotaste ? '<span class="badge badge-success" style="font-size:12px;padding:4px 12px;"><i class="fas fa-check-circle"></i> Ya votaste</span>' : ''}
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:16px;">
+          ${lista.map(c => `
+            <div class="candidato-card" style="width:180px;text-align:center;padding:16px;border:1px solid var(--gray-200);border-radius:var(--border-radius-lg);background:var(--card-bg);${yaVotaste ? 'opacity:0.7;' : ''}">
+              ${c.imagen_url
+                ? `<img src="${c.imagen_url}" style="width:80px;height:80px;object-fit:cover;border-radius:50%;margin-bottom:10px;border:2px solid var(--gray-200);">`
+                : `<div style="width:80px;height:80px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;margin:0 auto 10px;font-size:28px;color:#fff;"><i class="fas fa-user"></i></div>`
+              }
+              <p style="font-weight:700;font-size:13px;margin:0 0 3px;">${c.nombre}</p>
+              <p style="font-size:11px;color:var(--gray-500);margin:0 0 12px;">N° ${c.numero_campana}</p>
+              ${yaVotaste
+                ? `<button class="btn-secondary" disabled style="width:100%;padding:7px;cursor:not-allowed;"><i class="fas fa-check"></i> Votado</button>`
+                : `<button class="btn-primary btn-votar-est" data-candidato-id="${c.id}" data-cargo="${cargoKey}" style="width:100%;padding:7px;"><i class="fas fa-check"></i> Votar</button>`
+              }
+            </div>
+          `).join('')}
+          ${!lista.length ? '<p style="color:var(--gray-500);font-size:14px;">No hay candidatos para este cargo.</p>' : ''}
+        </div>
+      </div>`;
+  };
+
+  content.innerHTML = `
+    <div class="section-header-bar">
+      <h2 class="section-title"><i class="fas fa-vote-yea"></i> Votaciones</h2>
+    </div>
+    <div class="mgmt-card" style="display:flex;align-items:center;gap:10px;padding:14px 18px;margin-bottom:20px;">
+      <i class="fas fa-circle" style="color:var(--success);font-size:10px;"></i>
+      <span style="font-size:13px;font-weight:600;color:var(--success);">Votación activa</span>
+      <span style="font-size:12px;color:var(--gray-500);margin-left:auto;">
+        Finaliza: ${data.sesion.cierra_en || ''}
+      </span>
+    </div>
+    <p style="font-size:14px;color:var(--gray-500);margin-bottom:20px;">
+      Selecciona un candidato para cada cargo y emite tu voto.
+    </p>
+    ${renderCargoSection('Personero Estudiantil', personeros, 'personero')}
+    ${renderCargoSection('Contralor Estudiantil', contralores, 'contralor')}
+    <div id="votacion-msg" style="margin-top:12px;"></div>`;
+
+  // Attach vote events
+  document.querySelectorAll('.btn-votar-est').forEach(btn => {
+    btn.addEventListener('click', async function () {
+      const candidatoId = this.dataset.candidatoId;
+      const cargo = this.dataset.cargo;
+      const msgEl = document.getElementById('votacion-msg');
+
+      if (!confirm(`¿Confirmas tu voto para ${cargo}? Esta acción no se puede deshacer.`)) return;
+
+      this.disabled = true;
+      this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando...';
+
+      try {
+        const res = await fetch('/api/estudiante/votar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ candidato_id: parseInt(candidatoId), cargo })
+        });
+        const result = await res.json();
+        if (result.status === 'success') {
+          msgEl.innerHTML = `<div class="alert alert-success"><i class="fas fa-check-circle"></i> ${result.message}</div>`;
+          // Re-render section to reflect "ya votaste" state
+          setTimeout(() => renderVotaciones(), 1500);
+        } else {
+          msgEl.innerHTML = `<div class="alert alert-error"><i class="fas fa-exclamation-circle"></i> ${result.message}</div>`;
+          this.disabled = false;
+          this.innerHTML = '<i class="fas fa-check"></i> Votar';
+        }
+      } catch (err) {
+        msgEl.innerHTML = `<div class="alert alert-error"><i class="fas fa-exclamation-circle"></i> Error de conexión.</div>`;
+        this.disabled = false;
+        this.innerHTML = '<i class="fas fa-check"></i> Votar';
+      }
+    });
+  });
+}
+
 // ── Utilidades ──
 function emptyState(icon, msg) {
   return `<div class="empty-state"><i class="${icon}"></i><p>${msg}</p></div>`;
 }
 
-// ── Inicio — restaura última sección visitada o va a inicio ──
-(function restoreSection() {
-  try {
-    const saved = localStorage.getItem(EST_SECTION_KEY);
-    if (saved && navLinks.some(l => l.dataset.section === saved)) {
-      setActiveNav(saved);
-      renderSection(saved);
-      return;
-    }
-  } catch (_) {}
-  renderInicio();
-})();
+// ── Inicio — siempre va a inicio ──
+renderInicio();

@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings('ignore', category=DeprecationWarning, module='fpdf')
+
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file, flash, send_from_directory
 from fpdf import FPDF
 import io
@@ -50,6 +53,9 @@ ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'txt',
 # Carpeta para imágenes de candidatos (votaciones)
 UPLOAD_FOLDER_CANDIDATOS = os.path.join(os.path.dirname(__file__), 'static', 'uploads_candidatos')
 os.makedirs(UPLOAD_FOLDER_CANDIDATOS, exist_ok=True)
+
+UPLOAD_FOLDER_CHAT = os.path.join(os.path.dirname(__file__), 'static', 'uploads_chat')
+os.makedirs(UPLOAD_FOLDER_CHAT, exist_ok=True)
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -92,7 +98,7 @@ app.secret_key = _require_secret_key()
 EMAIL_HOST = "smtp.gmail.com"
 EMAIL_PORT = 465
 EMAIL_USER = os.environ.get("GMAIL_USER", "")
-EMAIL_FROM = os.environ.get("EMAIL_FROM") or (
+EMAIL_FROM = os.environ.get("GMAIL_FROM") or os.environ.get("EMAIL_FROM") or (
     f"MiBoletín <{EMAIL_USER}>" if EMAIL_USER else ""
 )
 GMAIL_CLIENT_ID = os.environ.get("GMAIL_CLIENT_ID", "")
@@ -354,12 +360,13 @@ def _pdf_agregar_estudiante(pdf, cur, est, profesor, id_docente):
     notas = [dict(n) for n in cur.fetchall()]
 
     pdf.set_font('helvetica', 'B', 11)
-    pdf.set_fill_color(0, 51, 102)
+    pdf.set_fill_color(*pdf.primary)
     pdf.set_text_color(255, 255, 255)
     pdf.cell(0, 9, ' Notas Academicas', 1, 1, 'L', fill=True)
     if notas:
         pdf.set_font('helvetica', 'B', 9)
-        pdf.set_fill_color(220, 230, 242)
+        r, g, b = pdf.primary
+        pdf.set_fill_color(min(r + 40, 255), min(g + 40, 255), min(b + 40, 255))
         pdf.set_text_color(0, 0, 0)
         pdf.cell(55, 8, 'Materia', 1, 0, 'C', fill=True)
         pdf.cell(35, 8, 'Tipo', 1, 0, 'C', fill=True)
@@ -368,7 +375,8 @@ def _pdf_agregar_estudiante(pdf, cur, est, profesor, id_docente):
         pdf.cell(25, 8, 'Fecha', 1, 1, 'C', fill=True)
         pdf.set_font('helvetica', '', 9)
         fill = False
-        pdf.set_fill_color(240, 248, 255)
+        r, g, b = pdf.primary
+        pdf.set_fill_color(min(r + 40, 255), min(g + 40, 255), min(b + 40, 255))
         valores = []
         for n in notas:
             v = float(n['valor'])
@@ -402,7 +410,7 @@ def _pdf_agregar_estudiante(pdf, cur, est, profesor, id_docente):
     obs = [dict(o) for o in cur.fetchall()]
 
     pdf.set_font('helvetica', 'B', 11)
-    pdf.set_fill_color(0, 51, 102)
+    pdf.set_fill_color(*pdf.primary)
     pdf.set_text_color(255, 255, 255)
     pdf.cell(0, 9, ' Observaciones del Observador', 1, 1, 'L', fill=True)
     if obs:
@@ -1006,13 +1014,12 @@ def loginuser():
         return render_template('general/loginuser.html')
 
     elif request.method == 'POST':
-        user_identifier = request.form.get('userIdentifier')
-        user_email = request.form.get('correo')
+        user_email = request.form.get('correo', '').strip().lower()
         password = request.form.get('contraseña')
 
-        if not all([user_identifier, user_email, password]):
+        if not all([user_email, password]):
             return render_template('general/loginuser.html',
-                                   error='Todos los campos son requeridos')
+                                   error='Correo y contraseña son requeridos')
 
         conn = get_db_connection()
         cur = conn.cursor()
@@ -1026,8 +1033,8 @@ def loginuser():
             # Buscar como estudiante
             cur.execute(
                 'SELECT id_estudiante, nombre_completo, codigo_estudiante, contrasena '
-                'FROM estudiantes WHERE codigo_estudiante = %s AND correo_electronico = %s AND id_colegio = %s;',
-                (user_identifier, user_email, id_colegio)
+                'FROM estudiantes WHERE LOWER(correo_electronico) = %s AND id_colegio = %s;',
+                (user_email, id_colegio)
             )
             estudiante = cur.fetchone()
 
@@ -1047,8 +1054,8 @@ def loginuser():
             # Buscar como profesor
             cur.execute(
                 'SELECT id_profesor, nombre_completo, codigo_profesor, contrasena '
-                'FROM profesores WHERE codigo_profesor = %s AND correo_electronico = %s AND id_colegio = %s;',
-                (user_identifier, user_email, id_colegio)
+                'FROM profesores WHERE LOWER(correo_electronico) = %s AND id_colegio = %s;',
+                (user_email, id_colegio)
             )
             profesor = cur.fetchone()
 
@@ -1066,7 +1073,7 @@ def loginuser():
                     return render_template('general/loginuser.html', error='Contraseña incorrecta')
 
             return render_template('general/loginuser.html',
-                                   error='Usuario no encontrado. Verifica tu identificador y correo electrónico.')
+                                   error='Usuario no encontrado. Verifica tu correo electrónico.')
 
         except Exception as e:
             print(f"Error en login: {str(e)}")
@@ -1486,24 +1493,34 @@ def dashboard():
             conn2.close()
 
         # ========== INICIO BLOQUE PARA VOTACIONES ==========
-        # Variables por defecto en caso de que las tablas no existan o haya error
         sesion_votacion = None
         candidatos = []
         candidatos_cargo = []
         now = datetime.utcnow()
+        v_step = request.args.get('v_step')
         try:
-            # Importar modelos dentro de la función para evitar errores si no existen
-            from models import VotacionSesion, Candidato
-            sesion_votacion = VotacionSesion.query.first()
+            conn3 = get_db_connection()
+            cur3 = conn3.cursor(cursor_factory=psycopg2.extras.DictCursor)
+            cur3.execute(
+                "SELECT id, activa, cierra_en FROM votacion_sesion WHERE activa = TRUE ORDER BY id LIMIT 1"
+            )
+            row = cur3.fetchone()
+            if row:
+                sesion_votacion = dict(row)
             if admin_rol != 'superadmin':
-                candidatos = Candidato.query.all()
-            v_step = request.args.get('v_step')
+                cur3.execute("SELECT id, nombre, numero_campana, cargo, imagen_url FROM candidato ORDER BY creado_en DESC")
+                candidatos = [dict(r) for r in cur3.fetchall()]
             if v_step == 'candidatos':
                 cargo = session.get('votacion_cargo')
                 if cargo:
-                    candidatos_cargo = Candidato.query.filter_by(cargo=cargo).all()
+                    cur3.execute(
+                        "SELECT id, nombre, numero_campana, cargo, imagen_url FROM candidato WHERE cargo = %s",
+                        (cargo,)
+                    )
+                    candidatos_cargo = [dict(r) for r in cur3.fetchall()]
+            cur3.close()
+            conn3.close()
         except Exception as e:
-            # Si hay error (por ejemplo, las tablas no existen), no interrumpimos el dashboard
             print(f"Error al cargar datos de votaciones: {e}")
         # ========== FIN BLOQUE ==========
 
@@ -1559,22 +1576,30 @@ def logout():
 
 def _get_chat_participant():
     admin = get_admin_from_session(session)
-    if not admin:
-        return None
-
-    user_id = admin.get('id')
-    nombre = admin.get('nombre')
-    rol = 'admin' if admin.get('rol') in ('superadmin', 'admin_colegio', 'admin_lider') else 'docente'
+    if admin:
+        user_id = str(admin.get('id'))
+        nombre = admin.get('nombre') or ''
+        rol = 'admin' if admin.get('rol') in ('superadmin', 'admin_colegio', 'admin_lider') else 'docente'
+    else:
+        user_info = session.get('user_info')
+        if not user_info:
+            return None
+        tipo = user_info.get('tipo')
+        if tipo not in ('profesor', 'estudiante'):
+            return None
+        user_id = str(user_info.get('id', ''))
+        nombre = user_info.get('nombre', '')
+        rol = tipo
 
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     participante = None
-    if user_id is not None:
+    if user_id:
         try:
             cur.execute(
                 "SELECT id_participante, room_id, user_id, rol_usuario, nombre_usuario "
                 "FROM chat_participants WHERE user_id = %s AND rol_usuario = %s LIMIT 1",
-                (str(user_id), rol)
+                (user_id, rol)
             )
             participante = cur.fetchone()
         except Exception:
@@ -1591,9 +1616,9 @@ def _get_chat_participant():
     cur.close()
     conn.close()
     
-    if not participante and user_id is not None and nombre:
+    if not participante and user_id and nombre:
         return {
-            'user_id': str(user_id),
+            'user_id': user_id,
             'rol_usuario': rol,
             'nombre_usuario': nombre
         }
@@ -1603,34 +1628,62 @@ def _get_chat_participant():
 
 @app.route('/chat/contacts', methods=['GET'])
 def chat_contacts():
-    admin = get_admin_from_session(session)
-    if not admin:
+    participante = _get_chat_participant()
+    if not participante:
         return jsonify({"status": "error", "message": "No estás registrado."}), 404
-        
-    id_colegio = admin.get('id_colegio')
-    if not id_colegio:
+
+    id_colegio = None
+    admin = get_admin_from_session(session)
+    if admin:
+        id_colegio = admin.get('id_colegio')
+    else:
+        user_info = session.get('user_info')
+        if user_info:
+            id_colegio = user_info.get('id_colegio')
+
+    if not id_colegio and (not admin or admin.get('rol') != 'superadmin'):
         return jsonify({"status": "error", "message": "Sin colegio asignado."}), 403
 
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    
-    cur.execute(
-        "SELECT id_admin as id, nombre_completo, rol, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_active)) as inactive_seconds FROM administradores "
-        "WHERE id_colegio = %s",
-        (id_colegio,)
-    )
-    admins = cur.fetchall()
-    
-    cur.execute(
-        "SELECT id_profesor as id, nombre_completo, 'docente' as rol, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_active)) as inactive_seconds FROM profesores "
-        "WHERE id_colegio = %s",
-        (id_colegio,)
-    )
-    docentes = cur.fetchall()
-    
+
+    is_super = admin and admin.get('rol') == 'superadmin'
+
+    if is_super:
+        cur.execute(
+            "SELECT id_admin as id, nombre_completo, rol, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_active)) as inactive_seconds FROM administradores"
+        )
+        admins = cur.fetchall()
+        docentes = []
+        estudiantes = []
+    else:
+        cur.execute(
+            "SELECT id_admin as id, nombre_completo, rol, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_active)) as inactive_seconds FROM administradores "
+            "WHERE id_colegio = %s",
+            (id_colegio,)
+        )
+        admins = cur.fetchall()
+
+        cur.execute(
+            "SELECT id_profesor as id, nombre_completo, 'profesor' as rol, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_active)) as inactive_seconds FROM profesores "
+            "WHERE id_colegio = %s",
+            (id_colegio,)
+        )
+        docentes = cur.fetchall()
+
+        cur.execute(
+            "SELECT id_estudiante as id, nombre_completo, 'estudiante' as rol, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - CURRENT_TIMESTAMP)) as inactive_seconds FROM estudiantes "
+            "WHERE id_colegio = %s AND estado = 'activo'",
+            (id_colegio,)
+        )
+        estudiantes = cur.fetchall()
+
+    current_id = participante['user_id']
+    current_rol = participante['rol_usuario']
+
     contacts = []
     for a in admins:
-        if str(a['id']) == str(admin.get('id')) and admin.get('rol') in ('superadmin', 'admin_colegio', 'admin_lider'):
+        if str(a['id']) == current_id and current_rol == 'admin':
             continue
         inactive = a['inactive_seconds']
         is_online = inactive is not None and inactive < 30
@@ -1640,17 +1693,27 @@ def chat_contacts():
             'nombre_usuario': a['nombre_completo'],
             'is_online': is_online
         })
-        
+
     for d in docentes:
-        if str(d['id']) == str(admin.get('id')) and admin.get('rol') not in ('superadmin', 'admin_colegio', 'admin_lider'):
+        if str(d['id']) == current_id and current_rol == 'profesor':
             continue
         inactive = d['inactive_seconds']
         is_online = inactive is not None and inactive < 30
         contacts.append({
             'user_id': str(d['id']),
-            'rol_usuario': 'docente',
+            'rol_usuario': 'profesor',
             'nombre_usuario': d['nombre_completo'],
             'is_online': is_online
+        })
+
+    for e in estudiantes:
+        if str(e['id']) == current_id and current_rol == 'estudiante':
+            continue
+        contacts.append({
+            'user_id': str(e['id']),
+            'rol_usuario': 'estudiante',
+            'nombre_usuario': e['nombre_completo'],
+            'is_online': False
         })
 
     cur.close()
@@ -1809,24 +1872,32 @@ def chat_room_messages(room_id):
 
     if cleared_at:
         cur.execute(
-            "SELECT id_mensaje, sender_id, contenido, leido, fecha_registro "
-            "FROM chat_messages "
-            "WHERE room_id = %s AND fecha_registro > %s "
-            "ORDER BY fecha_registro ASC",
+            "SELECT m.id_mensaje, m.sender_id, m.contenido, m.leido, m.fecha_registro, "
+            "COALESCE(p.nombre_usuario, 'Usuario') AS sender_nombre, "
+            "COALESCE(p.rol_usuario, 'desconocido') AS sender_rol "
+            "FROM chat_messages m "
+            "LEFT JOIN chat_participants p ON m.sender_id = p.user_id AND m.room_id = p.room_id "
+            "WHERE m.room_id = %s AND m.fecha_registro > %s "
+            "ORDER BY m.fecha_registro ASC",
             (room_id, cleared_at)
         )
     else:
         cur.execute(
-            "SELECT id_mensaje, sender_id, contenido, leido, fecha_registro "
-            "FROM chat_messages "
-            "WHERE room_id = %s "
-            "ORDER BY fecha_registro ASC",
+            "SELECT m.id_mensaje, m.sender_id, m.contenido, m.leido, m.fecha_registro, "
+            "COALESCE(p.nombre_usuario, 'Usuario') AS sender_nombre, "
+            "COALESCE(p.rol_usuario, 'desconocido') AS sender_rol "
+            "FROM chat_messages m "
+            "LEFT JOIN chat_participants p ON m.sender_id = p.user_id AND m.room_id = p.room_id "
+            "WHERE m.room_id = %s "
+            "ORDER BY m.fecha_registro ASC",
             (room_id,)
         )
     messages = [
         {
             'message_id': str(m['id_mensaje']),
             'sender_id': str(m['sender_id']),
+            'sender_nombre': m['sender_nombre'],
+            'sender_rol': m['sender_rol'],
             'content': m['contenido'],
             'is_mine': str(m['sender_id']) == str(participante['user_id']),
             'read': m['leido'],
@@ -1883,6 +1954,8 @@ def chat_room_send(room_id):
         "data": {
             "message_id": str(inserted['id_mensaje']),
             "sender_id": str(participante['user_id']),
+            "sender_nombre": participante['nombre_usuario'],
+            "sender_rol": participante['rol_usuario'],
             "content": contenido,
             "created_at": inserted['fecha_registro'].isoformat(),
             "is_mine": True,
@@ -1993,6 +2066,97 @@ def chat_room_clear(room_id):
     except Exception as e:
         print(f"Error en chat_room_clear: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/chat/notifications/unread', methods=['GET'])
+def chat_notifications_unread():
+    """Return total unread message count across all rooms for the current user."""
+    participante = _get_chat_participant()
+    if not participante:
+        return jsonify({"total": 0})
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT COUNT(*) AS total
+        FROM chat_messages m
+        JOIN chat_participants p ON m.room_id = p.room_id
+        WHERE p.user_id = %s AND p.rol_usuario = %s
+          AND m.sender_id != %s
+          AND m.leido = FALSE
+    """, (participante['user_id'], participante['rol_usuario'], participante['user_id']))
+    row = cur.fetchone()
+    total = row[0] if row else 0
+    cur.close()
+    conn.close()
+    return jsonify({"total": total})
+
+
+@app.route('/chat/upload', methods=['POST'])
+def chat_upload():
+    participante = _get_chat_participant()
+    if not participante:
+        return jsonify({"status": "error", "message": "No estás registrado como participante de chat."}), 404
+
+    if 'file' not in request.files:
+        return jsonify({"status": "error", "message": "No se envió ningún archivo."}), 400
+
+    file = request.files['file']
+    room_id = request.form.get('room_id', '')
+
+    if not file.filename:
+        return jsonify({"status": "error", "message": "Archivo vacío."}), 400
+
+    if not room_id:
+        return jsonify({"status": "error", "message": "room_id es requerido."}), 400
+
+    # Verificar acceso a la sala
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT 1 FROM chat_participants WHERE room_id = %s AND user_id = %s AND rol_usuario = %s",
+        (room_id, participante['user_id'], participante['rol_usuario'])
+    )
+    if not cur.fetchone():
+        cur.close(); conn.close()
+        return jsonify({"status": "error", "message": "No tienes acceso a esta sala."}), 403
+
+    # Guardar archivo
+    original_name = secure_filename(file.filename)
+    name, ext = os.path.splitext(original_name)
+    unique_name = f"{secrets.token_hex(8)}{ext}"
+    file.save(os.path.join(UPLOAD_FOLDER_CHAT, unique_name))
+
+    # Crear mensaje con el contenido codificado como FILE:original:unico
+    contenido = f"FILE:{original_name}:{unique_name}"
+    cur.execute(
+        "INSERT INTO chat_messages (room_id, sender_id, contenido, leido) "
+        "VALUES (%s, %s, %s, TRUE) RETURNING id_mensaje, fecha_registro",
+        (room_id, participante['user_id'], contenido)
+    )
+    inserted = cur.fetchone()
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return jsonify({
+        "status": "success",
+        "message": "Archivo enviado.",
+        "data": {
+            "message_id": str(inserted['id_mensaje']),
+            "sender_id": str(participante['user_id']),
+            "sender_nombre": participante['nombre_usuario'],
+            "sender_rol": participante['rol_usuario'],
+            "content": contenido,
+            "created_at": inserted['fecha_registro'].isoformat(),
+            "is_mine": True,
+        }
+    })
+
+
+@app.route('/uploads_chat/<path:filename>')
+def servir_chat_upload(filename):
+    return send_from_directory(UPLOAD_FOLDER_CHAT, filename)
 
 
 # -------------------------
@@ -2299,7 +2463,7 @@ def request_password_post():
 def admin_estudiantes():
     if 'user_id' not in session:
         return redirect(url_for('admin_login'))
-    return render_template('administrador/estudiantes.html')
+    return redirect(url_for('admin_dashboard'))
 
 #######Permite acceder a la vista de gestión de profesores solo si el administrador ha iniciado sesión.########
 #
@@ -2307,7 +2471,7 @@ def admin_estudiantes():
 def admin_profesores():
     if 'user_id' not in session:
         return redirect(url_for('admin_login'))
-    return render_template('administrador/profesores.html')
+    return redirect(url_for('admin_dashboard'))
 
 ########Busca y devuelve los datos de un estudiante por su código, validando que el administrador esté autenticado.########
 #
@@ -2721,7 +2885,7 @@ def obtener_estudiantes():
         filt, params = colegio_filter_sql(admin)
         cur.execute(
             f"SELECT codigo_estudiante as id, nombre_completo as nombre, correo_electronico as email, grado, grupo, "
-            f"TO_CHAR(fecha_registro, 'DD/MM/YYYY') as fecha_registro, estado FROM estudiantes WHERE 1=1 {filt} "
+            f"TO_CHAR(fecha_registro, 'DD/MM/YYYY') as fecha_registro, estado FROM estudiantes WHERE 1=1 {filt} AND estado = 'activo' "
             f"ORDER BY fecha_registro DESC",
             params,
         )
@@ -2749,7 +2913,7 @@ def obtener_profesores():
         cur.execute(
             f"SELECT codigo_profesor as id, nombre_completo as nombre, correo_electronico as email, telefono, "
             f"asignaturas, TO_CHAR(fecha_registro, 'DD/MM/YYYY') as fecha_registro, estado FROM profesores "
-            f"WHERE 1=1 {filt} ORDER BY fecha_registro DESC",
+            f"WHERE 1=1 {filt} AND estado = 'activo' ORDER BY fecha_registro DESC",
             params,
         )
         profesores_list = []
@@ -2871,13 +3035,13 @@ def eliminar_estudiante():
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute(
-            "DELETE FROM estudiantes WHERE codigo_estudiante = %s AND id_colegio = %s",
+            "UPDATE estudiantes SET estado = 'inactivo' WHERE codigo_estudiante = %s AND id_colegio = %s",
             (codigo, id_colegio),
         )
         conn.commit()
         cur.close()
         conn.close()
-        return jsonify({"status": "success", "message": "Estudiante eliminado exitosamente!"})
+        return jsonify({"status": "success", "message": "Estudiante desactivado exitosamente!"})
     except Exception as e:
         print(f"Error eliminando estudiante: {e}")
         return jsonify({"status": "error", "message": "Error al eliminar."})
@@ -2895,13 +3059,13 @@ def eliminar_profesor():
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute(
-            "DELETE FROM profesores WHERE codigo_profesor = %s AND id_colegio = %s",
+            "UPDATE profesores SET estado = 'inactivo' WHERE codigo_profesor = %s AND id_colegio = %s",
             (codigo, id_colegio),
         )
         conn.commit()
         cur.close()
         conn.close()
-        return jsonify({"status": "success", "message": "Profesor eliminado exitosamente!"})
+        return jsonify({"status": "success", "message": "Profesor desactivado exitosamente!"})
     except Exception as e:
         print(f"Error eliminando profesor: {e}")
         return jsonify({"status": "error", "message": "Error al eliminar."})
@@ -3043,48 +3207,64 @@ def importar_profesores_csv():
 
 # ================= CLASE PDF CON DISEÑO PROFESIONAL DE ALTA CALIDAD =================
 class MiBoletinPDF(FPDF):
-    def __init__(self, orientation='P', unit='mm', format='A4'):
+    def __init__(self, branding=None, orientation='P', unit='mm', format='A4'):
         super().__init__(orientation, unit, format)
         self.set_left_margin(12)
         self.set_right_margin(12)
         self.set_top_margin(20)
         self.set_auto_page_break(True, margin=25)
-        # Colores institucionales (ajústalos a los tuyos)
-        self.primary = (0, 51, 102)       # Azul marino
-        self.secondary = (70, 130, 180)   # Acero
-        self.light_bg = (245, 248, 250)   # Gris muy claro
-        self.accent = (255, 215, 0)       # Dorado (detalles)
+        self.branding = branding or {}
+        self.primary = _hex_to_rgb(self.branding.get('color_primario', ''), (0, 51, 102))
+        self.secondary = _hex_to_rgb(self.branding.get('color_secundario', ''), (70, 130, 180))
+        self.light_bg = (245, 248, 250)
+        self.accent = _hex_to_rgb(self.branding.get('color_secundario', ''), (70, 130, 180))
         self.text_dark = (33, 33, 33)
+        self._nombre_institucion = self.branding.get('nombre_oficial', 'MI BOLETIN')
+        self._lema = self.branding.get('lema', '')
+        self._escudo_url = self.branding.get('escudo_url', '')
+        self._encabezado_url = self.branding.get('encabezado_pdf_url', '')
+        self._marca_agua_url = self.branding.get('marca_agua_url', '')
         
     def header(self):
-        # --- Logo (opcional) ---
-        #try:
-        #    self.image('logo.png', x=12, y=10, w=18)
-        #except:
-        #     pass
-        
-        # --- Nombre de la institución (grande, negrita) ---
-        self.set_font('helvetica', 'B', 20)
+        self.add_watermark()
+        y_start = self.get_y()
+        logo_path = None
+        if self._encabezado_url:
+            candidate = self._encabezado_url.lstrip('/')
+            logo_path = candidate
+        elif self._escudo_url:
+            candidate = self._escudo_url.lstrip('/')
+            logo_path = candidate
+
+        if logo_path:
+            try:
+                self.image(logo_path, x=12, y=y_start + 1, w=24)
+            except Exception:
+                logo_path = None
+
+        self.set_font('helvetica', 'B', 18)
         self.set_text_color(*self.primary)
-        self.cell(0, 10, 'MY_BOLETIN', 0, 1, 'C')
+        if logo_path:
+            self.cell(0, 8, self._nombre_institucion, 0, 1, 'C')
+        else:
+            self.cell(0, 10, self._nombre_institucion, 0, 1, 'C')
         
-        # --- Lema o subtítulo ---
-        self.set_font('helvetica', '', 10)
-        self.set_text_color(*self.secondary)
-        self.cell(0, 6, 'Comprometidos con la excelencia académica', 0, 1, 'C')
+        if self._lema:
+            self.set_font('helvetica', '', 9)
+            self.set_text_color(*self.secondary)
+            self.cell(0, 5, self._lema, 0, 1, 'C')
         
-        # --- Línea gruesa decorativa con color secundario ---
         self.set_draw_color(*self.secondary)
         self.set_line_width(1.2)
-        self.line(12, 30, 198, 30)
+        header_bottom = self.get_y() + 1
+        self.line(12, header_bottom, 198, header_bottom)
         
-        # --- Fecha de generación a la derecha ---
-        self.set_y(34)
+        self.set_y(header_bottom + 4)
         self.set_font('helvetica', 'I', 8)
         self.set_text_color(100, 100, 100)
         fecha_str = f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
         self.cell(0, 5, fecha_str, 0, 1, 'R')
-        self.ln(8)
+        self.ln(6)
     
     def footer(self):
         self.set_y(-22)
@@ -3100,6 +3280,16 @@ class MiBoletinPDF(FPDF):
         self.set_y(self.get_y()+3)
         self.set_font('helvetica', 'I', 7)
         self.cell(0, 4, 'Documento generado automáticamente por el sistema - Confidencial', 0, 0, 'C')
+
+    def add_watermark(self):
+        url = self._marca_agua_url
+        if not url:
+            return
+        candidate = url.lstrip('/') if url.startswith('/') else url
+        try:
+            self.image(candidate, x=55, y=110, w=100, h=100, keep_aspect_ratio=True)
+        except Exception:
+            pass
     
     def section_title(self, title):
         self.set_font('helvetica', 'B', 13)
@@ -3134,7 +3324,8 @@ class MiBoletinPDF(FPDF):
         """Recuadro para totales"""
         self.set_font('helvetica', 'B', 10)
         self.set_text_color(*self.primary)
-        self.set_fill_color(240, 248, 255)
+        r, g, b = self.primary
+        self.set_fill_color(min(r + 40, 255), min(g + 40, 255), min(b + 40, 255))
         self.set_draw_color(*self.secondary)
         self.cell(0, 10, f' {text} ', 1, 1, 'R', fill=True)
         self.ln(5)
@@ -3154,6 +3345,158 @@ class MiBoletinPDF(FPDF):
             
             
             
+def _pdf_for_colegio(id_colegio):
+    branding = {}
+    if id_colegio:
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+            row = fetch_colegio_branding_row(cur, id_colegio)
+            if row:
+                branding = dict(row)
+            cur.close()
+            conn.close()
+        except Exception:
+            pass
+    return MiBoletinPDF(branding=branding)
+
+
+@app.route("/constancia/pdf", methods=["GET"])
+def constancia_pdf():
+    if 'user_id' not in session and 'user_info' not in session:
+        return jsonify({"status": "error", "message": "Debes iniciar sesión primero."})
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+        # Determine user role and fetch info
+        user_info = session.get('user_info')
+        if user_info:
+            tipo = user_info['tipo']
+            user_id = user_info['id']
+            user_name = user_info['nombre']
+            id_colegio = user_info.get('id_colegio')
+            if tipo == 'estudiante':
+                cur.execute(
+                    "SELECT tipo_documento, numero_documento, correo_electronico, fecha_registro "
+                    "FROM estudiantes WHERE id_estudiante = %s",
+                    (user_id,)
+                )
+                row = cur.fetchone()
+                if not row:
+                    return jsonify({"status": "error", "message": "Usuario no encontrado."})
+                tipo_doc = row['tipo_documento']
+                num_doc = row['numero_documento']
+                email = row['correo_electronico']
+                fecha_reg = row['fecha_registro']
+                rol_label = 'Estudiante'
+            else:
+                cur.execute(
+                    "SELECT tipo_documento, numero_documento, correo_electronico, fecha_registro "
+                    "FROM profesores WHERE id_profesor = %s",
+                    (user_id,)
+                )
+                row = cur.fetchone()
+                if not row:
+                    return jsonify({"status": "error", "message": "Usuario no encontrado."})
+                tipo_doc = row['tipo_documento']
+                num_doc = row['numero_documento']
+                email = row['correo_electronico']
+                fecha_reg = row['fecha_registro']
+                rol_label = 'Docente'
+        else:
+            tipo = 'admin'
+            user_id = session['user_id']
+            user_name = session.get('user_name', '')
+            email = session.get('user_email', '')
+            id_colegio = session.get('id_colegio')
+            tipo_doc = 'N/A'
+            num_doc = 'N/A'
+            cur.execute(
+                "SELECT fecha_registro FROM administradores WHERE id_admin = %s",
+                (user_id,)
+            )
+            row = cur.fetchone()
+            fecha_reg = row['fecha_registro'] if row else None
+            rol_label = session.get('admin_rol', 'Administrador')
+
+        cur.close()
+        conn.close()
+
+        fecha_reg_str = fecha_reg.strftime('%d/%m/%Y') if fecha_reg else 'No disponible'
+
+        pdf = _pdf_for_colegio(id_colegio)
+        pdf.add_page()
+
+        # Title
+        pdf.set_font('helvetica', 'B', 18)
+        pdf.set_text_color(*pdf.primary)
+        pdf.cell(0, 12, 'CONSTANCIA', 0, 1, 'C')
+        pdf.ln(2)
+
+        # Decorative line
+        pdf.set_draw_color(*pdf.secondary)
+        pdf.set_line_width(0.6)
+        pdf.line(pdf.l_margin, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())
+        pdf.ln(6)
+
+        # Body
+        pdf.set_font('helvetica', '', 11)
+        pdf.set_text_color(*pdf.text_dark)
+        body = (
+            f'El suscrito hace constar que {user_name}, '
+            f'identificado con {tipo_doc} No. {num_doc}, '
+            f'es {rol_label} de esta institucion desde el {fecha_reg_str}.'
+        )
+        pdf.multi_cell(0, 7, body)
+        pdf.ln(4)
+
+        pdf.set_font('helvetica', '', 10)
+        pdf.multi_cell(0, 6, (
+            'Se expide esta constancia a solicitud del interesado '
+            'para los fines que estime convenientes.'
+        ))
+        pdf.ln(12)
+
+        # Place and date
+        hoy = datetime.now().strftime('%d/%m/%Y')
+        pdf.cell(0, 6, f'Dado a los {hoy}.', 0, 1, 'R')
+        pdf.ln(16)
+
+        # Signature line
+        pdf.cell(0, 6, '______________________________', 0, 1, 'C')
+        pdf.set_font('helvetica', 'B', 10)
+        pdf.set_text_color(*pdf.primary)
+        pdf.cell(0, 6, 'Firma del responsable', 0, 1, 'C')
+
+        buffer = _pdf_to_bytesio(pdf)
+        return send_file(
+            buffer, as_attachment=True,
+            download_name='constancia.pdf', mimetype='application/pdf'
+        )
+
+    except Exception as e:
+        print(f"Error generando constancia: {e}")
+        return jsonify({"status": "error", "message": "Error generando la constancia."})
+
+
+def _filter_report_fields(fields_param, headers, widths, db_field_names):
+    """Filter columns based on comma-separated fields param. Returns (headers, widths, selected_names) or originals if empty."""
+    if not fields_param:
+        return headers, widths, db_field_names
+    requested = [f.strip() for f in fields_param.split(',')]
+    out_headers, out_widths, out_names = [], [], []
+    for h, w, n in zip(headers, widths, db_field_names):
+        if n in requested:
+            out_headers.append(h)
+            out_widths.append(w)
+            out_names.append(n)
+    if not out_names:
+        return headers, widths, db_field_names
+    return out_headers, out_widths, out_names
+
+
 # ========================== RUTAS DE REPORTES CON NUEVO ESTILO ==========================
 #####ESTUDIANTES#####
 #
@@ -3164,6 +3507,7 @@ def reporte_estudiantes_pdf():
     
     grado = request.args.get('grado', '')
     grupo = request.args.get('grupo', '')
+    fields = request.args.get('fields', '')
 
     query = "SELECT codigo_estudiante, nombre_completo, correo_electronico, grado, grupo, estado FROM estudiantes"
     conditions = []
@@ -3189,7 +3533,7 @@ def reporte_estudiantes_pdf():
         cur.close()
         conn.close()
 
-        pdf = MiBoletinPDF()
+        pdf = _pdf_for_colegio(session.get('id_colegio'))
         pdf.add_page()
         
         # Título
@@ -3198,31 +3542,30 @@ def reporte_estudiantes_pdf():
         if grupo: titulo += f" - Grupo {grupo}"
         pdf.section_title(titulo)
         
-        # Definir anchos de columna (en mm)
-        widths = [25, 65, 51, 25, 20]
-        headers = ['Código', 'Nombre Completo', 'Email', 'Grado/Grupo', 'Estado']
+        headers_all = ['Código', 'Nombre Completo', 'Email', 'Grado/Grupo', 'Estado']
+        widths_all = [25, 65, 51, 25, 20]
+        field_names = ['codigo_estudiante', 'nombre_completo', 'correo_electronico', 'grado_grupo', 'estado']
+        headers, widths, selected = _filter_report_fields(fields, headers_all, widths_all, field_names)
+        
         pdf.table_header(headers, widths)
         
-        # Filas
         fill = False
         for e in estudiantes:
-            row = [
-                e['codigo_estudiante'],
-                e['nombre_completo'],
-                e['correo_electronico'],
-                f"{e['grado']}-{e['grupo']}",
-                e['estado'].capitalize()
-            ]
+            row_map = {
+                'codigo_estudiante': e['codigo_estudiante'],
+                'nombre_completo': e['nombre_completo'],
+                'correo_electronico': e['correo_electronico'],
+                'grado_grupo': f"{e['grado']}-{e['grupo']}",
+                'estado': e['estado'].capitalize(),
+            }
+            row = [row_map[n] for n in selected]
             pdf.table_row(row, widths, fill)
             fill = not fill
         
         pdf.total_box(f"Total estudiantes: {len(estudiantes)}")
-        pdf.add_logo('static/img/Logo.01.png', width_mm=50)   # <--- llama al método
+        pdf.add_logo('static/img/Logo.01.png', width_mm=50)
         
-        
-        pdf_bytes = pdf.output(dest='S').encode('latin-1')
-        buffer = io.BytesIO(pdf_bytes)
-        buffer.seek(0)
+        buffer = _pdf_to_bytesio(pdf)
         return send_file(buffer, as_attachment=True, download_name='reporte_estudiantes.pdf', mimetype='application/pdf')
         
     except Exception as e:
@@ -3237,6 +3580,7 @@ def reporte_profesores_pdf():
         return jsonify({"status": "error", "message": "Debes iniciar sesión primero."})
     
     try:
+        fields = request.args.get('fields', '')
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         cur.execute("SELECT codigo_profesor, nombre_completo, correo_electronico, telefono, estado FROM profesores ORDER BY nombre_completo")
@@ -3244,35 +3588,36 @@ def reporte_profesores_pdf():
         cur.close()
         conn.close()
 
-        pdf = MiBoletinPDF()
+        pdf = _pdf_for_colegio(session.get('id_colegio'))
         pdf.add_page()
         pdf.section_title("Directorio de Profesores")
         
-        widths = [26, 65, 50, 30, 15]  # Ajustados para mejor visualización
-        headers = ['Código', 'Nombre Completo', 'Email', 'Teléfono', 'Estado']
+        headers_all = ['Código', 'Nombre Completo', 'Email', 'Teléfono', 'Estado']
+        widths_all = [26, 65, 50, 30, 15]
+        field_names = ['codigo_profesor', 'nombre_completo', 'correo_electronico', 'telefono', 'estado']
+        headers, widths, selected = _filter_report_fields(fields, headers_all, widths_all, field_names)
+        
         pdf.table_header(headers, widths)
         
         fill = False
         for p in profesores:
-            telefono = str(p['telefono']) if p['telefono'] else 'N/A'
-            row = [
-                p['codigo_profesor'],
-                p['nombre_completo'],
-                p['correo_electronico'],
-                telefono,
-                p['estado'].capitalize()
-            ]
+            row_map = {
+                'codigo_profesor': p['codigo_profesor'],
+                'nombre_completo': p['nombre_completo'],
+                'correo_electronico': p['correo_electronico'],
+                'telefono': str(p['telefono']) if p['telefono'] else 'N/A',
+                'estado': p['estado'].capitalize(),
+            }
+            row = [row_map[n] for n in selected]
             pdf.table_row(row, widths, fill)
             fill = not fill
         
         pdf.total_box(f"Total profesores: {len(profesores)}")
         pdf.cell(0, 6, f"Generado por: {session.get('user_name', 'Administrador')}", 0, 1, 'L')
         
-        pdf.add_logo('static/img/Logo.01.png', width_mm=50)   # <--- llama al método
+        pdf.add_logo('static/img/Logo.01.png', width_mm=50)
         
-        pdf_bytes = pdf.output(dest='S').encode('latin-1')
-        buffer = io.BytesIO(pdf_bytes)
-        buffer.seek(0)
+        buffer = _pdf_to_bytesio(pdf)
         return send_file(buffer, as_attachment=True, download_name='directorio_profesores.pdf', mimetype='application/pdf')
         
     except Exception as e:
@@ -3301,7 +3646,7 @@ def reporte_resumen_pdf():
         cur.close()
         conn.close()
 
-        pdf = MiBoletinPDF()
+        pdf = _pdf_for_colegio(session.get('id_colegio'))
         pdf.add_page()
         pdf.section_title("Resumen General del Sistema")
         
@@ -3336,9 +3681,7 @@ def reporte_resumen_pdf():
         # Logo al final
         pdf.add_logo('static/img/Logo.01.png', width_mm=50)   # Asegúrate de renombrar el logo
         
-        pdf_bytes = pdf.output(dest='S').encode('latin-1')   # Sigue siendo latin-1 porque ya no hay caracteres especiales
-        buffer = io.BytesIO(pdf_bytes)
-        buffer.seek(0)
+        buffer = _pdf_to_bytesio(pdf)
         return send_file(buffer, as_attachment=True, download_name='resumen_sistema.pdf', mimetype='application/pdf')
         
     except Exception as e:
@@ -3353,6 +3696,7 @@ def reporte_administradores_pdf():
     if 'user_id' not in session:
         return jsonify({"status": "error", "message": "Debes iniciar sesión primero."})
     try:
+        fields = request.args.get('fields', '')
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         cur.execute("SELECT id_admin, nombre_completo, correo_electronico, email_verified FROM administradores ORDER BY id_admin")
@@ -3360,41 +3704,41 @@ def reporte_administradores_pdf():
         cur.close()
         conn.close()
 
-        pdf = MiBoletinPDF()
+        pdf = _pdf_for_colegio(session.get('id_colegio'))
         pdf.add_page()
         pdf.section_title("Directorio de Administradores")
         
-        widths = [21, 70, 65, 30]
-        headers = ['ID', 'Nombre Completo', 'Correo Electrónico', 'Verificado']
+        headers_all = ['ID', 'Nombre Completo', 'Correo Electrónico', 'Verificado']
+        widths_all = [21, 70, 65, 30]
+        field_names = ['id_admin', 'nombre_completo', 'correo_electronico', 'email_verified']
+        headers, widths, selected = _filter_report_fields(fields, headers_all, widths_all, field_names)
+        
         pdf.table_header(headers, widths)
         
         fill = False
         for a in admins:
-            row = [
-                a['id_admin'],
-                a['nombre_completo'],
-                a['correo_electronico'],
-                'Sí' if a['email_verified'] else 'No'
-            ]
+            row_map = {
+                'id_admin': str(a['id_admin']),
+                'nombre_completo': a['nombre_completo'],
+                'correo_electronico': a['correo_electronico'],
+                'email_verified': 'Sí' if a['email_verified'] else 'No',
+            }
+            row = [row_map[n] for n in selected]
             pdf.table_row(row, widths, fill)
             fill = not fill
         
         pdf.total_box(f"Total administradores: {len(admins)}")
         pdf.cell(0, 6, f"Generado por: {session.get('user_name', 'Administrador')}", 0, 1, 'L')
         pdf.add_logo('static/img/Logo.01.png', width_mm=50)
-        pdf.set_font('helvetica', 'I', 8)
         
-        
-        pdf_bytes = pdf.output(dest='S').encode('latin-1')
-        buffer = io.BytesIO(pdf_bytes)
-        buffer.seek(0)
+        buffer = _pdf_to_bytesio(pdf)
         return send_file(buffer, as_attachment=True, download_name='directorio_administradores.pdf', mimetype='application/pdf')
 
     except Exception as e:
         print(f"Error generando PDF de administradores: {e}")
         return jsonify({"status": "error", "message": "Error generando el reporte PDF."})
 
-{"message":"Error generando el reporte PDF.","status":"error"}
+
 
 
 
@@ -5551,13 +5895,13 @@ def reporte_superadmin_colegios_pdf():
         rows = cur.fetchall()
         cur.close()
         conn.close()
-        pdf = ColegioBrandedPDF({'nombre_oficial': 'MiBoletin Plataforma'})
+        pdf = MiBoletinPDF()
         pdf.add_page()
         pdf.set_font('helvetica', 'B', 14)
         pdf.cell(0, 10, 'Reporte de Colegios', 0, 1, 'C')
         pdf.ln(4)
         pdf.set_font('helvetica', 'B', 9)
-        pdf.set_fill_color(0, 51, 102)
+        pdf.set_fill_color(*pdf.primary)
         pdf.set_text_color(255, 255, 255)
         for h, w in [('Codigo', 28), ('Nombre', 55), ('Estudiantes', 22), ('Profesores', 22), ('Admins', 18), ('Estado', 20)]:
             pdf.cell(w, 8, h, 1, 0, 'C', fill=True)
@@ -5565,7 +5909,8 @@ def reporte_superadmin_colegios_pdf():
         pdf.set_font('helvetica', '', 8)
         pdf.set_text_color(0, 0, 0)
         fill = False
-        pdf.set_fill_color(240, 248, 255)
+        rp, gp, bp = pdf.primary
+        pdf.set_fill_color(min(rp + 40, 255), min(gp + 40, 255), min(bp + 40, 255))
         for r in rows:
             pdf.cell(28, 7, _pdf_sanitize(r['codigo_colegio']), 1, 0, 'L', fill=fill)
             pdf.cell(55, 7, _pdf_sanitize(r['nombre_oficial'])[:32], 1, 0, 'L', fill=fill)
@@ -5595,13 +5940,13 @@ def reporte_superadmin_superadmins_pdf():
         rows = cur.fetchall()
         cur.close()
         conn.close()
-        pdf = ColegioBrandedPDF({'nombre_oficial': 'MiBoletin Plataforma'})
+        pdf = MiBoletinPDF()
         pdf.add_page()
         pdf.set_font('helvetica', 'B', 14)
         pdf.cell(0, 10, 'Reporte de Super Administradores', 0, 1, 'C')
         pdf.ln(4)
         pdf.set_font('helvetica', 'B', 9)
-        pdf.set_fill_color(0, 51, 102)
+        pdf.set_fill_color(*pdf.primary)
         pdf.set_text_color(255, 255, 255)
         pdf.cell(15, 8, 'ID', 1, 0, 'C', fill=True)
         pdf.cell(70, 8, 'Nombre', 1, 0, 'C', fill=True)
@@ -5610,7 +5955,8 @@ def reporte_superadmin_superadmins_pdf():
         pdf.set_font('helvetica', '', 9)
         pdf.set_text_color(0, 0, 0)
         fill = False
-        pdf.set_fill_color(240, 248, 255)
+        rp, gp, bp = pdf.primary
+        pdf.set_fill_color(min(rp + 40, 255), min(gp + 40, 255), min(bp + 40, 255))
         for r in rows:
             pdf.cell(15, 7, str(r['id_admin']), 1, 0, 'C', fill=fill)
             pdf.cell(70, 7, _pdf_sanitize(r['nombre_completo'])[:38], 1, 0, 'L', fill=fill)
@@ -5642,13 +5988,13 @@ def reporte_superadmin_admins_colegio_pdf():
         rows = cur.fetchall()
         cur.close()
         conn.close()
-        pdf = ColegioBrandedPDF({'nombre_oficial': 'MiBoletin Plataforma'})
+        pdf = MiBoletinPDF()
         pdf.add_page()
         pdf.set_font('helvetica', 'B', 14)
         pdf.cell(0, 10, 'Reporte de Administradores de Colegio', 0, 1, 'C')
         pdf.ln(4)
         pdf.set_font('helvetica', 'B', 8)
-        pdf.set_fill_color(0, 51, 102)
+        pdf.set_fill_color(*pdf.primary)
         pdf.set_text_color(255, 255, 255)
         pdf.cell(15, 8, 'ID', 1, 0, 'C', fill=True)
         pdf.cell(50, 8, 'Nombre', 1, 0, 'C', fill=True)
@@ -5659,7 +6005,8 @@ def reporte_superadmin_admins_colegio_pdf():
         pdf.set_font('helvetica', '', 8)
         pdf.set_text_color(0, 0, 0)
         fill = False
-        pdf.set_fill_color(240, 248, 255)
+        rp, gp, bp = pdf.primary
+        pdf.set_fill_color(min(rp + 40, 255), min(gp + 40, 255), min(bp + 40, 255))
         for r in rows:
             pdf.cell(15, 7, str(r['id_admin']), 1, 0, 'C', fill=fill)
             pdf.cell(50, 7, _pdf_sanitize(r['nombre_completo'])[:28], 1, 0, 'L', fill=fill)
@@ -5717,6 +6064,9 @@ def admin_upload_colegio_branding():
 
 @app.route('/admin/votaciones/abrir', methods=['POST'])
 def admin_abrir_votacion():
+    admin, err = _require_admin_api()
+    if err:
+        return err
     duracion_dias = float(request.form.get('duracion_dias', 1))
     conn = get_db_connection()
     cur = conn.cursor()
@@ -5739,6 +6089,9 @@ def admin_abrir_votacion():
 
 @app.route('/admin/votaciones/cerrar', methods=['POST'])
 def admin_cerrar_votacion():
+    admin, err = _require_admin_api()
+    if err:
+        return err
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("UPDATE votacion_sesion SET activa = FALSE, cierra_en = NULL WHERE activa = TRUE")
@@ -5750,6 +6103,9 @@ def admin_cerrar_votacion():
 @app.route('/admin/candidatos/listar', methods=['GET'])
 def admin_listar_candidatos():
     """Endpoint para obtener la lista de candidatos en JSON."""
+    admin, err = _require_admin_api()
+    if err:
+        return err
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     cur.execute("SELECT id, nombre, numero_campana, cargo, imagen_url FROM candidato ORDER BY creado_en DESC")
@@ -5760,6 +6116,9 @@ def admin_listar_candidatos():
 
 @app.route('/admin/candidatos/agregar', methods=['POST'])
 def admin_agregar_candidato():
+    admin, err = _require_admin_api()
+    if err:
+        return err
     nombre = request.form.get('nombre')
     numero_campana = request.form.get('numero_campana')
     cargo = request.form.get('cargo')
@@ -5793,6 +6152,9 @@ def admin_agregar_candidato():
 
 @app.route('/admin/candidatos/editar/<int:id>', methods=['POST'])
 def admin_editar_candidato(id):
+    admin, err = _require_admin_api()
+    if err:
+        return err
     nombre = request.form.get('nombre')
     numero_campana = request.form.get('numero_campana')
     cargo = request.form.get('cargo')
@@ -5832,6 +6194,9 @@ def admin_editar_candidato(id):
 
 @app.route('/admin/candidatos/eliminar/<int:id>', methods=['POST'])
 def admin_eliminar_candidato(id):
+    admin, err = _require_admin_api()
+    if err:
+        return err
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("SELECT imagen_url FROM candidato WHERE id = %s", (id,))
@@ -5840,6 +6205,7 @@ def admin_eliminar_candidato(id):
         ruta = os.path.join(UPLOAD_FOLDER_CANDIDATOS, row[0].replace('/uploads_candidatos/', ''))
         if os.path.exists(ruta):
             os.remove(ruta)
+    cur.execute("DELETE FROM voto WHERE candidato_id = %s", (id,))
     cur.execute("DELETE FROM candidato WHERE id = %s", (id,))
     conn.commit()
     cur.close()
@@ -5848,6 +6214,9 @@ def admin_eliminar_candidato(id):
 
 @app.route('/admin/votaciones/resumen', methods=['POST'])
 def admin_resumen_votaciones():
+    admin, err = _require_admin_api()
+    if err:
+        return err
     try:
         anio = request.form.get('anio')
         if not anio or not anio.isdigit():
@@ -5871,10 +6240,10 @@ def admin_resumen_votaciones():
                 SELECT v.id AS voto_id, v.candidato_id
                 FROM voto v
                 JOIN votacion_sesion vs ON v.sesion_id = vs.id
-                WHERE EXTRACT(YEAR FROM vs.creada_en) = %s
+                WHERE EXTRACT(YEAR FROM vs.cierra_en) = %s
             ) v ON c.id = v.candidato_id
             GROUP BY c.id, c.nombre, c.numero_campana, c.imagen_url, c.cargo
-            ORDER BY c.cargo, total_votos ASC
+            ORDER BY c.cargo, total_votos DESC
         """, (anio,))
         
         resultados = cur.fetchall()
@@ -5905,6 +6274,110 @@ def admin_resumen_votaciones():
         import traceback
         traceback.print_exc()
         return jsonify({'status': 'error', 'message': 'Error al obtener el resumen'}), 500
+
+# -----------------------------------------------------------------------------
+# RUTAS PARA ESTUDIANTE (votación) - API JSON
+# -----------------------------------------------------------------------------
+
+@app.route('/api/estudiante/votacion', methods=['GET'])
+def api_estudiante_votacion():
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'estudiante':
+        return jsonify({'status': 'error', 'message': 'No autorizado'}), 401
+
+    codigo = user_info.get('codigo')
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+    cur.execute("SELECT id, activa, cierra_en FROM votacion_sesion WHERE activa = TRUE AND cierra_en > NOW() ORDER BY id LIMIT 1")
+    sesion = cur.fetchone()
+
+    if not sesion:
+        cur.close()
+        conn.close()
+        return jsonify({'status': 'success', 'activa': False, 'sesion': None})
+
+    sesion_dict = {'id': sesion['id'], 'cierra_en': sesion['cierra_en'].strftime('%d/%m/%Y %H:%M') if sesion['cierra_en'] else None}
+
+    cur.execute("SELECT id, nombre, numero_campana, cargo, imagen_url FROM candidato ORDER BY cargo, numero_campana")
+    candidatos = [dict(r) for r in cur.fetchall()]
+
+    cur.execute("SELECT id_estudiante FROM estudiantes WHERE codigo_estudiante = %s", (codigo,))
+    estudiante = cur.fetchone()
+    estudiante_id = estudiante['id_estudiante'] if estudiante else None
+
+    ya_voto = {}
+    if estudiante_id:
+        cur.execute("SELECT cargo FROM voto WHERE estudiante_id = %s AND sesion_id = %s", (estudiante_id, sesion['id']))
+        for row in cur.fetchall():
+            ya_voto[row['cargo']] = True
+
+    cur.close()
+    conn.close()
+
+    return jsonify({
+        'status': 'success',
+        'activa': True,
+        'sesion': sesion_dict,
+        'candidatos': candidatos,
+        'ya_voto': ya_voto,
+        'estudiante_id': estudiante_id
+    })
+
+
+@app.route('/api/estudiante/votar', methods=['POST'])
+def api_estudiante_votar():
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'estudiante':
+        return jsonify({'status': 'error', 'message': 'No autorizado'}), 401
+
+    data = request.get_json()
+    candidato_id = data.get('candidato_id')
+    cargo = data.get('cargo')
+
+    if not candidato_id or not cargo:
+        return jsonify({'status': 'error', 'message': 'Faltan datos'}), 400
+
+    codigo = user_info.get('codigo')
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("SELECT id_estudiante FROM estudiantes WHERE codigo_estudiante = %s", (codigo,))
+    estudiante = cur.fetchone()
+    if not estudiante:
+        cur.close()
+        conn.close()
+        return jsonify({'status': 'error', 'message': 'Estudiante no encontrado'}), 400
+
+    estudiante_id = estudiante[0]
+
+    cur.execute("SELECT id FROM votacion_sesion WHERE activa = TRUE AND cierra_en > NOW() ORDER BY id LIMIT 1")
+    sesion = cur.fetchone()
+    if not sesion:
+        cur.close()
+        conn.close()
+        return jsonify({'status': 'error', 'message': 'No hay votación activa'}), 400
+
+    sesion_id = sesion[0]
+
+    cur.execute("SELECT id FROM voto WHERE estudiante_id = %s AND cargo = %s AND sesion_id = %s",
+                (estudiante_id, cargo, sesion_id))
+    if cur.fetchone():
+        cur.close()
+        conn.close()
+        return jsonify({'status': 'error', 'message': f'Ya has votado para {cargo}'}), 400
+
+    cur.execute(
+        "INSERT INTO voto (estudiante_id, candidato_id, cargo, sesion_id) VALUES (%s, %s, %s, %s)",
+        (estudiante_id, candidato_id, cargo, sesion_id)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return jsonify({'status': 'success', 'message': 'Voto registrado exitosamente'})
+
 
 # -----------------------------------------------------------------------------
 # RUTAS PARA DOCENTE (votación) - CON REDIRECCIONES Y FLASH

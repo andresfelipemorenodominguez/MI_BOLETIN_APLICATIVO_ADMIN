@@ -9,15 +9,25 @@
         estudiante: 'Estudiante',
     };
 
+    function hexToRgb(hex) {
+        const h = hex.replace('#', '');
+        return { r: parseInt(h.slice(0,2), 16), g: parseInt(h.slice(2,4), 16), b: parseInt(h.slice(4,6), 16) };
+    }
+
     function applyCssVars(data) {
         const root = document.documentElement;
         if (data.color_primario) {
             root.style.setProperty('--brand-primary', data.color_primario);
             root.style.setProperty('--primary', data.color_primario);
         }
-        if (data.color_secundario) {
-            root.style.setProperty('--brand-secondary', data.color_secundario);
-            root.style.setProperty('--primary-light', data.color_secundario);
+        const accentHex = data.color_secundario || data.color_primario || '#4A90E2';
+        if (accentHex) {
+            root.style.setProperty('--brand-secondary', accentHex);
+            root.style.setProperty('--primary-light', accentHex);
+            root.style.setProperty('--accent', accentHex);
+            const { r, g, b } = hexToRgb(accentHex);
+            root.style.setProperty('--accent-bg', `rgba(${r},${g},${b},0.10)`);
+            root.style.setProperty('--accent-bg-hov', `rgba(${r},${g},${b},0.06)`);
         }
     }
 
@@ -77,5 +87,5 @@
         loadBranding();
     }
 
-    window.PanelBranding = { reload: loadBranding, apply: applySidebar };
+    window.PanelBranding = { reload: loadBranding, apply: applySidebar, applyCss: applyCssVars };
 })();

@@ -70,6 +70,9 @@ def ensure_multicolegio_schema(get_db_connection, superadmin_email=None, superad
         cur.execute("ALTER TABLE administradores ADD COLUMN rol VARCHAR(20) DEFAULT 'admin_colegio'")
     if not _column_exists(cur, 'administradores', 'id_colegio'):
         cur.execute("ALTER TABLE administradores ADD COLUMN id_colegio INTEGER REFERENCES colegios(id_colegio) ON DELETE SET NULL")
+    if not _column_exists(cur, 'administradores', 'fecha_registro'):
+        cur.execute("ALTER TABLE administradores ADD COLUMN fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+        cur.execute("UPDATE administradores SET fecha_registro = CURRENT_TIMESTAMP WHERE fecha_registro IS NULL")
 
     for table in ('estudiantes', 'profesores', 'grupos', 'materia', 'periodo_academico'):
         if not _column_exists(cur, table, 'id_colegio'):

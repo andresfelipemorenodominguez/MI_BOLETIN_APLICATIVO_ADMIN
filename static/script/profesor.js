@@ -11,7 +11,6 @@ ProfilePanel.init({
   },
 });
 
-const PROF_SECTION_KEY = 'miboletin_last_section_profesor';
 
 function setActiveNav(section) {
   navLinks.forEach(link => link.classList.toggle('active', link.dataset.section === section));
@@ -28,8 +27,7 @@ navLinks.forEach(link => {
 });
 
 async function renderSection(section) {
-  // Persistir sección para restaurar en F5
-  try { localStorage.setItem(PROF_SECTION_KEY, section); } catch (_) {}
+
   // Votaciones usa una section HTML propia, no el panel-content dinámico
   const votacionesSection = document.getElementById('votaciones');
   const panelContent = document.getElementById('panel-content');
@@ -52,6 +50,7 @@ async function renderSection(section) {
     case 'agenda':     await renderAgenda();     break;
     case 'asistencia': await renderAsistencia(); break;
     case 'material':   await renderMaterial();   break;
+    case 'chat':       renderChat();             break;
     default:           renderInicio();
   }
 }
@@ -108,6 +107,101 @@ window.navToProf = function (sec) {
   setActiveNav(sec);
   renderSection(sec);
 };
+
+
+// ══════════════════════════════════════════════════════
+//  CHAT INSTITUCIONAL
+// ══════════════════════════════════════════════════════
+
+let chatManagerProf = null;
+
+function renderChat() {
+  content.innerHTML = `
+    <div id="chat-section" class="chat-app" style="height:calc(100vh - 120px);min-height:500px;">
+      <div class="chat-sidebar">
+        <div class="chat-sidebar-header">
+          <h2 class="chat-sidebar-title"><i class="fas fa-comments"></i> Chats</h2>
+          <div class="chat-search-box">
+            <i class="fas fa-search chat-search-icon"></i>
+            <input type="text" class="chat-search-input" id="chat-search" placeholder="Buscar contacto..." autocomplete="off">
+          </div>
+          <div class="chat-filter-row">
+            <label for="chat-filter">Ver:</label>
+            <select id="chat-filter" class="chat-filter-select">
+              <option value="all">Todos</option>
+              <option value="admin">Solo admins</option>
+              <option value="profesor">Solo docentes</option>
+              <option value="estudiante">Solo estudiantes</option>
+            </select>
+          </div>
+        </div>
+        <div class="chat-contact-list" id="chat-contact-list">
+          <div style="padding:30px 20px;text-align:center;color:var(--gray-500);">
+            <i class="fas fa-circle-notch fa-spin" style="font-size:24px;margin-bottom:12px;"></i>
+            <p style="font-size:14px;">Cargando chats...</p>
+          </div>
+        </div>
+      </div>
+      <div class="chat-conversation">
+        <div class="chat-conversation-placeholder" id="chat-placeholder">
+          <div class="chat-placeholder-content">
+            <div class="chat-placeholder-icon"><i class="fas fa-comments"></i></div>
+            <h3>Tus mensajes</h3>
+            <p>Selecciona una conversación para empezar a chatear</p>
+          </div>
+        </div>
+        <div class="chat-conversation-active" id="chat-active" style="display:none;">
+  <div class="chat-conversation-header">
+    <button id="chat-back-btn" class="chat-back-btn" title="Volver a contactos"><i class="fas fa-arrow-left"></i></button>
+    <div class="chat-conversation-user">
+              <div class="chat-avatar" id="chat-active-avatar">
+                <span class="chat-avatar-initials" id="chat-active-initials">JD</span>
+              </div>
+              <div>
+                <h4 class="chat-conversation-name" id="chat-active-name">Juan Pérez</h4>
+                <div class="chat-status-row">
+                  <span class="chat-status-dot" id="chat-status-dot"></span>
+                  <span class="chat-conversation-status" id="chat-active-status">Desconectado</span>
+                </div>
+              </div>
+            </div>
+            <div class="chat-header-menu" style="position:relative;">
+              <button id="chat-menu-btn" class="chat-menu-btn" title="Opciones">
+                <i class="fas fa-ellipsis-v"></i>
+              </button>
+              <div class="chat-menu-dropdown" id="chat-menu-dropdown">
+                <button id="chat-clear-btn" class="chat-menu-item chat-menu-item--danger">
+                  <i class="fas fa-trash-alt"></i> Vaciar chat
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="chat-messages" id="chat-messages"></div>
+          <div class="chat-input-area">
+            <div id="chat-emoji-picker" style="display:none;flex-wrap:wrap;gap:2px;flex-direction:row;"></div>
+            <div class="chat-input-wrapper">
+              <button id="chat-emoji-btn" title="Emojis" class="chat-emoji-btn">
+                <i class="far fa-smile"></i>
+              </button>
+              <button id="chat-file-btn" title="Adjuntar archivo" class="chat-emoji-btn" style="margin-left:2px;">
+                <i class="fas fa-paperclip"></i>
+              </button>
+              <input type="file" id="chat-file-input" style="display:none" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.zip,.rar,.txt">
+              <input type="text" class="chat-input" id="chat-msg-input" placeholder="Escribe un mensaje..." autocomplete="off">
+              <button class="chat-send-btn" id="chat-send-btn" title="Enviar">
+                <i class="fas fa-paper-plane"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  if (chatManagerProf) chatManagerProf.destroy();
+  chatManagerProf = new ChatManager();
+  chatManagerProf.refreshElements();
+  chatManagerProf.init();
+}
 
 
 // ══════════════════════════════════════════════════════
@@ -1208,22 +1302,5 @@ window.cambiarEstado=async function(id_agenda,estado){
   renderCalendario();
 };
 
-// ── Inicialización — restaura última sección visitada o va a inicio ──
-(function restoreSection() {
-  try {
-    const saved = localStorage.getItem(PROF_SECTION_KEY);
-    if (saved) {
-      // votaciones se valida diferente (es un <section> HTML, no el panel-content)
-      const isVotaciones = saved === 'votaciones';
-      const exists = isVotaciones
-        ? !!document.getElementById('votaciones')
-        : navLinks.some(l => l.dataset.section === saved);
-      if (exists) {
-        setActiveNav(saved);
-        renderSection(saved);
-        return;
-      }
-    }
-  } catch (_) {}
-  renderInicio(); // fallback
-})();
+// ── Inicio — siempre va a inicio ──
+renderInicio();

@@ -164,10 +164,10 @@
                     </a>
                 </li>
 
-                <li class="nav-item nav-section-label admin-colegio-only">
+                <li class="nav-item nav-section-label">
                     <span class="text-sm text-gray-500">Comunicación</span>
                 </li>
-                <li class="nav-item admin-colegio-only">
+                <li class="nav-item">
                     <a href="#" class="nav-link" data-section="chat-section">
                         <i class="fas fa-comments nav-icon"></i>
                         <span class="nav-text">Chat</span>
@@ -1106,7 +1106,6 @@
                     <h3><i class="fas fa-user-graduate"></i> Reporte de Estudiantes</h3>
                     <p style="color:var(--gray-600);margin-bottom:16px;">Descarga la lista de estudiantes en PDF. Puedes filtrar por grado y grupo.</p>
                     <div class="mgmt-grid" style="margin-bottom:16px;">
-                        <!-- Filtro por grado para el reporte de estudiantes -->
                         <div class="form-group">
                             <label class="form-label">Grado (opcional)</label>
                             <select id="filtro-grado-reporte" class="form-select">
@@ -1119,7 +1118,6 @@
                                 <option value="11">11°</option>
                             </select>
                         </div>
-                        <!-- Filtro por grupo para el reporte de estudiantes -->
                         <div class="form-group">
                             <label class="form-label">Grupo (opcional)</label>
                             <select id="filtro-grupo-reporte" class="form-select">
@@ -1131,30 +1129,68 @@
                             </select>
                         </div>
                     </div>
-                    <!-- Botón para descargar reporte de estudiantes filtrado -->
-                    <button class="btn-primary" onclick="descargarReporteEstudiantes()">
-                        <i class="fas fa-file-pdf"></i> Descargar PDF Estudiantes
-                    </button>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <div class="report-fields-wrapper">
+                            <button type="button" class="btn-secondary report-fields-btn" data-target="est-fields">
+                                <i class="fas fa-list"></i> Campos
+                            </button>
+                            <div id="est-fields" class="report-fields-panel" style="display:none;">
+                                <label><input type="checkbox" value="codigo_estudiante" checked> Código</label>
+                                <label><input type="checkbox" value="nombre_completo" checked> Nombre</label>
+                                <label><input type="checkbox" value="correo_electronico" checked> Email</label>
+                                <label><input type="checkbox" value="grado_grupo" checked> Grado/Grupo</label>
+                                <label><input type="checkbox" value="estado" checked> Estado</label>
+                            </div>
+                        </div>
+                        <button class="btn-primary" onclick="descargarReporteEstudiantes()">
+                            <i class="fas fa-file-pdf"></i> Descargar PDF
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Reporte Profesores -->
                 <div class="mgmt-card">
                     <h3><i class="fas fa-chalkboard-teacher"></i> Reporte de Profesores</h3>
                     <p style="color:var(--gray-600);margin-bottom:16px;">Descarga el directorio completo de profesores activos en PDF.</p>
-                    <!-- Botón para descargar reporte completo de profesores -->
-                    <button class="btn-primary" onclick="window.location.href='/reporte/profesores/pdf'">
-                        <i class="fas fa-file-pdf"></i> Descargar PDF Profesores
-                    </button>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <div class="report-fields-wrapper">
+                            <button type="button" class="btn-secondary report-fields-btn" data-target="prof-fields">
+                                <i class="fas fa-list"></i> Campos
+                            </button>
+                            <div id="prof-fields" class="report-fields-panel" style="display:none;">
+                                <label><input type="checkbox" value="codigo_profesor" checked> Código</label>
+                                <label><input type="checkbox" value="nombre_completo" checked> Nombre</label>
+                                <label><input type="checkbox" value="correo_electronico" checked> Email</label>
+                                <label><input type="checkbox" value="telefono" checked> Teléfono</label>
+                                <label><input type="checkbox" value="estado" checked> Estado</label>
+                            </div>
+                        </div>
+                        <button class="btn-primary" onclick="descargarReporteProfesores()">
+                            <i class="fas fa-file-pdf"></i> Descargar PDF
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Reporte Administradores -->
                 <div class="mgmt-card">
                     <h3><i class="fas fa-user-shield"></i> Reporte de Administradores</h3>
                     <p style="color:var(--gray-600);margin-bottom:16px;">Descarga el listado de administradores registrados en el sistema.</p>
-                    <!-- Botón para descargar reporte de administradores -->
-                    <button class="btn-primary" onclick="window.location.href='/reporte/administradores/pdf'">
-                        <i class="fas fa-file-pdf"></i> Descargar PDF Administradores
-                    </button>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <div class="report-fields-wrapper">
+                            <button type="button" class="btn-secondary report-fields-btn" data-target="admin-fields">
+                                <i class="fas fa-list"></i> Campos
+                            </button>
+                            <div id="admin-fields" class="report-fields-panel" style="display:none;">
+                                <label><input type="checkbox" value="id_admin" checked> ID</label>
+                                <label><input type="checkbox" value="nombre_completo" checked> Nombre</label>
+                                <label><input type="checkbox" value="correo_electronico" checked> Email</label>
+                                <label><input type="checkbox" value="email_verified" checked> Verificado</label>
+                            </div>
+                        </div>
+                        <button class="btn-primary" onclick="descargarReporteAdministradores()">
+                            <i class="fas fa-file-pdf"></i> Descargar PDF
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Reporte Resumen -->
@@ -1400,7 +1436,7 @@
         </section>
 
         <!-- ── CHAT ── -->
-        <section id="chat-section" class="content-section admin-colegio-only">
+        <section id="chat-section" class="content-section">
             <div class="chat-app">
                 <!-- PANEL IZQUIERDO: Lista de contactos -->
                 <div class="chat-sidebar">
@@ -1412,11 +1448,12 @@
                         </div>
                         <div class="chat-filter-row">
                             <label for="chat-filter">Ver:</label>
-                            <select id="chat-filter" class="chat-filter-select">
-                                <option value="all">Todos</option>
-                                <option value="docente">Solo docentes</option>
-                                <option value="admin">Solo admins</option>
-                            </select>
+<select id="chat-filter" class="chat-filter-select">
+    <option value="all">Todos</option>
+    <option value="profesor">Solo docentes</option>
+    <option value="admin">Solo admins</option>
+    <option value="estudiante">Solo estudiantes</option>
+</select>
                         </div>
                     </div>
                     <div class="chat-contact-list" id="chat-contact-list">
@@ -1439,8 +1476,9 @@
                         </div>
                     </div>
                     <div class="chat-conversation-active" id="chat-active" style="display:none;">
-                        <div class="chat-conversation-header">
-                            <div class="chat-conversation-user">
+                    <div class="chat-conversation-header">
+                        <button id="chat-back-btn" class="chat-back-btn" title="Volver a contactos"><i class="fas fa-arrow-left"></i></button>
+                        <div class="chat-conversation-user">
                                 <div class="chat-avatar" id="chat-active-avatar">
                                     <span class="chat-avatar-initials" id="chat-active-initials">JD</span>
                                 </div>
@@ -1477,6 +1515,10 @@
                                 <button id="chat-emoji-btn" title="Emojis" class="chat-emoji-btn">
                                     <i class="far fa-smile"></i>
                                 </button>
+                                <button id="chat-file-btn" title="Adjuntar archivo" class="chat-emoji-btn" style="margin-left:2px;">
+                                    <i class="fas fa-paperclip"></i>
+                                </button>
+                                <input type="file" id="chat-file-input" style="display:none" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.zip,.rar,.txt">
                                 <input type="text" class="chat-input" id="chat-msg-input" placeholder="Escribe un mensaje..." autocomplete="off">
                                 <button class="chat-send-btn" id="chat-send-btn" title="Enviar">
                                     <i class="fas fa-paper-plane"></i>
@@ -1659,6 +1701,30 @@
             setTimeout(() => flashDiv.remove(), 3000);
         }
 
+        // --- Eliminar candidato (handler para event delegation) ---
+        async function eliminarCandidatoHandler(e) {
+            const btn = e.target.closest('.btn-eliminar-candidato');
+            if (!btn) return;
+            const id = btn.getAttribute('data-candidato-id');
+            if (!id) return;
+            if (!confirm('¿Estás seguro de eliminar a este candidato? Esta acción no se puede deshacer.')) return;
+            try {
+                const response = await fetch(`/admin/candidatos/eliminar/${id}`, {
+                    method: 'POST',
+                });
+                const result = await response.json();
+                if (result.status === 'success') {
+                    mostrarMensaje(result.message, 'success');
+                    cargarCandidatos();
+                } else {
+                    mostrarMensaje(result.message || 'Error al eliminar', 'error');
+                }
+            } catch (error) {
+                console.error('Error al eliminar candidato:', error);
+                mostrarMensaje('Error de conexión al eliminar', 'error');
+            }
+        }
+
         // --- Cargar candidatos ---
         async function cargarCandidatos() {
             try {
@@ -1676,43 +1742,31 @@
                     }
                     data.candidatos.forEach(c => {
                         const card = document.createElement('div');
-                        card.className = 'candidate-item';
-                        card.style.border = '1px solid #ccc';
-                        card.style.padding = '10px';
+                        card.className = 'candidato-card';
                         card.style.width = '200px';
-                        card.setAttribute('data-id', c.id);
-                        const imagenHtml = c.imagen_url ? `<img src="${c.imagen_url}" style="max-width:100px;">` : '';
+                        card.style.textAlign = 'center';
+                        card.style.padding = '16px';
+                        card.style.border = '1px solid var(--gray-200)';
+                        card.style.borderRadius = 'var(--border-radius-lg)';
+                        card.style.background = 'var(--card-bg)';
+                        const fotoHtml = c.imagen_url
+                            ? `<img src="${c.imagen_url}" style="width:80px;height:80px;object-fit:cover;border-radius:50%;margin-bottom:10px;border:2px solid var(--gray-200);">`
+                            : `<div style="width:80px;height:80px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;margin:0 auto 10px;font-size:28px;color:#fff;"><i class="fas fa-user"></i></div>`;
                         card.innerHTML = `
-                            ${imagenHtml}
-                            <p><strong>${escapeHtml(c.nombre)}</strong><br>N° ${escapeHtml(c.numero_campana)}<br>${escapeHtml(c.cargo)}</p>
-                            <button class="btn-eliminar-candidato" data-id="${c.id}" style="background:#dc3545; color:white; border:none; padding:5px 10px; cursor:pointer;">Eliminar</button>
+                            ${fotoHtml}
+                            <p style="font-weight:700;font-size:13px;margin:0 0 3px;">${escapeHtml(c.nombre)}</p>
+                            <p style="font-size:11px;color:var(--gray-500);margin:0 0 6px;">N° ${escapeHtml(c.numero_campana)}</p>
+                            <span class="tipo-chip" style="display:inline-block;margin-bottom:10px;">${escapeHtml(c.cargo)}</span>
+                            <br>
+                            <button class="btn-eliminar-candidato" data-candidato-id="${c.id}" style="background:#dc3545;color:#fff;border:none;padding:5px 14px;border-radius:6px;cursor:pointer;font-size:12px;">
+                                <i class="fas fa-trash"></i> Eliminar
+                            </button>
                         `;
                         contenedor.appendChild(card);
                     });
-                    // Agregar eventos a botones eliminar
-                    document.querySelectorAll('.btn-eliminar-candidato').forEach(btn => {
-                        btn.addEventListener('click', async function(e) {
-                            const id = this.getAttribute('data-id');
-                            if (confirm('¿Eliminar este candidato?')) {
-                                try {
-                                    const response = await fetch(`/admin/candidatos/eliminar/${id}`, {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({})
-                                    });
-                                    const result = await response.json();
-                                    if (result.status === 'success') {
-                                        mostrarMensaje(result.message, 'success');
-                                        cargarCandidatos(); // Recargar lista
-                                    } else {
-                                        mostrarMensaje(result.message, 'error');
-                                    }
-                                } catch (error) {
-                                    mostrarMensaje('Error al eliminar', 'error');
-                                }
-                            }
-                        });
-                    });
+                    // Event delegation: un solo listener en el contenedor
+                    contenedor.removeEventListener('click', eliminarCandidatoHandler);
+                    contenedor.addEventListener('click', eliminarCandidatoHandler);
                 } else {
                     mostrarMensaje('Error al cargar candidatos', 'error');
                 }
@@ -2159,6 +2213,44 @@ html.dark-mode .profile-action-btn.btn-destructive:hover {
     border-color: var(--error-dark);
     color: #fff;
 }
+
+/* ── Report field selectors ── */
+.report-fields-wrapper {
+    position: relative;
+}
+.report-fields-panel {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    z-index: 100;
+    background: #fff;
+    border: 1px solid var(--gray-300);
+    border-radius: 8px;
+    padding: 10px 14px;
+    min-width: 170px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+}
+html.dark-mode .report-fields-panel {
+    background: var(--dm-surface);
+    border-color: var(--dm-border);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+}
+.report-fields-panel label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    padding: 4px 0;
+    cursor: pointer;
+    color: var(--gray-700);
+    white-space: nowrap;
+}
+html.dark-mode .report-fields-panel label {
+    color: var(--dm-text);
+}
+.report-fields-panel input[type="checkbox"] {
+    accent-color: var(--accent);
+}
 </style>
 
 <div class="modal-overlay" id="profile-modal-overlay">
@@ -2242,6 +2334,10 @@ html.dark-mode .profile-action-btn.btn-destructive:hover {
 
                         <button type="button" class="profile-action-btn" id="open-password-modal">
                             <i class="fas fa-key"></i> Cambiar contraseña
+                        </button>
+
+                        <button type="button" class="profile-action-btn" onclick="window.location.href='/constancia/pdf'">
+                            <i class="fas fa-file-certificate"></i> Descargar Constancia
                         </button>
 
                         <button type="button" class="profile-action-btn btn-logout" onclick="window.location.href='/logout'">
@@ -2576,17 +2672,60 @@ html.dark-mode .profile-action-btn.btn-destructive:hover {
 <!-- Scripts para la funcionalidad del dashboard administrativo -->
 <script src="{{ url_for('static', filename='script/panel-branding.js') }}"></script>
 <script src="{{ url_for('static', filename='script/profile-panel.js') }}"></script>
+<script src="{{ url_for('static', filename='script/chat-shared.js') }}"></script>
 <script src="{{ url_for('static', filename='script/dashboard.js') }}"></script>
 <script>
-// Función para descargar reportes de estudiantes con filtros aplicados
+function getCheckedFields(panelId) {
+    const checks = document.querySelectorAll('#' + panelId + ' input[type="checkbox"]:checked');
+    return Array.from(checks).map(c => c.value).join(',');
+}
+
+function toggleFieldsPanel(btn) {
+    const targetId = btn.getAttribute('data-target');
+    const panel = document.getElementById(targetId);
+    if (!panel) return;
+    const isVisible = panel.style.display !== 'none';
+    document.querySelectorAll('.report-fields-panel').forEach(p => p.style.display = 'none');
+    panel.style.display = isVisible ? 'none' : 'block';
+}
+
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.report-fields-wrapper')) {
+        document.querySelectorAll('.report-fields-panel').forEach(p => p.style.display = 'none');
+    }
+});
+
+document.querySelectorAll('.report-fields-btn').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        toggleFieldsPanel(this);
+    });
+});
+
 window.descargarReporteEstudiantes = function() {
     const grado = document.getElementById('filtro-grado-reporte')?.value || '';
     const grupo = document.getElementById('filtro-grupo-reporte')?.value || '';
+    const fields = getCheckedFields('est-fields');
     let url = '/reporte/estudiantes/pdf';
     const params = [];
     if (grado) params.push('grado=' + encodeURIComponent(grado));
     if (grupo) params.push('grupo=' + encodeURIComponent(grupo));
+    if (fields) params.push('fields=' + encodeURIComponent(fields));
     if (params.length) url += '?' + params.join('&');
+    window.location.href = url;
+};
+
+window.descargarReporteProfesores = function() {
+    const fields = getCheckedFields('prof-fields');
+    let url = '/reporte/profesores/pdf';
+    if (fields) url += '?fields=' + encodeURIComponent(fields);
+    window.location.href = url;
+};
+
+window.descargarReporteAdministradores = function() {
+    const fields = getCheckedFields('admin-fields');
+    let url = '/reporte/administradores/pdf';
+    if (fields) url += '?fields=' + encodeURIComponent(fields);
     window.location.href = url;
 };
 </script>

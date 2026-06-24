@@ -7934,6 +7934,111 @@ html.dark-mode #chat-emoji-picker button:hover {
     background: var(--dm-border);
 }
 
+/* ── Responsive: mobile chat ── */
+.chat-back-btn {
+    display: none;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: var(--gray-100);
+    cursor: pointer;
+    border-radius: 50%;
+    color: var(--gray-600);
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+    transition: background 0.15s;
+}
+.chat-back-btn:hover {
+    background: var(--gray-200);
+}
+html.dark-mode .chat-back-btn {
+    background: var(--dm-surface2);
+    color: var(--dm-text-muted);
+}
+html.dark-mode .chat-back-btn:hover {
+    background: var(--dm-border);
+}
+
+@media (max-width: 768px) {
+    #chat-section.active {
+        height: calc(100vh - 40px);
+        padding: 0 !important;
+    }
+
+    .chat-app {
+        grid-template-columns: 1fr;
+        border-radius: 12px;
+    }
+
+    .chat-sidebar {
+        grid-row: 1;
+        grid-column: 1;
+    }
+
+    .chat-conversation {
+        grid-row: 1;
+        grid-column: 1;
+    }
+
+    .chat-app.chat-mobile-sidebar .chat-sidebar {
+        display: flex;
+    }
+    .chat-app.chat-mobile-sidebar .chat-conversation {
+        display: none;
+    }
+
+    .chat-app.chat-mobile-conversation .chat-sidebar {
+        display: none;
+    }
+    .chat-app.chat-mobile-conversation .chat-conversation {
+        display: flex;
+    }
+
+    .chat-back-btn {
+        display: flex;
+    }
+
+    .chat-conversation-header {
+        padding: 10px 14px;
+    }
+
+    .chat-messages {
+        padding: 12px 14px;
+    }
+
+    .chat-input-area {
+        padding: 8px 12px;
+    }
+
+    .chat-bubble {
+        max-width: 85%;
+    }
+
+    .chat-bubble-row {
+        max-width: 85% !important;
+    }
+
+    .chat-contact-item {
+        padding: 10px 12px;
+    }
+
+    .chat-sidebar-header {
+        padding: 14px 14px 10px;
+    }
+
+    .chat-conversation-name {
+        font-size: 14px;
+    }
+
+    /* archivos adjuntos en mobile */
+    .chat-file-preview img {
+        max-width: 140px !important;
+        max-height: 140px !important;
+    }
+}
+
 /* ═══════════════════════════════════════════════════════════
    SIDEBAR FOOTER — compacto, sin sombra, sin borde de avatar
    ═══════════════════════════════════════════════════════════ */

@@ -91,6 +91,26 @@
                         <span class="nav-text">Agenda</span>
                     </a>
                 </li>
+
+                <li class="nav-item nav-section-label">
+                    <span class="text-sm text-gray-500">Comunicación</span>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" data-section="chat">
+                        <i class="fas fa-comments nav-icon"></i>
+                        <span class="nav-text">Chat</span>
+                    </a>
+                </li>
+
+                <li class="nav-item nav-section-label">
+                    <span class="text-sm text-gray-500">Participación</span>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" data-section="votaciones">
+                        <i class="fas fa-vote-yea nav-icon"></i>
+                        <span class="nav-text">Votaciones</span>
+                    </a>
+                </li>
             </ul>
         </nav>
 
@@ -117,121 +137,176 @@
     </main>
 </div>
 
-<!-- Modal perfil -->
+<!-- Modal perfil — split professional layout -->
+<style>
+#profile-modal-overlay { z-index: 1000; }
+#profile-modal {
+    position: relative;
+    max-width: 760px;
+    width: 95%;
+    padding: 0;
+    border-radius: 16px;
+    border: 1px solid var(--gray-200);
+    box-shadow: 0 16px 48px rgba(0,0,0,0.12);
+    background: #fff;
+    overflow: visible;
+    max-height: 92vh;
+}
+html.dark-mode #profile-modal {
+    background: var(--dm-surface);
+    border-color: var(--dm-border);
+    box-shadow: 0 16px 48px rgba(0,0,0,0.45);
+}
+#close-profile-modal {
+    position: absolute;
+    top: 14px; right: 14px;
+    z-index: 10;
+    background: var(--gray-100);
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    border: none;
+    color: var(--gray-500);
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.15s, color 0.15s;
+}
+html.dark-mode #close-profile-modal { background: var(--dm-surface2); color: var(--dm-text-muted); }
+#close-profile-modal:hover { background: var(--error); color: #fff; }
+.profile-split-body  { padding:0; margin:0; overflow:hidden; border-radius:16px; max-height:92vh; overflow-y:auto; }
+.profile-split-grid  { display:grid; grid-template-columns: 1fr 240px; }
+@media(max-width:680px){ .profile-split-grid { display:flex; flex-direction:column-reverse; } }
+.profile-left-col    { padding:28px; border-right:1px solid var(--gray-200); display:flex; flex-direction:column; background:#fff; overflow-y:auto; }
+html.dark-mode .profile-left-col { background:var(--dm-surface); border-right-color:var(--dm-border); }
+.profile-title-custom{ margin:0 0 20px!important; font-size:17px; font-weight:700; color:var(--accent); display:flex; align-items:center; gap:8px; background:transparent!important; border:none!important; }
+.profile-right-col   { display:flex; flex-direction:column; align-items:center; padding:24px 18px; background:var(--gray-50); border-left:1px solid var(--gray-200); }
+html.dark-mode .profile-right-col { background:var(--dm-surface2); border-left-color:var(--dm-border); }
+.profile-avatar-img  { width:80px; height:80px; border-radius:50%; object-fit:cover; border:3px solid var(--gray-200); display:block; }
+html.dark-mode .profile-avatar-img { border-color:var(--dm-border); }
+.profile-info-name   { margin:10px 0 2px; font-size:.92rem; font-weight:700; color:var(--gray-800); text-align:center; }
+html.dark-mode .profile-info-name  { color:var(--dm-text); }
+.profile-info-email  { margin:0 0 3px; color:var(--gray-500); font-size:.76rem; text-align:center; }
+html.dark-mode .profile-info-email { color:var(--dm-text-muted); }
+.profile-info-role   { margin:0; color:var(--accent); font-size:.73rem; font-weight:600; text-align:center; }
+.profile-dark-mode-row { width:100%; display:flex; justify-content:space-between; align-items:center; padding:10px 0; margin:12px 0; border-top:1px solid var(--gray-200); border-bottom:1px solid var(--gray-200); }
+html.dark-mode .profile-dark-mode-row { border-color:var(--dm-border); }
+.profile-dark-mode-label { font-size:.82rem; font-weight:500; color:var(--gray-700); display:flex; align-items:center; gap:6px; }
+html.dark-mode .profile-dark-mode-label { color:var(--dm-text-muted); }
+.profile-action-btn.btn-logout { color:#fff; background:var(--error); border-color:var(--error); }
+.profile-action-btn.btn-logout:hover { background:var(--error-dark); border-color:var(--error-dark); }
+</style>
+
 <div class="modal-overlay" id="profile-modal-overlay">
     <div class="modal" id="profile-modal">
-        <div class="modal-header">
-            <h2 class="modal-title"><i class="fas fa-user-circle"></i> Mi Perfil</h2>
-            <button type="button" class="modal-close" id="close-profile-modal" aria-label="Cerrar">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-        <div class="modal-body">
-            <div class="avatar-wrapper">
-                <img id="profile-avatar-img" src="https://ui-avatars.com/api/?name={{ nombre|urlencode }}&background=003366&color=fff&size=80" alt="Avatar">
-                <h3 id="profile-view-name">{{ nombre }}</h3>
-                <p id="profile-view-email">{{ codigo }}</p>
-                <p id="profile-view-role" class="welcome-text" style="margin-top:8px;font-size:13px;">Estudiante</p>
+        <button id="close-profile-modal"><i class="fas fa-times"></i></button>
+        <div class="modal-body profile-split-body">
+            <div class="profile-split-grid">
+
+                <!-- LEFT: info -->
+                <div class="profile-left-col">
+                    <h2 class="profile-title-custom">
+                        <i class="fas fa-user-circle"></i> Mi Perfil
+                    </h2>
+                    <div id="profile-info-list" class="profile-info-list"></div>
+
+                    <!-- Editar perfil inline -->
+                    <div id="est-edit-form" style="display:none;margin-top:12px;">
+                        <div class="form-group">
+                            <label class="form-label" for="editName">Nombre completo</label>
+                            <input type="text" id="editName" class="form-input" value="{{ nombre }}">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="editEmail">Correo electrónico</label>
+                            <input type="email" id="editEmail" class="form-input" placeholder="correo@ejemplo.com">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="edit-fecha-nac">Fecha de nacimiento</label>
+                            <input type="date" id="edit-fecha-nac" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="edit-lugar-nac">Lugar de nacimiento</label>
+                            <input type="text" id="edit-lugar-nac" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="edit-genero">Género</label>
+                            <select id="edit-genero" class="form-input">
+                                <option value="">Seleccionar</option>
+                                <option value="masculino">Masculino</option>
+                                <option value="femenino">Femenino</option>
+                                <option value="otro">Otro</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="edit-direccion">Dirección de residencia</label>
+                            <input type="text" id="edit-direccion" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="edit-eps">EPS</label>
+                            <input type="text" id="edit-eps" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="edit-rh">Grupo sanguíneo</label>
+                            <input type="text" id="edit-rh" class="form-input" placeholder="Ej. O+">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="edit-alergias">Alergias</label>
+                            <textarea id="edit-alergias" class="form-input" rows="2"></textarea>
+                        </div>
+                        <div style="display:flex;gap:8px;margin-top:8px;">
+                            <button type="button" class="btn-secondary" id="cancel-profile" style="flex:1;">Cancelar</button>
+                            <button type="button" class="btn-primary" id="save-profile" style="flex:1;">
+                                <i class="fas fa-save"></i> Guardar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RIGHT: avatar + acciones -->
+                <div class="profile-right-col">
+                    <img id="profile-avatar-img"
+                         src="https://ui-avatars.com/api/?name={{ nombre|urlencode }}&background=003366&color=fff&size=120"
+                         alt="Avatar" class="profile-avatar-img">
+
+                    <h3 id="profile-view-name" class="profile-info-name">{{ nombre }}</h3>
+                    <p id="profile-view-email" class="profile-info-email">{{ codigo }}</p>
+                    <p id="profile-view-role" class="profile-info-role">Estudiante</p>
+
+                    <div class="profile-dark-mode-row">
+                        <label for="dark-mode-toggle" class="profile-dark-mode-label">
+                            <i class="fas fa-moon"></i> Modo Oscuro
+                        </label>
+                        <label class="dark-toggle-switch">
+                            <input type="checkbox" id="dark-mode-toggle">
+                            <span class="dark-toggle-track"></span>
+                        </label>
+                    </div>
+
+                    <div style="display:flex;flex-direction:column;width:100%;gap:7px;margin-top:4px;">
+                        <label class="profile-action-btn">
+                            <i class="fas fa-camera"></i> Cambiar foto
+                            <input type="file" id="profile-photo-input" accept="image/png,image/jpeg,image/webp" hidden>
+                        </label>
+                        <button type="button" class="profile-action-btn" id="est-open-edit">
+                            <i class="fas fa-user-edit"></i> Editar perfil
+                        </button>
+                        <button type="button" class="profile-action-btn" id="open-password-modal">
+                            <i class="fas fa-key"></i> Cambiar contraseña
+                        </button>
+                        <button type="button" class="profile-action-btn" onclick="window.location.href='/constancia/pdf'">
+                            <i class="fas fa-file-certificate"></i> Descargar Constancia
+                        </button>
+                        <button type="button" class="profile-action-btn btn-logout" onclick="window.location.href='/logout'">
+                            <i class="fas fa-sign-out-alt"></i> Cerrar sesión
+                        </button>
+                    </div>
+                </div>
+
             </div>
-            <div id="profile-info-list" class="profile-info-list"></div>
-            <div class="dark-mode-row">
-                <label for="dark-mode-toggle">
-                    <i class="fas fa-moon"></i> Modo Oscuro
-                </label>
-                <label class="dark-toggle-switch">
-                    <input type="checkbox" id="dark-mode-toggle">
-                    <span class="dark-toggle-track"></span>
-                </label>
-            </div>
-        </div>
-        <div class="modal-footer" style="flex-direction:column;gap:8px;">
-            <button type="button" class="btn-secondary" id="open-edit-profile" style="width:100%;">
-                <i class="fas fa-user-edit"></i> Editar Perfil
-            </button>
-            <button type="button" class="btn-secondary" id="open-password-modal" style="width:100%;">
-                <i class="fas fa-key"></i> Cambiar Contraseña
-            </button>
-        </div>
-        <div class="logout-section">
-            <button type="button" class="btn-danger" style="width:100%;" onclick="window.location.href='/logout'">
-                <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
-            </button>
         </div>
     </div>
 </div>
 
-<!-- Modal editar perfil -->
-<div class="modal-overlay" id="edit-modal-overlay">
-    <div class="modal" style="max-width:520px;width:95%;">
-        <div class="modal-header">
-            <h2 class="modal-title"><i class="fas fa-user-edit"></i> Editar Perfil</h2>
-            <button type="button" class="modal-close" id="close-edit-modal" aria-label="Cerrar">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-        <div class="modal-body" style="max-height:65vh;overflow-y:auto;">
-            <div class="edit-profile-avatar-section">
-                <div class="current-avatar">
-                    <img id="edit-profile-avatar" src="https://ui-avatars.com/api/?name={{ nombre|urlencode }}&background=003366&color=fff&size=120" alt="Avatar">
-                </div>
-                <div class="avatar-actions">
-                    <label class="btn-secondary change-photo-btn" style="cursor:pointer;">
-                        <i class="fas fa-camera"></i> Cambiar foto
-                        <input type="file" id="profile-photo-input" accept="image/png,image/jpeg,image/webp" hidden>
-                    </label>
-                    <p class="avatar-hint">PNG, JPG o WEBP. Máx. 2 MB.</p>
-                </div>
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="editName">Nombre completo</label>
-                <input type="text" id="editName" class="form-input" value="{{ nombre }}">
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="editEmail">Correo electrónico</label>
-                <input type="email" id="editEmail" class="form-input" placeholder="tu@email.com">
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="edit-fecha-nac">Fecha de nacimiento</label>
-                <input type="date" id="edit-fecha-nac" class="form-input">
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="edit-lugar-nac">Lugar de nacimiento</label>
-                <input type="text" id="edit-lugar-nac" class="form-input">
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="edit-genero">Género</label>
-                <select id="edit-genero" class="form-input">
-                    <option value="">Seleccionar</option>
-                    <option value="masculino">Masculino</option>
-                    <option value="femenino">Femenino</option>
-                    <option value="otro">Otro</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="edit-direccion">Dirección de residencia</label>
-                <input type="text" id="edit-direccion" class="form-input">
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="edit-eps">EPS</label>
-                <input type="text" id="edit-eps" class="form-input">
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="edit-rh">Grupo sanguíneo</label>
-                <input type="text" id="edit-rh" class="form-input" placeholder="Ej. O+">
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="edit-alergias">Alergias</label>
-                <textarea id="edit-alergias" class="form-input" rows="2"></textarea>
-            </div>
-        </div>
-        <div class="modal-footer">
-            <button type="button" class="btn-secondary" id="cancel-edit-modal">Cancelar</button>
-            <button type="button" class="btn-primary" id="save-profile">
-                <i class="fas fa-save"></i> Guardar
-            </button>
-        </div>
-    </div>
-</div>
+<!-- Modal editar perfil (reemplazado por inline en perfil) -->
 
 <!-- Modal contraseña -->
 <div class="modal-overlay" id="password-modal-overlay">
@@ -269,6 +344,7 @@
 <script src="{{ url_for('static', filename='script/panel-shell.js') }}"></script>
 <script src="{{ url_for('static', filename='script/panel-branding.js') }}"></script>
 <script src="{{ url_for('static', filename='script/profile-panel.js') }}"></script>
+<script src="{{ url_for('static', filename='script/chat-shared.js') }}"></script>
 <script src="{{ url_for('static', filename='script/estudiante.js') }}"></script>
 </body>
 </html>
