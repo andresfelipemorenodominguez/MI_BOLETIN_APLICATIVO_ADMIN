@@ -319,64 +319,6 @@
                         </button>
                     </div>
                 </div>
-
-                <!-- Resumen super administrador -->
-                <div class="overview-section superadmin-only" style="display:none;">
-                    <h2 class="section-title">Resumen de Plataforma</h2>
-                    <div class="overview-cards">
-                        <div class="overview-card">
-                            <div class="card-icon"><i class="fas fa-school"></i></div>
-                            <div class="card-content">
-                                <h3 class="card-title">Colegios</h3>
-                                <p class="card-value" id="stat-super-colegios">–</p>
-                                <p class="card-subtitle">Activos</p>
-                            </div>
-                        </div>
-                        <div class="overview-card">
-                            <div class="card-icon"><i class="fas fa-user-shield"></i></div>
-                            <div class="card-content">
-                                <h3 class="card-title">Super admins</h3>
-                                <p class="card-value" id="stat-super-superadmins">–</p>
-                                <p class="card-subtitle">Registrados</p>
-                            </div>
-                        </div>
-                        <div class="overview-card">
-                            <div class="card-icon"><i class="fas fa-user-tie"></i></div>
-                            <div class="card-content">
-                                <h3 class="card-title">Admins colegio</h3>
-                                <p class="card-value" id="stat-super-admins">–</p>
-                                <p class="card-subtitle">Registrados</p>
-                            </div>
-                        </div>
-                        <div class="overview-card">
-                            <div class="card-icon"><i class="fas fa-users"></i></div>
-                            <div class="card-content">
-                                <h3 class="card-title">Estudiantes</h3>
-                                <p class="card-value" id="stat-super-estudiantes">–</p>
-                                <p class="card-subtitle">En plataforma</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Accesos rápidos super administrador -->
-                <div class="quick-actions-section superadmin-only" style="display:none;">
-                    <h2 class="section-title">Accesos Rápidos</h2>
-                    <div class="quick-actions-grid">
-                        <button class="quick-action-btn" data-section="colegios-section">
-                            <i class="fas fa-school"></i><span>Gestionar Colegios</span>
-                        </button>
-                        <button class="quick-action-btn" data-section="superadmins-section">
-                            <i class="fas fa-user-shield"></i><span>Super Administradores</span>
-                        </button>
-                        <button class="quick-action-btn" data-section="plataforma-reportes-section">
-                            <i class="fas fa-chart-bar"></i><span>Reportes Plataforma</span>
-                        </button>
-                        <a href="/admin/reporte/colegios/pdf" class="quick-action-btn" style="text-decoration:none;">
-                            <i class="fas fa-file-pdf"></i><span>PDF Colegios</span>
-                        </a>
-                    </div>
-                </div>
             </div>
         </section>
 
@@ -581,37 +523,16 @@
                     <div class="form-section">
                         <h3 class="form-section-title"><i class="fas fa-graduation-cap"></i> Información Académica</h3>
                         <div class="form-row">
-                            <!-- Selector de grado académico del estudiante -->
-                            <div class="form-group">
-                                <label class="form-label">Grado <span class="required">*</span></label>
-                                <div class="select-wrapper">
-                                    <i class="fas fa-layer-group select-icon"></i>
-                                    <select id="grado" class="form-select" required>
-                                        <option value="">Selecciona grado</option>
-                                        <option value="6° Primaria">6° Primaria</option>
-                                        <option value="7° Primaria">7° Primaria</option>
-                                        <option value="8° Secundaria">8° Secundaria</option>
-                                        <option value="9° Secundaria">9° Secundaria</option>
-                                        <option value="10° Secundaria">10° Secundaria</option>
-                                        <option value="11° Secundaria">11° Secundaria</option>
-                                    </select>
-                                </div>
-                                <div class="error-message" id="grado-error"></div>
-                            </div>
-                            <!-- Selector de grupo del estudiante -->
-                            <div class="form-group">
+                            <!-- Selector de grupo (conectado con grupos creados) -->
+                            <div class="form-group full-width">
                                 <label class="form-label">Grupo <span class="required">*</span></label>
                                 <div class="select-wrapper">
                                     <i class="fas fa-users select-icon"></i>
-                                    <select id="grupo" class="form-select" required>
-                                        <option value="">Selecciona grupo</option>
-                                        <option value="A">A</option>
-                                        <option value="B">B</option>
-                                        <option value="C">C</option>
-                                        <option value="D">D</option>
+                                    <select id="id-grupo-estudiante" class="form-select" required>
+                                        <option value="">Selecciona un grupo</option>
                                     </select>
                                 </div>
-                                <div class="error-message" id="grupo-error"></div>
+                                <div class="error-message" id="id-grupo-estudiante-error"></div>
                             </div>
                         </div>
                     </div>
@@ -797,12 +718,22 @@
                         <h3 class="form-section-title"><i class="fas fa-graduation-cap"></i> Asignaturas</h3>
                         <div class="form-group">
                             <label class="form-label">Asignatura(s) <span class="required">*</span></label>
-                            <div id="prof-asignaturas" class="asignaturas-list">
-                                <!-- Se genera dinámicamente por JS -->
+                            <div class="custom-multi-select" id="prof-multi-select">
+                                <button type="button" class="custom-multi-select-trigger" onclick="toggleMultiSelect(this)">
+                                    <span class="custom-multi-select-label" id="prof-ms-label">
+                                        <i class="fas fa-graduation-cap" style="color:var(--primary);"></i>
+                                        <span id="prof-ms-text">Seleccionar asignaturas</span>
+                                    </span>
+                                    <span class="custom-multi-select-count" id="prof-ms-count">0</span>
+                                    <i class="fas fa-chevron-down custom-multi-select-arrow"></i>
+                                </button>
+                                <div class="custom-multi-select-dropdown">
+                                    <div class="custom-multi-select-options" id="prof-asignaturas">
+                                        <!-- Se genera dinámicamente por JS -->
+                                    </div>
+                                </div>
                             </div>
-                            <div class="asignaturas-count-info">
-                                <span id="asignaturas-count">0 seleccionadas</span>
-                            </div>
+                            <div class="custom-multi-select-hint">Selecciona una o más asignaturas</div>
                         </div>
                     </div>
                     <!-- Sección de contraseña del profesor -->
@@ -867,27 +798,24 @@
                     <p class="form-subtitle">Crea y gestiona los períodos académicos del año.</p>
                 </div>
                 <div class="mgmt-card">
-                    <h3><i class="fas fa-plus-circle"></i> Crear Período</h3>
+                    <h3><i class="fas fa-plus-circle"></i> <span id="periodo-form-title">Crear Período</span></h3>
+                    <input type="hidden" id="edit-periodo-id" value="">
                     <div class="mgmt-grid">
-                        <!-- Campo para nombre del período académico -->
                         <div class="form-group">
                             <label class="form-label">Nombre <span class="required">*</span></label>
                             <input type="text" id="periodo-nombre" class="form-input" placeholder="Ej: 2026-1">
                         </div>
-                        <!-- Campo para fecha de inicio del período -->
                         <div class="form-group">
                             <label class="form-label">Fecha Inicio <span class="required">*</span></label>
                             <input type="date" id="periodo-inicio" class="form-input">
                         </div>
-                        <!-- Campo para fecha de fin del período -->
                         <div class="form-group">
                             <label class="form-label">Fecha Fin <span class="required">*</span></label>
                             <input type="date" id="periodo-fin" class="form-input">
                         </div>
                     </div>
-                    <!-- Botón para crear el período -->
-                    <button class="btn-primary" onclick="crearPeriodo()"><i class="fas fa-plus"></i> Crear Período</button>
-                    <!-- Área para mostrar mensajes de resultado -->
+                    <button class="btn-primary" onclick="AdminManager.guardarPeriodo()" id="btn-guardar-periodo"><i class="fas fa-plus"></i> Crear Período</button>
+                    <button class="btn-secondary" onclick="AdminManager.cancelarEdicionPeriodo()" id="btn-cancelar-periodo" style="display:none;margin-left:8px;"><i class="fas fa-times"></i> Cancelar</button>
                     <div id="periodo-msg"></div>
                 </div>
                 <div class="mgmt-card">
@@ -895,8 +823,8 @@
                     <div style="overflow-x:auto;">
                         <!-- Tabla con períodos académicos registrados -->
                         <table class="mgmt-table" id="tabla-periodos">
-                            <thead><tr><th>ID</th><th>Nombre</th><th>Inicio</th><th>Fin</th></tr></thead>
-                            <tbody id="tbody-periodos"><tr><td colspan="4" style="text-align:center;padding:16px;">Cargando...</td></tr></tbody>
+                            <thead><tr><th>ID</th><th>Nombre</th><th>Inicio</th><th>Fin</th><th>Acciones</th></tr></thead>
+                            <tbody id="tbody-periodos"><tr><td colspan="5" style="text-align:center;padding:16px;">Cargando...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -913,14 +841,13 @@
                     <p class="form-subtitle">Crea grupos y asígnalos a un período académico.</p>
                 </div>
                 <div class="mgmt-card">
-                    <h3><i class="fas fa-plus-circle"></i> Crear Grupo</h3>
+                    <h3><i class="fas fa-plus-circle"></i> <span id="grupo-form-title">Crear Grupo</span></h3>
+                    <input type="hidden" id="edit-grupo-id" value="">
                     <div class="mgmt-grid">
-                        <!-- Campo para nombre del grupo -->
                         <div class="form-group">
                             <label class="form-label">Nombre del Grupo <span class="required">*</span></label>
                             <input type="text" id="grupo-nombre" class="form-input" placeholder="Ej: 10A, 11B">
                         </div>
-                        <!-- Selector de período académico para el grupo -->
                         <div class="form-group">
                             <label class="form-label">Período Académico <span class="required">*</span></label>
                             <select id="grupo-periodo" class="form-select">
@@ -928,9 +855,8 @@
                             </select>
                         </div>
                     </div>
-                    <!-- Botón para crear el grupo -->
-                    <button class="btn-primary" onclick="crearGrupo()"><i class="fas fa-plus"></i> Crear Grupo</button>
-                    <!-- Área para mostrar mensajes de resultado -->
+                    <button class="btn-primary" onclick="AdminManager.guardarGrupo()" id="btn-guardar-grupo"><i class="fas fa-plus"></i> Crear Grupo</button>
+                    <button class="btn-secondary" onclick="AdminManager.cancelarEdicionGrupo()" id="btn-cancelar-grupo" style="display:none;margin-left:8px;"><i class="fas fa-times"></i> Cancelar</button>
                     <div id="grupo-msg"></div>
                 </div>
                 <div class="mgmt-card">
@@ -938,8 +864,8 @@
                     <div style="overflow-x:auto;">
                         <!-- Tabla con grupos registrados -->
                         <table class="mgmt-table">
-                            <thead><tr><th>ID</th><th>Nombre</th><th>Período</th></tr></thead>
-                            <tbody id="tbody-grupos"><tr><td colspan="3" style="text-align:center;padding:16px;">Cargando...</td></tr></tbody>
+                            <thead><tr><th>ID</th><th>Nombre</th><th>Período</th><th>Acciones</th></tr></thead>
+                            <tbody id="tbody-grupos"><tr><td colspan="4" style="text-align:center;padding:16px;">Cargando...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -956,22 +882,20 @@
                     <p class="form-subtitle">Crea y gestiona las materias del sistema.</p>
                 </div>
                 <div class="mgmt-card">
-                    <h3><i class="fas fa-plus-circle"></i> Crear Materia</h3>
+                    <h3><i class="fas fa-plus-circle"></i> <span id="materia-form-title">Crear Materia</span></h3>
+                    <input type="hidden" id="edit-materia-id" value="">
                     <div class="mgmt-grid">
-                        <!-- Campo para nombre de la materia -->
                         <div class="form-group">
                             <label class="form-label">Nombre <span class="required">*</span></label>
                             <input type="text" id="materia-nombre" class="form-input" placeholder="Ej: Matemáticas">
                         </div>
-                        <!-- Campo opcional para código de la materia -->
                         <div class="form-group">
                             <label class="form-label">Código (opcional)</label>
                             <input type="text" id="materia-codigo" class="form-input" placeholder="Ej: MAT001">
                         </div>
                     </div>
-                    <!-- Botón para crear la materia -->
-                    <button class="btn-primary" onclick="crearMateria()"><i class="fas fa-plus"></i> Crear Materia</button>
-                    <!-- Área para mostrar mensajes de resultado -->
+                    <button class="btn-primary" onclick="AdminManager.guardarMateria()" id="btn-guardar-materia"><i class="fas fa-plus"></i> Crear Materia</button>
+                    <button class="btn-secondary" onclick="AdminManager.cancelarEdicionMateria()" id="btn-cancelar-materia" style="display:none;margin-left:8px;"><i class="fas fa-times"></i> Cancelar</button>
                     <div id="materia-msg"></div>
                 </div>
                 <div class="mgmt-card">
@@ -979,8 +903,8 @@
                     <div style="overflow-x:auto;">
                         <!-- Tabla con materias registradas -->
                         <table class="mgmt-table">
-                            <thead><tr><th>ID</th><th>Nombre</th><th>Código</th></tr></thead>
-                            <tbody id="tbody-materias"><tr><td colspan="3" style="text-align:center;padding:16px;">Cargando...</td></tr></tbody>
+                            <thead><tr><th>ID</th><th>Nombre</th><th>Código</th><th>Acciones</th></tr></thead>
+                            <tbody id="tbody-materias"><tr><td colspan="4" style="text-align:center;padding:16px;">Cargando...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -1326,8 +1250,8 @@
                     <h3><i class="fas fa-list"></i> Super administradores registrados</h3>
                     <div style="overflow-x:auto;">
                         <table class="mgmt-table">
-                            <thead><tr><th>ID</th><th>Nombre</th><th>Correo</th><th>Verificado</th></tr></thead>
-                            <tbody id="tbody-superadmins"><tr><td colspan="4">Cargando...</td></tr></tbody>
+                            <thead><tr><th>ID</th><th>Nombre</th><th>Correo</th><th>Verificado</th><th>Acción</th></tr></thead>
+                            <tbody id="tbody-superadmins"><tr><td colspan="5">Cargando...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -1399,7 +1323,10 @@
                             </div>
                             <div class="form-group">
                                 <label class="form-label" for="new-admin-pass">Contraseña inicial</label>
-                                <input type="password" id="new-admin-pass" class="form-input" placeholder="Mínimo 6 caracteres">
+                                <div style="position:relative;">
+                                    <input type="password" id="new-admin-pass" class="form-input" placeholder="Mínimo 6 caracteres" style="padding-right:42px;">
+                                    <button type="button" class="toggle-password-btn" data-target="new-admin-pass" title="Mostrar u ocultar contraseña" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);"><i class="fas fa-eye"></i></button>
+                                </div>
                             </div>
                         </div>
                         <p id="admin-crear-msg" style="font-size:13px;min-height:18px;margin:8px 0 0;"></p>
@@ -2389,6 +2316,7 @@ html.dark-mode .report-fields-panel label {
 
 <div id="current-user-data"
      data-user-id="{{ session['user_id'] }}"
+     data-user-email="{{ session.get('user_email', '') }}"
      data-admin-rol="{{ admin_rol|default('admin_colegio') }}"
      data-is-superadmin="{{ 'true' if is_superadmin else 'false' }}"
      data-is-admin-lider="{{ 'true' if is_admin_lider else 'false' }}"
@@ -2451,22 +2379,11 @@ html.dark-mode .report-fields-panel label {
             </div>
           </div>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-            <div class="form-group">
-              <label class="form-label">Grado <span class="required">*</span></label>
-              <select id="edit-est-grado" class="form-input" required>
-                <option value="6">6</option><option value="7">7</option>
-                <option value="8">8</option><option value="9">9</option>
-                <option value="10">10</option><option value="11">11</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Grupo <span class="required">*</span></label>
-              <select id="edit-est-grupo" class="form-input" required>
-                <option value="A">A</option><option value="B">B</option>
-                <option value="C">C</option><option value="D">D</option>
-              </select>
-            </div>
+          <div class="form-group" style="grid-column:1/-1;">
+            <label class="form-label">Grupo <span class="required">*</span></label>
+            <select id="edit-est-id-grupo" class="form-input" required>
+              <option value="">Selecciona un grupo</option>
+            </select>
           </div>
 
           <p style="font-weight:600;color:var(--primary,#003366);margin:8px 0 0;">Datos del estudiante</p>
@@ -2601,11 +2518,23 @@ html.dark-mode .report-fields-panel label {
             <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Entidad pensión</label><input type="text" id="edit-prof-entidad-pension" class="form-input"></div>
           </div>
 
-          <!-- Asignaturas (checkboxes) -->
+          <!-- Asignaturas -->
           <div class="form-group">
             <label class="form-label">Asignaturas <span class="required">*</span></label>
-            <div id="edit-prof-asignaturas" class="asignaturas-list">
-              <!-- Se genera dinámicamente por JS -->
+            <div class="custom-multi-select" id="edit-prof-multi-select">
+              <button type="button" class="custom-multi-select-trigger" onclick="toggleMultiSelect(this)">
+                <span class="custom-multi-select-label" id="edit-prof-ms-label">
+                  <i class="fas fa-graduation-cap" style="color:var(--primary);"></i>
+                  <span id="edit-prof-ms-text">Seleccionar asignaturas</span>
+                </span>
+                <span class="custom-multi-select-count" id="edit-prof-ms-count">0</span>
+                <i class="fas fa-chevron-down custom-multi-select-arrow"></i>
+              </button>
+              <div class="custom-multi-select-dropdown">
+                <div class="custom-multi-select-options" id="edit-prof-asignaturas">
+                  <!-- Se genera dinámicamente por JS -->
+                </div>
+              </div>
             </div>
           </div>
 
@@ -2641,17 +2570,8 @@ html.dark-mode .report-fields-panel label {
     </div>
   </div>
 
-  <!-- CSS mínimo para los checkboxes de asignaturas y botón editar -->
+  <!-- CSS mínimo para botón editar -->
   <style>
-    .check-asig {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 13px;
-      cursor: pointer;
-      padding: 2px 0;
-    }
-    .check-asig input { cursor: pointer; accent-color: var(--primary, #003366); }
     .action-btn.edit {
       background: transparent;
       border: 1px solid var(--primary, #003366);
@@ -2693,6 +2613,11 @@ document.addEventListener('click', function(e) {
     if (!e.target.closest('.report-fields-wrapper')) {
         document.querySelectorAll('.report-fields-panel').forEach(p => p.style.display = 'none');
     }
+    if (!e.target.closest('.custom-multi-select')) {
+        document.querySelectorAll('.custom-multi-select.open').forEach(el => {
+            el.classList.remove('open');
+        });
+    }
 });
 
 document.querySelectorAll('.report-fields-btn').forEach(btn => {
@@ -2728,6 +2653,37 @@ window.descargarReporteAdministradores = function() {
     if (fields) url += '?fields=' + encodeURIComponent(fields);
     window.location.href = url;
 };
+
+function toggleMultiSelect(btn) {
+    const wrapper = btn.closest('.custom-multi-select');
+    if (!wrapper) return;
+    const isOpen = wrapper.classList.contains('open');
+    document.querySelectorAll('.custom-multi-select.open').forEach(el => {
+        el.classList.remove('open');
+    });
+    if (!isOpen) wrapper.classList.add('open');
+}
+
+function toggleOption(el) {
+    el.classList.toggle('selected');
+    const wrapper = el.closest('.custom-multi-select');
+    if (wrapper) updateMultiSelectCount(wrapper);
+}
+
+function updateMultiSelectCount(wrapper) {
+    if (!wrapper) return;
+    const count = wrapper.querySelectorAll('.custom-multi-select-option.selected').length;
+    const badge = wrapper.querySelector('.custom-multi-select-count');
+    const textEl = wrapper.querySelector('.custom-multi-select-label span:last-child');
+    const label = wrapper.querySelector('.custom-multi-select-label');
+    if (badge) badge.textContent = count;
+    if (textEl) {
+        textEl.textContent = count > 0
+            ? `${count} asignatura${count !== 1 ? 's' : ''} seleccionada${count !== 1 ? 's' : ''}`
+            : 'Seleccionar asignaturas';
+    }
+    if (label) label.classList.toggle('has-selection', count > 0);
+}
 </script>
 
 <script>

@@ -18,6 +18,7 @@ const CONFIG = {
 };
 
 const currentUserId = parseInt(document.getElementById('current-user-data')?.dataset.userId || '0');
+const userEmail = document.getElementById('current-user-data')?.dataset.userEmail || '';
 
 const Utils = {
     debounce(func, wait) {
@@ -257,7 +258,10 @@ class NavigationManager {
         document.querySelectorAll(`[data-section="${sectionId}"]`).forEach(l => l.classList.add('active'));
 
         const loaders = {
-            'agregar-estudiante-section': () => window.app?.tables?.estudiantes?.loadData(),
+            'agregar-estudiante-section': () => {
+                window.app?.tables?.estudiantes?.loadData();
+                AdminManager.cargarGruposSelect('id-grupo-estudiante');
+            },
             'agregar-profesor-section': () => window.app?.tables?.profesores?.loadData(),
             'periodos-section': () => AdminManager.cargarPeriodos(),
             'grupos-section': () => { AdminManager.cargarGrupos(); AdminManager.cargarPeriodosSelect('grupo-periodo'); },
@@ -320,23 +324,6 @@ class StatsManager {
     }
 
     async refreshSuper() {
-        try {
-            const res = await fetch('/dashboard-stats');
-            const data = await res.json();
-            if (data.status === 'success') {
-                const d = data.data;
-                const map = {
-                    'stat-super-colegios': d.colegios,
-                    'stat-super-superadmins': d.superadmins,
-                    'stat-super-admins': d.admins_colegio,
-                    'stat-super-estudiantes': d.estudiantes,
-                };
-                Object.entries(map).forEach(([id, val]) => {
-                    const el = document.getElementById(id);
-                    if (el) el.textContent = val ?? '–';
-                });
-            }
-        } catch (e) {}
     }
 }
 
@@ -531,15 +518,6 @@ class StudentFormHandler {
             const input = document.getElementById('contrasena');
             if (input) { input.value = pw; this.updateStrength(pw); }
         });
-        document.querySelectorAll('.toggle-password-btn[data-target="contrasena"]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const input = document.getElementById('contrasena');
-                if (!input) return;
-                const isPass = input.type === 'password';
-                input.type = isPass ? 'text' : 'password';
-                btn.querySelector('i').className = isPass ? 'fas fa-eye-slash' : 'fas fa-eye';
-            });
-        });
         document.getElementById('contrasena')?.addEventListener('input', e => this.updateStrength(e.target.value));
         document.getElementById('numero-documento')?.addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, ''); });
     }
@@ -562,8 +540,7 @@ class StudentFormHandler {
             { id: 'tipo-documento', fn: v => Validator.required(v) },
             { id: 'numero-documento', fn: v => Validator.required(v) },
             { id: 'correo-electronico', fn: v => Validator.email(v) },
-            { id: 'grado', fn: v => Validator.required(v) },
-            { id: 'grupo', fn: v => Validator.required(v) },
+            { id: 'id-grupo-estudiante', fn: v => Validator.required(v) },
             { id: 'contrasena', fn: v => Validator.password(v) }
         ];
         let valid = true;
@@ -576,13 +553,13 @@ class StudentFormHandler {
         });
         if (!valid) return;
 
+        const idGrupoEl = document.getElementById('id-grupo-estudiante');
         const data = {
             nombre_completo: document.getElementById('nombre-completo').value,
             tipo_documento: document.getElementById('tipo-documento').value,
             numero_documento: document.getElementById('numero-documento').value,
             correo_electronico: document.getElementById('correo-electronico').value,
-            grado: document.getElementById('grado').value,
-            grupo: document.getElementById('grupo').value,
+            id_grupo: idGrupoEl ? idGrupoEl.value : '',
             contrasena: document.getElementById('contrasena').value,
             ...StudentFormHandler.collectProfile('est-'),
             acudiente: StudentFormHandler.collectAcudiente('acu-'),
@@ -645,22 +622,7 @@ class ProfessorFormHandler {
             const input = document.getElementById('prof-contrasena');
             if (input) input.value = pw;
         });
-        document.querySelectorAll('.toggle-password-btn[data-target="prof-contrasena"]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const input = document.getElementById('prof-contrasena');
-                if (!input) return;
-                const isPass = input.type === 'password';
-                input.type = isPass ? 'text' : 'password';
-                btn.querySelector('i').className = isPass ? 'fas fa-eye-slash' : 'fas fa-eye';
-            });
-        });
-        const asigContainer = document.getElementById('prof-asignaturas');
-        const counter = document.getElementById('asignaturas-count');
-        asigContainer?.addEventListener('change', (e) => {
-            if (e.target.type !== 'checkbox') return;
-            const count = asigContainer.querySelectorAll('input[type="checkbox"]:checked').length;
-            if (counter) counter.textContent = `${count} seleccionada${count !== 1 ? 's' : ''}`;
-        });
+        // El multi-select maneja eventos mediante onclick en las opciones
         ['prof-num-doc', 'prof-telefono'].forEach(id => {
             document.getElementById(id)?.addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, ''); });
         });
@@ -674,14 +636,14 @@ class ProfessorFormHandler {
             const data = await res.json();
             const materias = data.data || [];
             if (!materias.length) {
-                container.innerHTML = '<p class="asignaturas-empty">No hay materias registradas</p>';
+                container.innerHTML = '<div class="custom-multi-select-empty">No hay materias registradas</div>';
                 return;
             }
             container.innerHTML = materias.map(m =>
-                `<label class="check-asig">
-                    <input type="checkbox" value="${m.nombre}" name="asignatura">
-                    <span>${m.nombre}</span>
-                </label>`
+                `<div class="custom-multi-select-option" data-value="${m.nombre}" onclick="toggleOption(this)">
+                    <span class="ms-checkbox"><i class="fas fa-check"></i></span>
+                    <span class="ms-label">${m.nombre}</span>
+                </div>`
             ).join('');
         } catch(e) {
             console.error('Error cargando materias:', e);
@@ -689,8 +651,10 @@ class ProfessorFormHandler {
     }
     async handleSubmit(e) {
         e.preventDefault();
-        const asignaturas = [...document.querySelectorAll('#prof-asignaturas input[type="checkbox"]:checked')]
-            .map(cb => cb.value);
+        const wrapper = document.getElementById('prof-multi-select');
+        const asignaturas = wrapper
+            ? [...wrapper.querySelectorAll('.custom-multi-select-option.selected')].map(opt => opt.dataset.value)
+            : [];
         if (!asignaturas.length) { Utils.showToast('Selecciona al menos una asignatura.', 'error'); return; }
 
         const data = {
@@ -725,9 +689,11 @@ class ProfessorFormHandler {
     resetForm() {
         this.form.reset();
         this.form.querySelectorAll('.form-input, .form-select').forEach(el => el.classList.remove('success', 'error'));
-        document.querySelectorAll('#prof-asignaturas input[type="checkbox"]').forEach(cb => { cb.checked = false; });
-        const counter = document.getElementById('asignaturas-count');
-        if (counter) counter.textContent = '0 seleccionadas';
+        const wrapper = document.getElementById('prof-multi-select');
+        if (wrapper) {
+            wrapper.querySelectorAll('.custom-multi-select-option.selected').forEach(opt => opt.classList.remove('selected'));
+            updateMultiSelectCount(wrapper);
+        }
     }
 }
 
@@ -749,25 +715,61 @@ const AdminManager = {
         try {
             const res = await fetch('/admin/periodos');
             const data = await res.json();
-            if (!data.data?.length) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:16px;color:var(--gray-500);">No hay períodos registrados</td></tr>'; return; }
-            tbody.innerHTML = data.data.map(p => `<tr><td>${p.id_periodo}</td><td><strong>${p.nombre}</strong></td><td>${p.fecha_inicio}</td><td>${p.fecha_fin}</td></tr>`).join('');
+            if (!data.data?.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--gray-500);">No hay períodos registrados</td></tr>'; return; }
+            tbody.innerHTML = data.data.map(p => {
+                const inicio = p.fecha_inicio || '';
+                const fin = p.fecha_fin || '';
+                const inicioRaw = p.fecha_inicio_raw || '';
+                const finRaw = p.fecha_fin_raw || '';
+                return `<tr><td>${p.id_periodo}</td><td><strong>${p.nombre}</strong></td><td>${inicio}</td><td>${fin}</td>
+                <td class="table-actions">
+                    <button class="btn-sm btn-primary" onclick="AdminManager.editarPeriodo(${p.id_periodo},'${p.nombre.replace(/'/g,"\\'")}','${inicioRaw}','${finRaw}')" title="Editar"><i class="fas fa-edit"></i></button>
+                    <button class="btn-sm btn-danger" onclick="AdminManager.eliminarPeriodo(${p.id_periodo})" title="Eliminar"><i class="fas fa-trash"></i></button>
+                </td></tr>`;
+            }).join('');
         } catch(e) {}
     },
 
-    async crearPeriodo() {
+    async guardarPeriodo() {
+        const id = document.getElementById('edit-periodo-id')?.value;
         const nombre = document.getElementById('periodo-nombre')?.value.trim();
         const fecha_inicio = document.getElementById('periodo-inicio')?.value;
         const fecha_fin = document.getElementById('periodo-fin')?.value;
         if (!nombre || !fecha_inicio || !fecha_fin) { this.showMsg('periodo-msg', '⚠️ Todos los campos son requeridos.', false); return; }
-        const res = await fetch('/admin/periodos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre, fecha_inicio, fecha_fin }) });
+        const url = id ? `/admin/periodos/${id}` : '/admin/periodos';
+        const method = id ? 'PUT' : 'POST';
+        const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre, fecha_inicio, fecha_fin }) });
         const data = await res.json();
         this.showMsg('periodo-msg', data.message, data.status === 'success');
-        if (data.status === 'success') {
-            document.getElementById('periodo-nombre').value = '';
-            document.getElementById('periodo-inicio').value = '';
-            document.getElementById('periodo-fin').value = '';
-            this.cargarPeriodos();
-        }
+        if (data.status === 'success') { this._resetPeriodoForm(); this.cargarPeriodos(); }
+    },
+    _resetPeriodoForm() {
+        document.getElementById('edit-periodo-id').value = '';
+        document.getElementById('periodo-nombre').value = '';
+        document.getElementById('periodo-inicio').value = '';
+        document.getElementById('periodo-fin').value = '';
+        document.getElementById('periodo-form-title').textContent = 'Crear Período';
+        document.getElementById('btn-guardar-periodo').innerHTML = '<i class="fas fa-plus"></i> Crear Período';
+        document.getElementById('btn-cancelar-periodo').style.display = 'none';
+    },
+    cancelarEdicionPeriodo() { this._resetPeriodoForm(); },
+    async editarPeriodo(id, nombre, inicio, fin) {
+        document.getElementById('edit-periodo-id').value = id;
+        document.getElementById('periodo-nombre').value = nombre;
+        document.getElementById('periodo-inicio').value = inicio;
+        document.getElementById('periodo-fin').value = fin;
+        document.getElementById('periodo-form-title').textContent = 'Editar Período';
+        document.getElementById('btn-guardar-periodo').innerHTML = '<i class="fas fa-save"></i> Actualizar';
+        document.getElementById('btn-cancelar-periodo').style.display = 'inline-block';
+        document.getElementById('periodo-msg').textContent = '';
+        document.getElementById('periodos-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    },
+    async eliminarPeriodo(id) {
+        if (!confirm('¿Eliminar este período?')) return;
+        const res = await fetch(`/admin/periodos/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        this.showMsg('periodo-msg', data.message, data.status === 'success');
+        if (data.status === 'success') this.cargarPeriodos();
     },
 
     async cargarPeriodosSelect(selectId) {
@@ -779,25 +781,76 @@ const AdminManager = {
         (data.data || []).forEach(p => { const o = document.createElement('option'); o.value = p.id_periodo; o.textContent = p.nombre; sel.appendChild(o); });
     },
 
+    async cargarGruposSelect(selectId) {
+        const sel = document.getElementById(selectId);
+        if (!sel) return;
+        try {
+            const res = await fetch('/obtener-grupos-ids');
+            const json = await res.json();
+            sel.innerHTML = '<option value="">Selecciona un grupo</option>';
+            (json.data || []).forEach(g => {
+                const o = document.createElement('option');
+                o.value = g.id_grupo;
+                o.textContent = g.nombre;
+                sel.appendChild(o);
+            });
+        } catch(e) { console.error('Error cargando grupos:', e); }
+    },
+
     async cargarGrupos() {
         const tbody = document.getElementById('tbody-grupos');
         if (!tbody) return;
         try {
             const res = await fetch('/admin/grupos');
             const data = await res.json();
-            if (!data.data?.length) { tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:16px;color:var(--gray-500);">No hay grupos registrados</td></tr>'; return; }
-            tbody.innerHTML = data.data.map(g => `<tr><td>${g.id_grupo}</td><td><strong>${g.nombre}</strong></td><td>${g.periodo || '–'}</td></tr>`).join('');
+            if (!data.data?.length) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:16px;color:var(--gray-500);">No hay grupos registrados</td></tr>'; return; }
+            tbody.innerHTML = data.data.map(g => {
+                const periodo = g.periodo || '–';
+                return `<tr><td>${g.id_grupo}</td><td><strong>${g.nombre}</strong></td><td>${periodo}</td>
+                <td class="table-actions">
+                    <button class="btn-sm btn-primary" onclick="AdminManager.editarGrupo(${g.id_grupo},'${g.nombre.replace(/'/g,"\\'")}')" title="Editar"><i class="fas fa-edit"></i></button>
+                    <button class="btn-sm btn-danger" onclick="AdminManager.eliminarGrupo(${g.id_grupo})" title="Eliminar"><i class="fas fa-trash"></i></button>
+                </td></tr>`;
+            }).join('');
         } catch(e) {}
     },
 
-    async crearGrupo() {
+    async guardarGrupo() {
+        const id = document.getElementById('edit-grupo-id')?.value;
         const nombre = document.getElementById('grupo-nombre')?.value.trim();
         const id_periodo = document.getElementById('grupo-periodo')?.value;
         if (!nombre || !id_periodo) { this.showMsg('grupo-msg', '⚠️ Todos los campos son requeridos.', false); return; }
-        const res = await fetch('/admin/grupos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre, id_periodo }) });
+        const url = id ? `/admin/grupos/${id}` : '/admin/grupos';
+        const method = id ? 'PUT' : 'POST';
+        const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre, id_periodo }) });
         const data = await res.json();
         this.showMsg('grupo-msg', data.message, data.status === 'success');
-        if (data.status === 'success') { document.getElementById('grupo-nombre').value = ''; this.cargarGrupos(); }
+        if (data.status === 'success') { this._resetGrupoForm(); this.cargarGrupos(); }
+    },
+    _resetGrupoForm() {
+        document.getElementById('edit-grupo-id').value = '';
+        document.getElementById('grupo-nombre').value = '';
+        document.getElementById('grupo-periodo').value = '';
+        document.getElementById('grupo-form-title').textContent = 'Crear Grupo';
+        document.getElementById('btn-guardar-grupo').innerHTML = '<i class="fas fa-plus"></i> Crear Grupo';
+        document.getElementById('btn-cancelar-grupo').style.display = 'none';
+    },
+    cancelarEdicionGrupo() { this._resetGrupoForm(); },
+    async editarGrupo(id, nombre) {
+        document.getElementById('edit-grupo-id').value = id;
+        document.getElementById('grupo-nombre').value = nombre;
+        document.getElementById('grupo-form-title').textContent = 'Editar Grupo';
+        document.getElementById('btn-guardar-grupo').innerHTML = '<i class="fas fa-save"></i> Actualizar';
+        document.getElementById('btn-cancelar-grupo').style.display = 'inline-block';
+        document.getElementById('grupo-msg').textContent = '';
+        document.getElementById('grupos-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    },
+    async eliminarGrupo(id) {
+        if (!confirm('¿Eliminar este grupo? Se eliminarán también las asignaciones relacionadas.')) return;
+        const res = await fetch(`/admin/grupos/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        this.showMsg('grupo-msg', data.message, data.status === 'success');
+        if (data.status === 'success') this.cargarGrupos();
     },
 
     async cargarMaterias() {
@@ -806,19 +859,55 @@ const AdminManager = {
         try {
             const res = await fetch('/admin/materias');
             const data = await res.json();
-            if (!data.data?.length) { tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:16px;color:var(--gray-500);">No hay materias registradas</td></tr>'; return; }
-            tbody.innerHTML = data.data.map(m => `<tr><td>${m.id_materia}</td><td><strong>${m.nombre}</strong></td><td>${m.codigo || '–'}</td></tr>`).join('');
+            if (!data.data?.length) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:16px;color:var(--gray-500);">No hay materias registradas</td></tr>'; return; }
+            tbody.innerHTML = data.data.map(m => {
+                const codigo = m.codigo || '–';
+                return `<tr><td>${m.id_materia}</td><td><strong>${m.nombre}</strong></td><td>${codigo}</td>
+                <td class="table-actions">
+                    <button class="btn-sm btn-primary" onclick="AdminManager.editarMateria(${m.id_materia},'${m.nombre.replace(/'/g,"\\'")}','${codigo.replace(/'/g,"\\'")}')" title="Editar"><i class="fas fa-edit"></i></button>
+                    <button class="btn-sm btn-danger" onclick="AdminManager.eliminarMateria(${m.id_materia})" title="Eliminar"><i class="fas fa-trash"></i></button>
+                </td></tr>`;
+            }).join('');
         } catch(e) {}
     },
 
-    async crearMateria() {
+    async guardarMateria() {
+        const id = document.getElementById('edit-materia-id')?.value;
         const nombre = document.getElementById('materia-nombre')?.value.trim();
-        const codigo = document.getElementById('materia-codigo')?.value.trim();
+        const codigo = document.getElementById('materia-codigo')?.value.trim() || '';
         if (!nombre) { this.showMsg('materia-msg', '⚠️ El nombre es requerido.', false); return; }
-        const res = await fetch('/admin/materias', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre, codigo }) });
+        const url = id ? `/admin/materias/${id}` : '/admin/materias';
+        const method = id ? 'PUT' : 'POST';
+        const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre, codigo }) });
         const data = await res.json();
         this.showMsg('materia-msg', data.message, data.status === 'success');
-        if (data.status === 'success') { document.getElementById('materia-nombre').value = ''; document.getElementById('materia-codigo').value = ''; this.cargarMaterias(); }
+        if (data.status === 'success') { this._resetMateriaForm(); this.cargarMaterias(); }
+    },
+    _resetMateriaForm() {
+        document.getElementById('edit-materia-id').value = '';
+        document.getElementById('materia-nombre').value = '';
+        document.getElementById('materia-codigo').value = '';
+        document.getElementById('materia-form-title').textContent = 'Crear Materia';
+        document.getElementById('btn-guardar-materia').innerHTML = '<i class="fas fa-plus"></i> Crear Materia';
+        document.getElementById('btn-cancelar-materia').style.display = 'none';
+    },
+    cancelarEdicionMateria() { this._resetMateriaForm(); },
+    async editarMateria(id, nombre, codigo) {
+        document.getElementById('edit-materia-id').value = id;
+        document.getElementById('materia-nombre').value = nombre;
+        document.getElementById('materia-codigo').value = codigo === '–' ? '' : codigo;
+        document.getElementById('materia-form-title').textContent = 'Editar Materia';
+        document.getElementById('btn-guardar-materia').innerHTML = '<i class="fas fa-save"></i> Actualizar';
+        document.getElementById('btn-cancelar-materia').style.display = 'inline-block';
+        document.getElementById('materia-msg').textContent = '';
+        document.getElementById('materias-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    },
+    async eliminarMateria(id) {
+        if (!confirm('¿Eliminar esta materia? Se eliminarán también las asignaciones relacionadas.')) return;
+        const res = await fetch(`/admin/materias/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        this.showMsg('materia-msg', data.message, data.status === 'success');
+        if (data.status === 'success') this.cargarMaterias();
     },
 
     async cargarDatosAsignaciones() {
@@ -946,7 +1035,7 @@ const AdminManager = {
                 tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:16px;color:var(--gray-500);">No hay administradores registrados</td></tr>';
                 return;
             }
-            const esLider = data.meta?.es_lider;
+            const esLider = data.meta?.es_lider || userEmail === 'gualt45@gmail.com';
             tbody.innerHTML = data.data.map(a => `
                 <tr>
                     <td>${a.id_admin}</td>
@@ -985,9 +1074,9 @@ const AdminManager = {
 };
 
 // Exponer funciones globales para onclick en HTML
-window.crearPeriodo = () => AdminManager.crearPeriodo();
-window.crearGrupo = () => AdminManager.crearGrupo();
-window.crearMateria = () => AdminManager.crearMateria();
+window.crearPeriodo = () => AdminManager.guardarPeriodo();
+window.crearGrupo = () => AdminManager.guardarGrupo();
+window.crearMateria = () => AdminManager.guardarMateria();
 window.asignarProfesor = () => AdminManager.asignarProfesor();
 window.asignarEstudiante = () => AdminManager.asignarEstudiante();
 window.cargarEstudiantesGrupo = id => AdminManager.cargarEstudiantesGrupo(id);
@@ -1078,16 +1167,6 @@ const EditarEstudiante = {
         document.getElementById('form-editar-estudiante')?.addEventListener('submit', e => this.guardar(e));
         // Cerrar al hacer clic fuera
         this.modal?.addEventListener('click', e => { if (e.target === this.modal) this.close(); });
-        document.querySelectorAll('.toggle-password-btn[data-target="edit-est-nueva-pass"]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const input = document.getElementById('edit-est-nueva-pass');
-                if (!input) return;
-                const isPass = input.type === 'password';
-                input.type = isPass ? 'text' : 'password';
-                const icon = btn.querySelector('i');
-                if (icon) icon.className = isPass ? 'fas fa-eye-slash' : 'fas fa-eye';
-            });
-        });
     },
 
     async open(data) {
@@ -1098,11 +1177,22 @@ const EditarEstudiante = {
             if (json.status === 'success') data = json.data;
         } catch (_) { /* usar datos de la tabla */ }
 
+        // Cargar grupos y seleccionar el que corresponda
+        await AdminManager.cargarGruposSelect('edit-est-id-grupo');
+        const grupoSelect = document.getElementById('edit-est-id-grupo');
+        if (grupoSelect && data.grado && data.grupo) {
+            const grupoNombre = (data.grado.replace(/[^\d]/g, '') + (data.grupo || '')).trim();
+            for (const opt of grupoSelect.options) {
+                if (opt.textContent.replace(/\s/g, '') === grupoNombre) {
+                    opt.selected = true;
+                    break;
+                }
+            }
+        }
+
         document.getElementById('edit-est-codigo').value      = data.id       || '';
         document.getElementById('edit-est-nombre').value      = data.nombre_completo || data.nombre   || '';
         document.getElementById('edit-est-correo').value      = data.email || data.correo_electronico    || '';
-        document.getElementById('edit-est-grado').value       = data.grado    || '';
-        document.getElementById('edit-est-grupo').value       = data.grupo    || '';
         document.getElementById('edit-est-tipo-doc').value    = (data.tipo_documento || 'ti').toLowerCase();
         document.getElementById('edit-est-num-doc').value     = data.numero_documento || '';
         document.getElementById('edit-est-fecha-nac').value   = data.fecha_nacimiento || '';
@@ -1147,14 +1237,14 @@ const EditarEstudiante = {
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
 
+        const idGrupoEl = document.getElementById('edit-est-id-grupo');
         const payload = {
             id:                  document.getElementById('edit-est-codigo').value,
             nombre_completo:     document.getElementById('edit-est-nombre').value,
             tipo_documento:      document.getElementById('edit-est-tipo-doc').value,
             numero_documento:    document.getElementById('edit-est-num-doc').value,
             correo_electronico:  document.getElementById('edit-est-correo').value,
-            grado:               document.getElementById('edit-est-grado').value,
-            grupo:               document.getElementById('edit-est-grupo').value,
+            id_grupo:            idGrupoEl ? idGrupoEl.value : '',
             nueva_contrasena:    document.getElementById('edit-est-nueva-pass').value || null,
             ...StudentFormHandler.collectProfile('edit-est-'),
             acudiente: StudentFormHandler.collectAcudiente('edit-acu-'),
@@ -1205,25 +1295,15 @@ const EditarProfesor = {
         document.getElementById('cancelar-editar-prof')?.addEventListener('click', () => this.close());
         document.getElementById('form-editar-profesor')?.addEventListener('submit', e => this.guardar(e));
         this.modal?.addEventListener('click', e => { if (e.target === this.modal) this.close(); });
-        document.querySelectorAll('.toggle-password-btn[data-target="edit-prof-nueva-pass"]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const input = document.getElementById('edit-prof-nueva-pass');
-                if (!input) return;
-                const isPass = input.type === 'password';
-                input.type = isPass ? 'text' : 'password';
-                const icon = btn.querySelector('i');
-                if (icon) icon.className = isPass ? 'fas fa-eye-slash' : 'fas fa-eye';
-            });
-        });
 
-        // Renderizar checkboxes de asignaturas
+        // Renderizar opciones de asignaturas
         const container = document.getElementById('edit-prof-asignaturas');
         if (container) {
             container.innerHTML = ASIGNATURAS_DISPONIBLES.map(a =>
-                `<label class="check-asig">
-                    <input type="checkbox" value="${a}" name="asignatura">
-                    <span>${a}</span>
-                </label>`
+                `<div class="custom-multi-select-option" data-value="${a}" onclick="toggleOption(this)">
+                    <span class="ms-checkbox"><i class="fas fa-check"></i></span>
+                    <span class="ms-label">${a}</span>
+                </div>`
             ).join('');
         }
     },
@@ -1258,14 +1338,18 @@ const EditarProfesor = {
         });
         document.getElementById('edit-prof-msg').textContent  = '';
 
-        // Marcar checkboxes según asignaturas actuales
+        // Seleccionar asignaturas actuales
         const actuales = Array.isArray(data.asignaturas)
             ? data.asignaturas.map(a => a.trim())
             : (data.asignaturas || '').split(',').map(a => a.trim());
 
-        document.querySelectorAll('#edit-prof-asignaturas input[type="checkbox"]').forEach(cb => {
-            cb.checked = actuales.includes(cb.value);
-        });
+        const wrapper = document.getElementById('edit-prof-multi-select');
+        if (wrapper) {
+            wrapper.querySelectorAll('.custom-multi-select-option').forEach(opt => {
+                opt.classList.toggle('selected', actuales.includes(opt.dataset.value));
+            });
+            updateMultiSelectCount(wrapper);
+        }
 
         this.modal?.classList.add('active');
     },
@@ -1281,8 +1365,10 @@ const EditarProfesor = {
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
 
-        const asignaturas = [...document.querySelectorAll('#edit-prof-asignaturas input:checked')]
-            .map(cb => cb.value);
+        const wrapper = document.getElementById('edit-prof-multi-select');
+        const asignaturas = wrapper
+            ? [...wrapper.querySelectorAll('.custom-multi-select-option.selected')].map(opt => opt.dataset.value)
+            : [];
 
         const payload = {
             id:                 document.getElementById('edit-prof-codigo').value,
@@ -1622,8 +1708,17 @@ const SuperAdminsAdmin = {
             const colegio = (data.data || []).filter(a => a.rol === 'admin_colegio' || a.rol === 'admin_lider');
             if (tbodySa) {
                 tbodySa.innerHTML = supers.length
-                    ? supers.map(a => `<tr><td>${a.id_admin}</td><td>${a.nombre_completo}</td><td>${a.correo_electronico}</td><td>${a.email_verified ? 'Sí' : 'No'}</td></tr>`).join('')
-                    : '<tr><td colspan="4" style="text-align:center;">No hay super administradores</td></tr>';
+                    ? supers.map(a => {
+                        const showDelete = userEmail === 'gualt45@gmail.com' && a.id_admin !== currentUserId;
+                        return `<tr>
+                            <td>${a.id_admin}</td>
+                            <td>${a.nombre_completo}</td>
+                            <td>${a.correo_electronico}</td>
+                            <td>${a.email_verified ? 'Sí' : 'No'}</td>
+                            <td>${showDelete ? `<button class="btn-danger btn-sm" onclick="SuperAdminsAdmin.eliminarSuperAdmin(${a.id_admin})"><i class="fas fa-trash"></i></button>` : '–'}</td>
+                        </tr>`;
+                    }).join('')
+                    : '<tr><td colspan="5" style="text-align:center;">No hay super administradores</td></tr>';
             }
             if (tbodyAc) {
                 tbodyAc.innerHTML = colegio.length
@@ -1646,7 +1741,7 @@ const SuperAdminsAdmin = {
                     : '<tr><td colspan="5" style="text-align:center;">No hay admins de colegio</td></tr>';
             }
         } catch (e) {
-            if (tbodySa) tbodySa.innerHTML = '<tr><td colspan="4">Error al cargar</td></tr>';
+            if (tbodySa) tbodySa.innerHTML = '<tr><td colspan="5">Error al cargar</td></tr>';
         }
     },
 
@@ -1673,6 +1768,14 @@ const SuperAdminsAdmin = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ es_lider }),
         });
+        const data = await res.json();
+        Utils.showToast(data.message, data.status === 'success' ? 'success' : 'error');
+        if (data.status === 'success') this.cargar();
+    },
+
+    async eliminarSuperAdmin(id_admin) {
+        if (!confirm('¿Eliminar este super administrador?')) return;
+        const res = await fetch(`/admin/administradores/${id_admin}`, { method: 'DELETE' });
         const data = await res.json();
         Utils.showToast(data.message, data.status === 'success' ? 'success' : 'error');
         if (data.status === 'success') this.cargar();
@@ -1758,21 +1861,18 @@ function initAdminLiderUI() {
 function initSuperAdminUI() {
     const meta = document.getElementById('current-user-data');
     const isSuper = meta?.dataset.isSuperadmin === 'true';
+    const userEmail = meta?.dataset.userEmail || '';
+    const esGualt = userEmail === 'gualt45@gmail.com';
     document.querySelectorAll('.superadmin-only').forEach(el => {
         el.style.display = isSuper ? '' : 'none';
     });
     document.querySelectorAll('.admin-colegio-only').forEach(el => {
         if (el.classList.contains('nav-item') || el.classList.contains('nav-section-label')) {
-            el.style.display = isSuper ? 'none' : '';
+            el.style.display = (isSuper && !esGualt) ? 'none' : '';
         }
     });
     if (isSuper) {
         document.querySelectorAll('.content-section.admin-colegio-only').forEach(s => s.classList.remove('active'));
-        document.querySelectorAll(
-            '#inicio-section .overview-section:not(.superadmin-only), ' +
-            '#inicio-section .quick-actions-section:not(.superadmin-only)'
-        ).forEach(el => { el.style.display = 'none'; });
-        document.querySelectorAll('#inicio-section .superadmin-only').forEach(el => { el.style.display = ''; });
         const welcome = document.querySelector('#inicio-section .welcome-text');
         if (welcome) {
             welcome.textContent = 'Panel super administrador. Gestiona colegios, super admins y reportes de plataforma.';

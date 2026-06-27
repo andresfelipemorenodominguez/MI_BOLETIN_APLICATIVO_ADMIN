@@ -697,6 +697,20 @@ def _profesor_payload_from_row(row):
     }
 
 
+def _parse_grupo_nombre(nombre):
+    """Parsea nombre de grupo tipo '10A' -> ('10', 'A')"""
+    if not nombre:
+        return '', ''
+    m = re.match(r'^(\d+)\s*°?\s*(.*)', nombre)
+    if m and m.group(2).strip():
+        return m.group(1), m.group(2).strip()
+    # fallback: leading digits = grado, rest = grupo
+    m2 = re.match(r'^(\d+)(.*)', nombre)
+    if m2:
+        return m2.group(1), (m2.group(2).strip() or 'A')
+    return nombre, 'A'
+
+
 def _insert_estudiante_db(cur, id_colegio, data, codigo_estudiante):
     nombre_completo = _clean_str(data.get('nombre_completo'))
     tipo_documento = _clean_str(data.get('tipo_documento'))
@@ -978,6 +992,69 @@ def send_recovery_email(to_email, recovery_link, user_name):
 def enviar_correo_admin(destinatario, asunto, cuerpo_html, cuerpo_texto=""):
     """Envía correos electrónicos desde el módulo de usuarios (estudiantes/profesores)"""
     return _send_html_email(destinatario, asunto, cuerpo_html, cuerpo_texto)
+
+
+def send_welcome_email(to_email, user_name, role, password, school_name=None, extra_msg=None):
+    """Envía un email de bienvenida con las credenciales de acceso"""
+    if not _email_config_ok():
+        print("Email no configurado: no se envió correo de bienvenida")
+        return False
+    try:
+        subject = "Credenciales de acceso - MiBoletín"
+        login_url = f"{PUBLIC_BASE_URL}/admin"
+        school_html = f" por la institución <strong>{school_name}</strong>" if school_name else ""
+        extra_html = f"<p>{extra_msg}</p>" if extra_msg else ""
+        html_content = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8">
+<style>
+    body {{ font-family: 'Segoe UI', Arial, sans-serif; background: #f0f7ff; padding: 20px; }}
+    .container {{ max-width:600px; margin:0 auto; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.1); }}
+    .header {{ background:#003366; color:#fff; padding:28px; text-align:center; }}
+    .header h1 {{ margin:0; font-size:22px; font-weight:600; }}
+    .content {{ padding:28px; }}
+    .content h2 {{ color:#003366; font-size:20px; margin-top:0; }}
+    .info-box {{ background:#f8faff; border:1px solid #e0e8f0; border-radius:8px; padding:16px; margin:16px 0; }}
+    .info-box .label {{ color:#888; font-size:13px; }}
+    .info-box .value {{ font-weight:600; color:#003366; font-size:15px; }}
+    .pass-box {{ background:#fffbf0; border:1px solid #f0dca0; border-radius:8px; padding:16px; margin:16px 0; }}
+    .pass-box .pass {{ font-family:Consolas, monospace; font-size:16px; font-weight:700; color:#003366; letter-spacing:1px; }}
+    .btn {{ display:inline-block; background:#4A90E2; color:#fff; text-decoration:none; padding:12px 32px; border-radius:6px; font-weight:600; font-size:14px; }}
+    .footer {{ background:#f8faff; border-top:1px solid #e0e8f0; color:#999; padding:20px; text-align:center; font-size:12px; }}
+</style></head>
+<body>
+<div class="container">
+    <div class="header"><h1>MiBoletín.com</h1></div>
+    <div class="content">
+        <h2>Bienvenido, {user_name}</h2>
+        <p>Has sido registrado en <strong>MiBoletín</strong>{school_html}.</p>
+        {extra_html}
+        <div class="info-box">
+            <p><span class="label">Usuario</span></p>
+            <p class="value">{to_email}</p>
+            <p style="margin-top:12px;"><span class="label">Rol</span></p>
+            <p class="value">{role}</p>
+        </div>
+        <div class="pass-box">
+            <p><strong>Contraseña temporal:</strong></p>
+            <p class="pass">{password}</p>
+            <p style="font-size:13px;color:#999;">Por seguridad, cambia esta contraseña después de iniciar sesión.</p>
+        </div>
+        <p style="text-align:center;margin:24px 0;">
+            <a href="{login_url}" class="btn">Iniciar Sesión</a>
+        </p>
+        <p style="font-size:12px;color:#bbb;text-align:center;">Si el botón no funciona, copia esta URL en tu navegador: {login_url}</p>
+    </div>
+    <div class="footer">
+        <p>&copy; {datetime.now().year} MiBoletín.com. Todos los derechos reservados.</p>
+        <p style="font-size:11px;color:#ccc;margin-top:4px;">Este correo fue generado automáticamente. No respondas a este mensaje.</p>
+    </div>
+</div>
+</body></html>"""
+        return _send_html_email(to_email, subject, html_content)
+    except Exception as e:
+        print(f"Error enviando email de bienvenida a {to_email}: {e}")
+        return False
 
 
 # 🔑 FUNCIÓN PARA GENERAR CÓDIGO
@@ -2560,11 +2637,12 @@ def actualizar_estudiante():
     tipo_documento = data.get("tipo_documento")
     numero_documento = data.get("numero_documento")
     correo_electronico = data.get("correo_electronico")
+    id_grupo = data.get("id_grupo")
     grado = data.get("grado")
     grupo = data.get("grupo")
     nueva_contrasena = data.get("nueva_contrasena")
 
-    if not all([estudiante_id, nombre_completo, tipo_documento, numero_documento, correo_electronico, grado, grupo]):
+    if not all([estudiante_id, nombre_completo, tipo_documento, numero_documento, correo_electronico]):
         return jsonify({"status": "error", "message": "Todos los campos obligatorios son requeridos."})
 
     try:
@@ -2579,6 +2657,16 @@ def actualizar_estudiante():
         if not est_row:
             return jsonify({"status": "error", "message": "Estudiante no encontrado."})
         id_est_db = est_row['id_estudiante'] if hasattr(est_row, 'keys') else est_row[0]
+
+        # Resolver grado/grupo desde id_grupo si se proporciona
+        if id_grupo:
+            cur.execute("SELECT nombre FROM grupos WHERE id_grupo = %s AND id_colegio = %s", (id_grupo, id_colegio))
+            row = cur.fetchone()
+            if not row:
+                return jsonify({"status": "error", "message": "El grupo seleccionado no existe."})
+            grado, grupo = _parse_grupo_nombre(row[0])
+        if not grado or not grupo:
+            return jsonify({"status": "error", "message": "Debes seleccionar un grupo."})
 
         if correo_electronico:
             cur.execute(
@@ -2618,6 +2706,13 @@ def actualizar_estudiante():
             tuple(update_values)
         )
         updated = cur.fetchone()
+        # Sincronizar grupo_estudiantes pivote
+        if id_grupo:
+            cur.execute("DELETE FROM grupo_estudiantes WHERE id_estudiante = %s AND id_grupo IN (SELECT id_grupo FROM grupos WHERE id_colegio = %s)", (id_est_db, id_colegio))
+            cur.execute(
+                "INSERT INTO grupo_estudiantes (id_grupo, id_estudiante) VALUES (%s,%s) ON CONFLICT DO NOTHING",
+                (id_grupo, id_est_db)
+            )
         acudiente = _acudiente_from_request(data)
         if acudiente:
             _upsert_acudiente_principal(cur, id_est_db, id_colegio, acudiente)
@@ -2943,16 +3038,30 @@ def registrar_estudiante():
     tipo_documento = data.get("tipo_documento")
     numero_documento = data.get("numero_documento")
     correo_electronico = data.get("correo_electronico")
+    id_grupo = data.get("id_grupo")
+    contrasena = data.get("contrasena")
     grado = data.get("grado")
     grupo = data.get("grupo")
-    contrasena = data.get("contrasena")
-    if not all([nombre_completo, tipo_documento, numero_documento, correo_electronico, grado, grupo, contrasena]):
+    if not all([nombre_completo, tipo_documento, numero_documento, correo_electronico, contrasena]):
         return jsonify({"status": "error", "message": "Todos los campos son requeridos."})
     if len(contrasena) < 8:
         return jsonify({"status": "error", "message": "La contraseña debe tener al menos 8 caracteres."})
     try:
         conn = get_db_connection()
         cur = conn.cursor()
+        # Resolver grado/grupo desde id_grupo si se proporciona
+        if id_grupo:
+            cur.execute("SELECT nombre FROM grupos WHERE id_grupo = %s AND id_colegio = %s", (id_grupo, id_colegio))
+            row = cur.fetchone()
+            if not row:
+                cur.close(); conn.close()
+                return jsonify({"status": "error", "message": "El grupo seleccionado no existe."})
+            grado, grupo = _parse_grupo_nombre(row[0])
+            data['grado'] = grado
+            data['grupo'] = grupo
+        if not grado or not grupo:
+            cur.close(); conn.close()
+            return jsonify({"status": "error", "message": "Debes seleccionar un grupo."})
         cur.execute(
             "SELECT codigo_estudiante FROM estudiantes WHERE id_colegio = %s ORDER BY id_estudiante DESC LIMIT 1",
             (id_colegio,),
@@ -2966,7 +3075,25 @@ def registrar_estudiante():
             cur.close()
             conn.close()
             return jsonify({"status": "error", "message": err})
+        # Auto-asignar al grupo en la tabla pivote
+        if ok and id_grupo and id_est:
+            try:
+                cur.execute(
+                    "INSERT INTO grupo_estudiantes (id_grupo, id_estudiante) VALUES (%s,%s) ON CONFLICT DO NOTHING",
+                    (id_grupo, id_est)
+                )
+            except Exception:
+                pass
         conn.commit()
+        # Enviar email de bienvenida
+        if correo_electronico:
+            try:
+                cur.execute("SELECT nombre_oficial FROM colegios WHERE id_colegio = %s", (id_colegio,))
+                row = cur.fetchone()
+                school_name = row[0] if row else None
+            except Exception:
+                school_name = None
+            send_welcome_email(correo_electronico, nombre_completo, "Estudiante", contrasena, school_name)
         cur.close()
         conn.close()
         return jsonify({"status": "success", "message": "Estudiante registrado exitosamente!", "data": {"id": id_est, "codigo": codigo}})
@@ -3015,6 +3142,15 @@ def registrar_profesor():
             conn.close()
             return jsonify({"status": "error", "message": err})
         conn.commit()
+        # Enviar email de bienvenida
+        if correo_electronico:
+            try:
+                cur.execute("SELECT nombre_oficial FROM colegios WHERE id_colegio = %s", (id_colegio,))
+                row = cur.fetchone()
+                school_name = row[0] if row else None
+            except Exception:
+                school_name = None
+            send_welcome_email(correo_electronico, nombre_completo, "Profesor", contrasena, school_name)
         cur.close()
         conn.close()
         return jsonify({"status": "success", "message": "Profesor registrado exitosamente!", "data": {"id": id_prof, "codigo": codigo}})
@@ -5120,8 +5256,9 @@ def get_periodos():
         filt, params = colegio_filter_sql(admin)
         cur.execute(
             f"SELECT id_periodo, nombre, TO_CHAR(fecha_inicio,'DD/MM/YYYY') as fecha_inicio, "
-            f"TO_CHAR(fecha_fin,'DD/MM/YYYY') as fecha_fin FROM periodo_academico WHERE 1=1 {filt} "
-            f"ORDER BY fecha_inicio DESC",
+            f"TO_CHAR(fecha_fin,'DD/MM/YYYY') as fecha_fin, "
+            f"fecha_inicio::text as fecha_inicio_raw, fecha_fin::text as fecha_fin_raw "
+            f"FROM periodo_academico WHERE 1=1 {filt} ORDER BY fecha_inicio DESC",
             params,
         )
         data = [dict(r) for r in cur.fetchall()]
@@ -5159,6 +5296,41 @@ def crear_periodo():
         return jsonify({"status": "success", "message": "Período creado exitosamente!", "id_periodo": id_periodo})
     except Exception as e:
         print(f"Error creando período: {e}")
+        return _api_error_response(e)
+
+@app.route('/admin/periodos/<int:id_periodo>', methods=['PUT', 'DELETE'])
+def editar_eliminar_periodo(id_periodo):
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    id_colegio = _admin_colegio_id(admin)
+    if not id_colegio:
+        return jsonify({"status": "error", "message": "Solo admin de colegio."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT 1 FROM periodo_academico WHERE id_periodo = %s AND id_colegio = %s", (id_periodo, id_colegio))
+        if not cur.fetchone():
+            cur.close(); conn.close()
+            return jsonify({"status": "error", "message": "Período no encontrado."})
+        if request.method == 'DELETE':
+            cur.execute("DELETE FROM periodo_academico WHERE id_periodo = %s", (id_periodo,))
+            conn.commit(); cur.close(); conn.close()
+            return jsonify({"status": "success", "message": "Período eliminado exitosamente!"})
+        data = request.get_json()
+        nombre = data.get('nombre')
+        fecha_inicio = data.get('fecha_inicio')
+        fecha_fin = data.get('fecha_fin')
+        if not all([nombre, fecha_inicio, fecha_fin]):
+            return jsonify({"status": "error", "message": "Todos los campos son requeridos."})
+        cur.execute(
+            "UPDATE periodo_academico SET nombre=%s, fecha_inicio=%s, fecha_fin=%s WHERE id_periodo=%s",
+            (nombre, fecha_inicio, fecha_fin, id_periodo),
+        )
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({"status": "success", "message": "Período actualizado exitosamente!"})
+    except Exception as e:
+        print(f"Error período: {e}")
         return _api_error_response(e)
 
 ###########obtiene todos los grupos registrados junto con su período académico asociado mediante un LEFT JOIN, retornando id del grupo, nombre y nombre del período, ordenados de forma descendente######
@@ -5220,6 +5392,45 @@ def crear_grupo():
         id_grupo = cur.fetchone()[0]
         conn.commit(); cur.close(); conn.close()
         return jsonify({"status": "success", "message": "Grupo creado exitosamente!", "id_grupo": id_grupo})
+    except Exception as e:
+        return _api_error_response(e)
+
+@app.route('/admin/grupos/<int:id_grupo>', methods=['PUT', 'DELETE'])
+def editar_eliminar_grupo(id_grupo):
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    id_colegio = _admin_colegio_id(admin)
+    if not id_colegio:
+        return jsonify({"status": "error", "message": "Solo admin de colegio."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT 1 FROM grupos WHERE id_grupo = %s AND id_colegio = %s", (id_grupo, id_colegio))
+        if not cur.fetchone():
+            cur.close(); conn.close()
+            return jsonify({"status": "error", "message": "Grupo no encontrado."})
+        if request.method == 'DELETE':
+            cur.execute("DELETE FROM grupo_estudiantes WHERE id_grupo = %s", (id_grupo,))
+            cur.execute("DELETE FROM grupo_materias WHERE id_grupo = %s", (id_grupo,))
+            cur.execute("DELETE FROM grupos WHERE id_grupo = %s", (id_grupo,))
+            conn.commit(); cur.close(); conn.close()
+            return jsonify({"status": "success", "message": "Grupo eliminado exitosamente!"})
+        data = request.get_json()
+        nombre = data.get('nombre')
+        id_periodo = data.get('id_periodo')
+        if not all([nombre, id_periodo]):
+            return jsonify({"status": "error", "message": "Todos los campos son requeridos."})
+        cur.execute("SELECT 1 FROM periodo_academico WHERE id_periodo = %s AND id_colegio = %s", (id_periodo, id_colegio))
+        if not cur.fetchone():
+            cur.close(); conn.close()
+            return jsonify({"status": "error", "message": "Período no pertenece a tu colegio."})
+        cur.execute(
+            "UPDATE grupos SET nombre=%s, id_periodo=%s WHERE id_grupo=%s",
+            (nombre, id_periodo, id_grupo),
+        )
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({"status": "success", "message": "Grupo actualizado exitosamente!"})
     except Exception as e:
         return _api_error_response(e)
 
@@ -5295,6 +5506,52 @@ def crear_materia():
         id_materia = cur.fetchone()[0]
         conn.commit(); cur.close(); conn.close()
         return jsonify({"status": "success", "message": "Materia creada exitosamente!", "id_materia": id_materia})
+    except psycopg2.Error as e:
+        if "unique" in str(e).lower():
+            return jsonify({"status": "error", "message": "El código ya existe."})
+        return _api_error_response(e)
+    except Exception as e:
+        return _api_error_response(e)
+
+@app.route('/admin/materias/<int:id_materia>', methods=['PUT', 'DELETE'])
+def editar_eliminar_materia(id_materia):
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    id_colegio = _admin_colegio_id(admin)
+    if not id_colegio:
+        return jsonify({"status": "error", "message": "Solo admin de colegio."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT 1 FROM materia WHERE id_materia = %s AND id_colegio = %s", (id_materia, id_colegio))
+        if not cur.fetchone():
+            cur.close(); conn.close()
+            return jsonify({"status": "error", "message": "Materia no encontrada."})
+        if request.method == 'DELETE':
+            cur.execute("DELETE FROM grupo_materias WHERE id_materia = %s", (id_materia,))
+            cur.execute("DELETE FROM materia WHERE id_materia = %s", (id_materia,))
+            conn.commit(); cur.close(); conn.close()
+            return jsonify({"status": "success", "message": "Materia eliminada exitosamente!"})
+        data = request.get_json()
+        nombre = data.get('nombre')
+        codigo = data.get('codigo') or None
+        if not nombre:
+            return jsonify({"status": "error", "message": "El nombre es requerido."})
+        if codigo:
+            cur.execute(
+                "SELECT 1 FROM materia WHERE id_colegio = %s AND codigo = %s AND id_materia != %s",
+                (id_colegio, codigo, id_materia),
+            )
+            if cur.fetchone():
+                cur.close(); conn.close()
+                return jsonify({"status": "error", "message": "El código ya existe en este colegio."})
+        cur.execute(
+            "UPDATE materia SET nombre=%s, codigo=%s WHERE id_materia=%s",
+            (nombre, codigo, id_materia),
+        )
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({"status": "success", "message": "Materia actualizada exitosamente!"})
     except psycopg2.Error as e:
         if "unique" in str(e).lower():
             return jsonify({"status": "error", "message": "El código ya existe."})
@@ -5501,12 +5758,16 @@ def get_administradores():
     admin, err = _require_admin_api()
     if err:
         return err
-    if is_superadmin(admin):
+    es_gualt = session.get('user_email', '') == 'gualt45@gmail.com'
+    if is_superadmin(admin) and not es_gualt:
         return jsonify({"status": "success", "data": []})
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        filt, params = colegio_filter_sql(admin)
+        if es_gualt:
+            filt, params = '', []
+        else:
+            filt, params = colegio_filter_sql(admin)
         cur.execute(
             f"SELECT id_admin, nombre_completo, correo_electronico, email_verified, rol "
             f"FROM administradores WHERE 1=1 {filt} ORDER BY id_admin",
@@ -5557,6 +5818,15 @@ def crear_administrador():
             ) VALUES (%s, %s, %s, TRUE, 'admin_colegio', %s) RETURNING id_admin
         """, (nombre, email, hashed, id_colegio))
         new_id = cur.fetchone()[0]
+        # Enviar email de bienvenida
+        if email:
+            try:
+                cur.execute("SELECT nombre_oficial FROM colegios WHERE id_colegio = %s", (id_colegio,))
+                row = cur.fetchone()
+                school_name = row[0] if row else None
+            except Exception:
+                school_name = None
+            send_welcome_email(email, nombre, "Administrador", password, school_name)
         conn.commit(); cur.close(); conn.close()
         return jsonify({
             "status": "success",
@@ -5614,24 +5884,39 @@ def toggle_admin_lider(id_admin):
 #
 @app.route('/admin/administradores/<int:id_admin>', methods=['DELETE'])
 def eliminar_administrador(id_admin):
-    admin, id_colegio, err = _require_admin_lider_api()
-    if err:
-        return err
+    es_gualt = session.get('user_email', '') == 'gualt45@gmail.com'
+    if not es_gualt:
+        admin, id_colegio, err = _require_admin_lider_api()
+        if err:
+            return err
     if id_admin == session['user_id']:
         return jsonify({"status": "error", "message": "No puedes eliminarte a ti mismo."})
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute(
-            "SELECT id_admin FROM administradores WHERE id_admin = %s AND id_colegio = %s",
-            (id_admin, id_colegio),
-        )
-        if not cur.fetchone():
-            cur.close()
-            conn.close()
-            return jsonify({"status": "error", "message": "Administrador no encontrado en tu colegio."})
+        cur.execute("SELECT rol FROM administradores WHERE id_admin = %s", (id_admin,))
+        target = cur.fetchone()
+        if not target:
+            cur.close(); conn.close()
+            return jsonify({"status": "error", "message": "Administrador no encontrado."})
+        if target[0] == 'superadmin':
+            if not es_gualt:
+                cur.close(); conn.close()
+                return jsonify({"status": "error", "message": "Solo el Super Administrador principal puede eliminar super admins."})
+            cur.execute("DELETE FROM solicitudes_cambio_contrasena WHERE id_admin = %s", (id_admin,))
+            cur.execute("DELETE FROM administradores WHERE id_admin = %s", (id_admin,))
+            conn.commit(); cur.close(); conn.close()
+            return jsonify({"status": "success", "message": "Super administrador eliminado."})
+        if not es_gualt:
+            cur.execute(
+                "SELECT id_admin FROM administradores WHERE id_admin = %s AND id_colegio = %s",
+                (id_admin, id_colegio),
+            )
+            if not cur.fetchone():
+                cur.close(); conn.close()
+                return jsonify({"status": "error", "message": "Administrador no encontrado en tu colegio."})
         cur.execute("DELETE FROM solicitudes_cambio_contrasena WHERE id_admin = %s", (id_admin,))
-        cur.execute("DELETE FROM administradores WHERE id_admin = %s AND id_colegio = %s", (id_admin, id_colegio))
+        cur.execute("DELETE FROM administradores WHERE id_admin = %s", (id_admin,))
         conn.commit(); cur.close(); conn.close()
         return jsonify({"status": "success", "message": "Administrador eliminado."})
     except Exception as e:
@@ -5751,6 +6036,9 @@ def admin_crear_colegio():
         result = crear_colegio_con_admin(
             cur, nombre, lema, admin_nombre, admin_email, admin_password, codigo_colegio=codigo,
         )
+        # Enviar email de bienvenida al admin del colegio
+        if admin_email:
+            send_welcome_email(admin_email, admin_nombre, "Administrador", admin_password, nombre)
         conn.commit()
         cur.close()
         conn.close()
@@ -5794,6 +6082,10 @@ def admin_crear_superadmin():
             VALUES (%s, %s, %s, TRUE, 'superadmin', NULL) RETURNING id_admin
         """, (nombre, email, hashed))
         new_id = cur.fetchone()[0]
+        # Enviar email de bienvenida
+        if email:
+            send_welcome_email(email, nombre, "Super Administrador", password,
+                               extra_msg="Has sido designado como <strong>Super Administrador</strong> de toda la plataforma <strong>MiBoletín</strong>.")
         conn.commit()
         cur.close()
         conn.close()

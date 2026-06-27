@@ -175,7 +175,6 @@
 .agenda-estado-badge.pendiente { background: #ebf8ff; color: #2b6cb0; }
 .agenda-estado-badge.completado { background: #c6f6d5; color: #276749; }
 .agenda-estado-badge.cancelado { background: #edf2f7; color: #718096; }
-.check-asig input { accent-color: #3182ce; }
 
 /* Dark mode dinámico */
 .page-dashboard.dark-mode .card.panel-card,
