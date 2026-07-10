@@ -21,8 +21,11 @@ import re
 import json
 import csv
 import secrets
+import time
 import urllib.request
 import urllib.error
+from collections import defaultdict
+import threading
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 load_dotenv()
@@ -91,6 +94,92 @@ def _pdf_to_bytesio(pdf):
 
 app = Flask(__name__)
 app.secret_key = _require_secret_key()
+
+
+# ══════════════════════════════════════════════════════
+#  RATE LIMITING (in-memory, por IP)
+# ══════════════════════════════════════════════════════
+_rate_store = defaultdict(list)
+_rate_lock = threading.Lock()
+
+def _rate_limit(ip, window=60, max_req=120):
+    """Retorna True si la petición debe ser bloqueada."""
+    now = time.time()
+    with _rate_lock:
+        _rate_store[ip] = [t for t in _rate_store[ip] if now - t < window]
+        if len(_rate_store[ip]) >= max_req:
+            return True
+        _rate_store[ip].append(now)
+        return False
+
+_login_attempts = defaultdict(list)
+
+def _login_rate_limit(ip, window=900, max_attempts=8):
+    """Rate limit más estricto para login: 8 intentos cada 15 min."""
+    now = time.time()
+    with _rate_lock:
+        _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < window]
+        if len(_login_attempts[ip]) >= max_attempts:
+            return True
+        _login_attempts[ip].append(now)
+        return False
+
+
+# ══════════════════════════════════════════════════════
+#  HEADERS DE SEGURIDAD
+# ══════════════════════════════════════════════════════
+@app.after_request
+def _add_security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; "
+        "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
+        "font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; "
+        "img-src 'self' data: https://ui-avatars.com blob:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'self'"
+    )
+    return response
+
+
+@app.before_request
+def _rate_limit_middleware():
+    ip = request.remote_addr or '127.0.0.1'
+    if _rate_limit(ip):
+        return jsonify({"status": "error", "message": "Demasiadas peticiones. Intenta más tarde."}), 429
+
+
+# ══════════════════════════════════════════════════════
+#  AUDITORÍA
+# ══════════════════════════════════════════════════════
+_audit_log = []
+
+def _audit(event_type, user_id=None, user_tipo=None, detalle=None):
+    """Registra evento de auditoría en memoria (ciclo reciente)."""
+    _audit_log.append({
+        'timestamp': datetime.now().isoformat(),
+        'tipo': event_type,
+        'user_id': user_id,
+        'user_tipo': user_tipo,
+        'ip': request.remote_addr if request else None,
+        'detalle': detalle,
+    })
+    if len(_audit_log) > 500:
+        _audit_log.pop(0)
+
+def _audit_login(user_id, user_tipo, exitoso, detalle=None):
+    _audit('LOGIN', user_id, user_tipo, f"{'exitoso' if exitoso else 'fallido'}: {detalle or ''}")
+
+def _audit_accion_crud(accion, tabla, id_objeto=None, detalle=None):
+    user_info = session.get('user_info')
+    uid = user_info.get('id') if user_info else None
+    utipo = user_info.get('tipo') if user_info else None
+    _audit(f'CRUD_{accion}', uid, utipo, f"{tabla} id={id_objeto}: {detalle or ''}")
 
 
 #  CONFIGURACIÓN EMAIL (GMAIL) — desde variables de entorno
@@ -403,7 +492,7 @@ def _pdf_agregar_estudiante(pdf, cur, est, profesor, id_docente):
     pdf.ln(4)
 
     cur.execute("""
-        SELECT tipo, descripcion, TO_CHAR(fecha_registro,'DD/MM/YYYY') as fecha
+        SELECT tipo, COALESCE(tipo_falta, 'otro') as tipo_falta, descripcion, TO_CHAR(fecha_registro,'DD/MM/YYYY') as fecha
         FROM observador WHERE id_estudiante = %s AND id_profesor = %s
         ORDER BY fecha_registro DESC
     """, (est['id_estudiante'], id_docente))
@@ -421,8 +510,9 @@ def _pdf_agregar_estudiante(pdf, cur, est, profesor, id_docente):
         for o in obs:
             r, g, b = fills.get(o['tipo'], (226, 232, 240))
             pdf.set_fill_color(r, g, b)
+            falta_label = o.get('tipo_falta') or 'otro'
             pdf.cell(25, 7, o['tipo'].capitalize(), 1, 0, 'C', fill=True)
-            pdf.cell(140, 7, _pdf_sanitize(o['descripcion'] or '')[:70], 1, 0, 'L', fill=fill)
+            pdf.cell(140, 7, _pdf_sanitize(f"[{falta_label}] {o['descripcion'] or ''}")[:70], 1, 0, 'L', fill=fill)
             pdf.cell(25, 7, o['fecha'], 1, 1, 'C', fill=fill)
             fill = not fill
     else:
@@ -1091,6 +1181,12 @@ def loginuser():
         return render_template('general/loginuser.html')
 
     elif request.method == 'POST':
+        ip = request.remote_addr or '127.0.0.1'
+        if _login_rate_limit(ip):
+            _audit('LOGIN_BLOCKED', detalle=f'IP {ip} rate-limited')
+            return render_template('general/loginuser.html',
+                                   error='Demasiados intentos. Espera 15 minutos.')
+
         user_email = request.form.get('correo', '').strip().lower()
         password = request.form.get('contraseña')
 
@@ -1124,8 +1220,10 @@ def loginuser():
                         'codigo': estudiante[2],
                         'id_colegio': id_colegio,
                     }
+                    _audit_login(estudiante[0], 'estudiante', True, user_email)
                     return redirect(url_for('estudiante_dashboard'))
                 else:
+                    _audit_login(None, 'estudiante', False, user_email)
                     return render_template('general/loginuser.html', error='Contraseña incorrecta')
 
             # Buscar como profesor
@@ -1145,10 +1243,13 @@ def loginuser():
                         'codigo': profesor[2],
                         'id_colegio': id_colegio,
                     }
+                    _audit_login(profesor[0], 'profesor', True, user_email)
                     return redirect(url_for('profesor_dashboard'))
                 else:
+                    _audit_login(None, 'profesor', False, user_email)
                     return render_template('general/loginuser.html', error='Contraseña incorrecta')
 
+            _audit_login(None, 'desconocido', False, user_email)
             return render_template('general/loginuser.html',
                                    error='Usuario no encontrado. Verifica tu correo electrónico.')
 
@@ -1168,7 +1269,8 @@ def estudiante_dashboard():
         return redirect(url_for('loginuser'))
     return render_template('estudiantes/estudiante.html',
                            nombre=user_info['nombre'],
-                           codigo=user_info['codigo'])
+                           codigo=user_info['codigo'],
+                           user_id=user_info['id'])
 
 ########Esta ruta permite el acceso al panel del profesor, solo si ha iniciado sesión correctamente.##########
 #
@@ -2923,6 +3025,33 @@ def obtener_materias_ids():
     except Exception as e:
         return _api_error_response(e)
 
+
+@app.route("/obtener-asignaciones-ids", methods=["GET"])
+def obtener_asignaciones_ids():
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    if is_superadmin(admin):
+        return jsonify({"status": "success", "data": []})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        filt, params = colegio_filter_sql(admin, alias='g')
+        cur.execute(f"""
+            SELECT gm.id_grupo_materia, m.nombre AS materia, g.nombre AS grupo
+            FROM grupo_materias gm
+            JOIN grupos g ON gm.id_grupo = g.id_grupo
+            JOIN materia m ON gm.id_materia = m.id_materia
+            WHERE 1=1 {filt}
+            ORDER BY g.nombre, m.nombre
+        """, params)
+        data = [dict(r) for r in cur.fetchall()]
+        cur.close(); conn.close()
+        return jsonify({"status": "success", "data": data})
+    except Exception as e:
+        return _api_error_response(e)
+
+
 #######Obtiene la cantidad de estudiantes y profesores activos para mostrar estadísticas en el dashboard del administrador.#######
 #
 @app.route("/dashboard-stats", methods=["GET"])
@@ -4093,16 +4222,19 @@ def agregar_observacion():
     data = request.get_json()
     id_estudiante = data.get('id_estudiante')
     tipo = data.get('tipo')
+    tipo_falta = data.get('tipo_falta') or 'otro'
     descripcion = data.get('descripcion')
     if not all([id_estudiante, tipo, descripcion]):
         return jsonify({"status": "error", "message": "Todos los campos son requeridos."})
+    if tipo_falta not in ('academica', 'disciplinaria', 'convivencia', 'asistencia', 'otro'):
+        tipo_falta = 'otro'
     try:
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute("""
-            INSERT INTO observador (id_estudiante, id_profesor, tipo, descripcion)
-            VALUES (%s, %s, %s, %s) RETURNING id_observacion
-        """, (id_estudiante, user_info['id'], tipo, descripcion))
+            INSERT INTO observador (id_estudiante, id_profesor, tipo, tipo_falta, descripcion)
+            VALUES (%s, %s, %s, %s, %s) RETURNING id_observacion
+        """, (id_estudiante, user_info['id'], tipo, tipo_falta, descripcion))
         id_obs = cur.fetchone()[0]
         conn.commit()
         cur.close()
@@ -4122,7 +4254,7 @@ def ver_observaciones(id_estudiante):
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         cur.execute("""
-            SELECT id_observacion, tipo, descripcion, fecha_registro
+            SELECT id_observacion, tipo, COALESCE(tipo_falta, 'otro') as tipo_falta, descripcion, fecha_registro
             FROM observador
             WHERE id_estudiante = %s AND id_profesor = %s
             ORDER BY fecha_registro DESC
@@ -4133,6 +4265,487 @@ def ver_observaciones(id_estudiante):
         cur.close()
         conn.close()
         return jsonify({"status": "success", "data": obs})
+    except Exception as e:
+        return _api_error_response(e)
+
+############# CLASES IMPARTIDAS - Registro del profesor y consulta del admin #################
+
+@app.route('/profesor/clases-impartidas', methods=['GET'])
+def profesor_clases_impartidas():
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT ci.id_clase_impartida, ci.fecha, ci.tema, ci.material_utilizado,
+                   ci.observaciones, ci.fecha_registro,
+                   g.nombre AS nombre_grupo, m.nombre AS nombre_materia
+            FROM clases_impartidas ci
+            JOIN grupo_materias gm ON ci.id_grupo_materia = gm.id_grupo_materia
+            JOIN grupos g ON gm.id_grupo = g.id_grupo
+            JOIN materia m ON gm.id_materia = m.id_materia
+            WHERE ci.id_profesor = %s AND ci.id_colegio = %s
+            ORDER BY ci.fecha DESC
+        """, (user_info['id'], user_info.get('id_colegio', 1)))
+        clases = [dict(c) for c in cur.fetchall()]
+        for c in clases:
+            c['fecha'] = str(c['fecha'])
+            c['fecha_registro'] = str(c['fecha_registro'])
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "data": clases})
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/profesor/clases-impartidas', methods=['POST'])
+def registrar_clase_impartida():
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    data = request.get_json()
+    id_grupo_materia = data.get('id_grupo_materia')
+    fecha = data.get('fecha')
+    tema = data.get('tema')
+    material_utilizado = data.get('material_utilizado') or ''
+    observaciones = data.get('observaciones') or ''
+    if not all([id_grupo_materia, fecha, tema]):
+        return jsonify({"status": "error", "message": "Grupo-materia, fecha y tema son requeridos."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        if not _profesor_puede_grupo(cur, user_info['id'], id_grupo_materia):
+            return jsonify({"status": "error", "message": "No tienes acceso a esta asignación."}), 403
+        cur.execute("""
+            INSERT INTO clases_impartidas (id_profesor, id_grupo_materia, fecha, tema, material_utilizado, observaciones, id_colegio)
+            VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id_clase_impartida
+        """, (user_info['id'], id_grupo_materia, fecha, tema, material_utilizado, observaciones, user_info.get('id_colegio', 1)))
+        id_nuevo = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "message": "Clase registrada.", "id_clase_impartida": id_nuevo})
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/profesor/clases-impartidas/<int:id_clase>', methods=['DELETE'])
+def eliminar_clase_impartida(id_clase):
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM clases_impartidas WHERE id_clase_impartida = %s AND id_profesor = %s",
+                    (id_clase, user_info['id']))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "message": "Clase eliminada."})
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/profesor/asignaciones-activas', methods=['GET'])
+def profesor_asignaciones_activas():
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT gm.id_grupo_materia, g.nombre AS nombre_grupo, m.nombre AS nombre_materia
+            FROM grupo_materias gm
+            JOIN grupos g ON gm.id_grupo = g.id_grupo
+            JOIN materia m ON gm.id_materia = m.id_materia
+            WHERE gm.id_docente = %s AND g.id_colegio = %s
+            ORDER BY g.nombre, m.nombre
+        """, (user_info['id'], user_info.get('id_colegio', 1)))
+        asignaciones = [dict(a) for a in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "data": asignaciones})
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/admin/clases-impartidas', methods=['GET'])
+def admin_clases_impartidas():
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    if is_superadmin(admin):
+        return jsonify({"status": "success", "data": []})
+    id_profesor = request.args.get('id_profesor', type=int)
+    id_grupo = request.args.get('id_grupo', type=int)
+    id_materia = request.args.get('id_materia', type=int)
+    fecha_desde = request.args.get('fecha_desde')
+    fecha_hasta = request.args.get('fecha_hasta')
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        filt, params = colegio_filter_sql(admin, alias='ci')
+        base = """
+            SELECT ci.id_clase_impartida, ci.fecha, ci.tema, ci.material_utilizado,
+                   ci.observaciones, ci.fecha_registro,
+                   p.nombre_completo AS profesor, g.nombre AS nombre_grupo,
+                   m.nombre AS nombre_materia, gm.id_grupo, gm.id_materia
+            FROM clases_impartidas ci
+            JOIN grupo_materias gm ON ci.id_grupo_materia = gm.id_grupo_materia
+            JOIN profesores p ON ci.id_profesor = p.id_profesor
+            JOIN grupos g ON gm.id_grupo = g.id_grupo
+            JOIN materia m ON gm.id_materia = m.id_materia
+            WHERE 1=1 {filt}
+        """.format(filt=filt)
+        if id_profesor:
+            base += " AND ci.id_profesor = %s"
+            params.append(id_profesor)
+        if id_grupo:
+            base += " AND gm.id_grupo = %s"
+            params.append(id_grupo)
+        if id_materia:
+            base += " AND gm.id_materia = %s"
+            params.append(id_materia)
+        if fecha_desde:
+            base += " AND ci.fecha >= %s"
+            params.append(fecha_desde)
+        if fecha_hasta:
+            base += " AND ci.fecha <= %s"
+            params.append(fecha_hasta)
+        base += " ORDER BY ci.fecha DESC, p.nombre_completo"
+        cur.execute(base, tuple(params))
+        clases = [dict(c) for c in cur.fetchall()]
+        for c in clases:
+            c['fecha'] = str(c['fecha'])
+            c['fecha_registro'] = str(c['fecha_registro'])
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "data": clases})
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/admin/lista-profesores', methods=['GET'])
+def admin_listar_profesores():
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        filt, params = colegio_filter_sql(admin, alias='p')
+        cur.execute("""
+            SELECT p.id_profesor, p.nombre_completo, p.correo_electronico
+            FROM profesores p WHERE 1=1 {filt} ORDER BY p.nombre_completo
+        """.format(filt=filt), tuple(params))
+        profesores = [dict(p) for p in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "data": profesores})
+    except Exception as e:
+        return _api_error_response(e)
+
+############# HORARIOS ESCOLARES - CRUD admin + vista profesor #################
+
+@app.route('/admin/horarios', methods=['GET'])
+def admin_horarios():
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        filt, params = colegio_filter_sql(admin, alias='h')
+        cur.execute("""
+            SELECT h.id_horario, h.dia_semana, h.hora_inicio::text, h.hora_fin::text,
+                   h.salon, h.id_grupo_materia,
+                   g.nombre AS nombre_grupo, m.nombre AS nombre_materia,
+                   p.nombre_completo AS profesor
+            FROM horarios h
+            JOIN grupo_materias gm ON h.id_grupo_materia = gm.id_grupo_materia
+            JOIN grupos g ON gm.id_grupo = g.id_grupo
+            JOIN materia m ON gm.id_materia = m.id_materia
+            JOIN profesores p ON gm.id_docente = p.id_profesor
+            WHERE 1=1 {filt}
+            ORDER BY g.nombre, h.dia_semana, h.hora_inicio
+        """.format(filt=filt), tuple(params))
+        horarios = [dict(h) for h in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "data": horarios})
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/admin/horarios', methods=['POST'])
+def crear_horario():
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    data = request.get_json()
+    dia_semana = data.get('dia_semana')
+    hora_inicio = data.get('hora_inicio')
+    hora_fin = data.get('hora_fin')
+    id_grupo_materia = data.get('id_grupo_materia')
+    salon = data.get('salon') or ''
+    if not all([dia_semana, hora_inicio, hora_fin, id_grupo_materia]):
+        return jsonify({"status": "error", "message": "Todos los campos son requeridos."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO horarios (dia_semana, hora_inicio, hora_fin, id_grupo_materia, salon, id_colegio)
+            VALUES (%s, %s, %s, %s, %s, %s) RETURNING id_horario
+        """, (dia_semana, hora_inicio, hora_fin, id_grupo_materia, salon, _admin_colegio_id(admin) or 1))
+        id_nuevo = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "message": "Horario creado.", "id_horario": id_nuevo})
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/admin/horarios/<int:id_horario>', methods=['DELETE'])
+def eliminar_horario(id_horario):
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        filt, params = colegio_filter_sql(admin, alias='h')
+        cur.execute(f"DELETE FROM horarios h WHERE h.id_horario = %s AND 1=1 {filt}", [id_horario] + list(params))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "message": "Horario eliminado."})
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/admin/horarios/<int:id_horario>', methods=['PUT'])
+def editar_horario(id_horario):
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    data = request.get_json()
+    dia_semana = data.get('dia_semana')
+    hora_inicio = data.get('hora_inicio')
+    hora_fin = data.get('hora_fin')
+    salon = data.get('salon', '')
+    if not all([dia_semana, hora_inicio, hora_fin]):
+        return jsonify({"status": "error", "message": "Día, hora inicio y hora fin son requeridos."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        filt, params = colegio_filter_sql(admin, alias='h')
+        cur.execute(f"""
+            UPDATE horarios h SET dia_semana=%s, hora_inicio=%s, hora_fin=%s, salon=%s
+            WHERE h.id_horario = %s AND 1=1 {filt}
+        """, [dia_semana, hora_inicio, hora_fin, salon, id_horario] + list(params))
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({"status": "success", "message": "Horario actualizado."})
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/admin/horarios/generar', methods=['POST'])
+def generar_horarios_automatico():
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    id_colegio = _admin_colegio_id(admin) or 1
+    data = request.get_json() or {}
+    horas_por_dia = data.get('horas_por_dia', 7)
+    hora_inicio = data.get('hora_inicio', '07:00')
+    duracion_min = data.get('duracion_min', 50)
+    dias = data.get('dias', ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'])
+    eliminar_existentes = data.get('eliminar_existentes', False)
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT gm.id_grupo_materia, gm.id_grupo, gm.id_materia, gm.id_docente,
+                   g.nombre AS nombre_grupo, m.nombre AS nombre_materia,
+                   p.nombre_completo AS profesor
+            FROM grupo_materias gm
+            JOIN grupos g ON gm.id_grupo = g.id_grupo
+            JOIN materia m ON gm.id_materia = m.id_materia
+            JOIN profesores p ON gm.id_docente = p.id_profesor
+            WHERE g.id_colegio = %s
+            ORDER BY g.nombre, m.nombre
+        """, (id_colegio,))
+        asignaciones = [dict(a) for a in cur.fetchall()]
+
+        if not asignaciones:
+            cur.close(); conn.close()
+            return jsonify({"status": "error", "message": "No hay asignaciones profesor-materia-grupo para generar horarios."})
+
+        if eliminar_existentes:
+            cur.execute("DELETE FROM horarios WHERE id_colegio = %s", (id_colegio,))
+            conn.commit()
+
+        slots_ocupados_profesor = set()
+        slots_ocupados_grupo = set()
+        slots_ocupados_salon = set()
+
+        if not eliminar_existentes:
+            cur.execute("""
+                SELECT h.dia_semana, h.hora_inicio::text, h.hora_fin::text,
+                       gm.id_docente, gm.id_grupo
+                FROM horarios h
+                JOIN grupo_materias gm ON h.id_grupo_materia = gm.id_grupo_materia
+                WHERE h.id_colegio = %s
+            """, (id_colegio,))
+            for ex in cur.fetchall():
+                slots_ocupados_profesor.add((ex['dia_semana'], ex['hora_inicio'], ex['hora_fin'], ex['id_docente']))
+                slots_ocupados_grupo.add((ex['dia_semana'], ex['hora_inicio'], ex['hora_fin'], ex['id_grupo']))
+
+        def _hora_add(hora_str, minutos):
+            h, m = map(int, hora_str.split(':'))
+            m += minutos
+            h += m // 60
+            m = m % 60
+            return f"{h:02d}:{m:02d}"
+
+        def _hay_conflicto(id_docente, id_grupo, dia, hi, hf):
+            for (sd, sh, sf, sdoc) in slots_ocupados_profesor:
+                if sdoc == id_docente and sd == dia and not (hf <= sh or hi >= sf):
+                    return True
+            for (sd, sh, sf, sgr) in slots_ocupados_grupo:
+                if sgr == id_grupo and sd == dia and not (hf <= sh or hi >= sf):
+                    return True
+            return False
+
+        todos_los_slots = []
+        for h in range(horas_por_dia):
+            hi = _hora_add(hora_inicio, h * duracion_min)
+            hf = _hora_add(hi, duracion_min)
+            for dia in dias:
+                todos_los_slots.append((dia, hi, hf))
+
+        materias_por_grupo = {}
+        for a in asignaciones:
+            gid = a['id_grupo']
+            if gid not in materias_por_grupo:
+                materias_por_grupo[gid] = []
+            materias_por_grupo[gid].append(a)
+
+        horarios_generados = []
+        sin_lugar = []
+
+        for gid, mats in materias_por_grupo.items():
+            idx_materia = 0
+            for dia, hi, hf in todos_los_slots:
+                asig = mats[idx_materia % len(mats)]
+                id_docente = asig['id_docente']
+                if not _hay_conflicto(id_docente, gid, dia, hi, hf):
+                    cur.execute("""
+                        INSERT INTO horarios (dia_semana, hora_inicio, hora_fin, id_grupo_materia, salon, id_colegio)
+                        VALUES (%s, %s, %s, %s, %s, %s) RETURNING id_horario
+                    """, (dia, hi, hf, asig['id_grupo_materia'], '', id_colegio))
+                    id_nuevo = cur.fetchone()[0]
+                    slots_ocupados_profesor.add((dia, hi, hf, id_docente))
+                    slots_ocupados_grupo.add((dia, hi, hf, gid))
+                    horarios_generados.append({
+                        'id_horario': id_nuevo,
+                        'dia_semana': dia,
+                        'hora_inicio': hi,
+                        'hora_fin': hf,
+                        'grupo': asig['nombre_grupo'],
+                        'materia': asig['nombre_materia'],
+                        'profesor': asig['profesor'],
+                    })
+                idx_materia += 1
+
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({
+            "status": "success",
+            "message": f"{len(horarios_generados)} horarios generados para {len(materias_por_grupo)} grupos en {len(dias)} días.",
+            "data": horarios_generados,
+            "conflictos": 0,
+            "sin_lugar": [],
+        })
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/admin/horarios/limpiar', methods=['DELETE'])
+def limpiar_horarios():
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    id_colegio = _admin_colegio_id(admin) or 1
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM horarios WHERE id_colegio = %s", (id_colegio,))
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({"status": "success", "message": "Todos los horarios han sido eliminados."})
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/profesor/horarios', methods=['GET'])
+def profesor_horarios():
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'profesor':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT h.id_horario, h.dia_semana, h.hora_inicio::text, h.hora_fin::text,
+                   h.salon, g.nombre AS nombre_grupo, m.nombre AS nombre_materia
+            FROM horarios h
+            JOIN grupo_materias gm ON h.id_grupo_materia = gm.id_grupo_materia
+            JOIN grupos g ON gm.id_grupo = g.id_grupo
+            JOIN materia m ON gm.id_materia = m.id_materia
+            WHERE gm.id_docente = %s AND h.id_colegio = %s
+            ORDER BY CASE h.dia_semana
+                WHEN 'Lunes' THEN 1 WHEN 'Martes' THEN 2 WHEN 'Miércoles' THEN 3
+                WHEN 'Jueves' THEN 4 WHEN 'Viernes' THEN 5 WHEN 'Sábado' THEN 6 ELSE 7
+            END, h.hora_inicio
+        """, (user_info['id'], user_info.get('id_colegio', 1)))
+        horarios = [dict(h) for h in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "data": horarios})
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/estudiante/horarios', methods=['GET'])
+def estudiante_horarios():
+    user_info = session.get('user_info')
+    if not user_info or user_info.get('tipo') != 'estudiante':
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT h.id_horario, h.dia_semana, h.hora_inicio::text, h.hora_fin::text,
+                   h.salon, m.nombre AS nombre_materia, p.nombre_completo AS profesor
+            FROM horarios h
+            JOIN grupo_materias gm ON h.id_grupo_materia = gm.id_grupo_materia
+            JOIN materia m ON gm.id_materia = m.id_materia
+            JOIN profesores p ON gm.id_docente = p.id_profesor
+            JOIN grupo_estudiantes ge ON gm.id_grupo = ge.id_grupo
+            WHERE ge.id_estudiante = %s AND h.id_colegio = %s
+            ORDER BY CASE h.dia_semana
+                WHEN 'Lunes' THEN 1 WHEN 'Martes' THEN 2 WHEN 'Miércoles' THEN 3
+                WHEN 'Jueves' THEN 4 WHEN 'Viernes' THEN 5 WHEN 'Sábado' THEN 6 ELSE 7
+            END, h.hora_inicio
+        """, (user_info['id'], user_info.get('id_colegio', 1)))
+        horarios = [dict(h) for h in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return jsonify({"status": "success", "data": horarios})
     except Exception as e:
         return _api_error_response(e)
 
@@ -4474,6 +5087,7 @@ def subir_notas_masivo():
             """, (n['id_estudiante'], n['valor'], n.get('descripcion',''), n['id_tipo'], n['id_grupo_materia']))
             guardadas += 1
         conn.commit(); cur.close(); conn.close()
+        _audit_accion_crud('INSERT', 'notas', None, f'{guardadas} notas subidas')
         return jsonify({"status": "success", "message": f"{guardadas} nota(s) guardadas exitosamente."})
     except Exception as e:
         return _api_error_response(e)
@@ -4935,7 +5549,7 @@ def estudiante_observador():
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         cur.execute("""
-            SELECT o.tipo, o.descripcion,
+            SELECT o.tipo, COALESCE(o.tipo_falta, 'otro') as tipo_falta, o.descripcion,
                    TO_CHAR(o.fecha_registro,'DD/MM/YYYY') as fecha,
                    p.nombre_completo as profesor
             FROM observador o
@@ -5415,6 +6029,7 @@ def editar_eliminar_grupo(id_grupo):
             cur.execute("DELETE FROM grupo_materias WHERE id_grupo = %s", (id_grupo,))
             cur.execute("DELETE FROM grupos WHERE id_grupo = %s", (id_grupo,))
             conn.commit(); cur.close(); conn.close()
+            _audit_accion_crud('DELETE', 'grupos', id_grupo)
             return jsonify({"status": "success", "message": "Grupo eliminado exitosamente!"})
         data = request.get_json()
         nombre = data.get('nombre')
@@ -6793,6 +7408,344 @@ def candidatos_uploads(filename):
     return send_from_directory(UPLOAD_FOLDER_CANDIDATOS, filename)
 
 ##########fin votaciones#######
+
+# =============================================================================
+# BOLETÍN PDF CONSOLIDADO
+# =============================================================================
+
+def _deshacer_nivel(valor):
+    """Mapea nota numérica a nivel de desempeño según escala colombiana."""
+    if valor is None: return 'Sin nota'
+    v = float(valor)
+    if v < 3.0: return 'Bajo'
+    if v < 4.0: return 'Básico'
+    if v < 4.5: return 'Alto'
+    return 'Superior'
+
+
+@app.route('/admin/boletin/areas', methods=['GET'])
+def admin_boletin_areas():
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    id_colegio = _admin_colegio_id(admin) or 1
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("SELECT id_area, nombre FROM areas WHERE id_colegio = %s ORDER BY nombre", (id_colegio,))
+        areas = [dict(a) for a in cur.fetchall()]
+        for a in areas:
+            cur.execute("""
+                SELECT m.id_materia, m.nombre FROM area_materias am
+                JOIN materia m ON am.id_materia = m.id_materia
+                WHERE am.id_area = %s ORDER BY m.nombre
+            """, (a['id_area'],))
+            a['materias'] = [dict(m) for m in cur.fetchall()]
+        cur.close(); conn.close()
+        return jsonify({"status": "success", "data": areas})
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/admin/boletin/areas', methods=['POST'])
+def admin_boletin_crear_area():
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    id_colegio = _admin_colegio_id(admin) or 1
+    data = request.get_json()
+    nombre = data.get('nombre')
+    id_materias = data.get('id_materias') or []
+    if not nombre:
+        return jsonify({"status": "error", "message": "Nombre del área es requerido."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("INSERT INTO areas (nombre, id_colegio) VALUES (%s, %s) RETURNING id_area", (nombre, id_colegio))
+        id_area = cur.fetchone()[0]
+        for mid in id_materias:
+            cur.execute("INSERT INTO area_materias (id_area, id_materia) VALUES (%s, %s) ON CONFLICT DO NOTHING", (id_area, mid))
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({"status": "success", "message": "Área creada.", "id_area": id_area})
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/admin/boletin/areas/<int:id_area>', methods=['DELETE'])
+def admin_boletin_eliminar_area(id_area):
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM areas WHERE id_area = %s", (id_area,))
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({"status": "success", "message": "Área eliminada."})
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/admin/boletin/liberar', methods=['POST'])
+def admin_boletin_liberar():
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    id_colegio = _admin_colegio_id(admin) or 1
+    data = request.get_json()
+    id_periodo = data.get('id_periodo')
+    id_grupo = data.get('id_grupo')
+    id_estudiante = data.get('id_estudiante')
+    liberar = data.get('liberar', True)
+    if not id_periodo:
+        return jsonify({"status": "error", "message": "Período es requerido."})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        if id_estudiante:
+            cur.execute("""
+                INSERT INTO boletin_liberacion (id_colegio, id_periodo, id_grupo, id_estudiante, liberado, fecha_liberacion, liberado_por)
+                VALUES (%s, %s, %s, %s, %s, NOW(), %s)
+                ON CONFLICT (id_colegio, id_periodo, id_grupo, id_estudiante)
+                DO UPDATE SET liberado = %s, fecha_liberacion = NOW(), liberado_por = %s
+            """, (id_colegio, id_periodo, id_grupo, id_estudiante, liberar, admin['id'], liberar, admin['id']))
+        elif id_grupo:
+            cur.execute("""
+                INSERT INTO boletin_liberacion (id_colegio, id_periodo, id_grupo, id_estudiante, liberado, fecha_liberacion, liberado_por)
+                SELECT %s, %s, %s, ge.id_estudiante, %s, NOW(), %s
+                FROM grupo_estudiantes ge WHERE ge.id_grupo = %s
+                ON CONFLICT (id_colegio, id_periodo, id_grupo, id_estudiante)
+                DO UPDATE SET liberado = %s, fecha_liberacion = NOW(), liberado_por = %s
+            """, (id_colegio, id_periodo, id_grupo, liberar, admin['id'], id_grupo, liberar, admin['id']))
+        else:
+            cur.execute("""
+                INSERT INTO boletin_liberacion (id_colegio, id_periodo, id_grupo, id_estudiante, liberado, fecha_liberacion, liberado_por)
+                SELECT %s, %s, g.id_grupo, ge.id_estudiante, %s, NOW(), %s
+                FROM grupos g JOIN grupo_estudiantes ge ON g.id_grupo = ge.id_grupo
+                WHERE g.id_colegio = %s
+                ON CONFLICT (id_colegio, id_periodo, id_grupo, id_estudiante)
+                DO UPDATE SET liberado = %s, fecha_liberacion = NOW(), liberado_por = %s
+            """, (id_colegio, id_periodo, liberar, admin['id'], id_colegio, liberar, admin['id']))
+        conn.commit(); cur.close(); conn.close()
+        return jsonify({"status": "success", "message": "Boletines liberados." if liberar else "Boletines bloqueados."})
+    except Exception as e:
+        return _api_error_response(e)
+
+
+def _boletin_esta_liberado(cur, id_colegio, id_estudiante, id_periodo):
+    """Verifica si el boletín de un estudiante para un período está liberado."""
+    cur.execute("""
+        SELECT liberado FROM boletin_liberacion
+        WHERE id_colegio = %s AND id_estudiante = %s AND id_periodo = %s
+        LIMIT 1
+    """, (id_colegio, id_estudiante, id_periodo))
+    row = cur.fetchone()
+    if row is None:
+        return True
+    return bool(row['liberado'])
+
+
+def _generar_boletin_pdf(cur, pdf, id_estudiante, id_colegio, id_periodo):
+    """Genera un boletín consolidado de un estudiante. Retorna el objeto pdf."""
+    cur.execute("""
+        SELECT e.id_estudiante, e.nombre_completo, e.codigo_estudiante,
+               e.grado, e.grupo, e.fecha_nacimiento, e.genero
+        FROM estudiantes e WHERE e.id_estudiante = %s
+    """, (id_estudiante,))
+    est = cur.fetchone()
+    if not est:
+        return pdf
+    est = dict(est)
+
+    pdf.add_page()
+    pdf.set_font('helvetica', 'B', 16)
+    pdf.set_text_color(*pdf.primary)
+    pdf.cell(0, 12, 'BOLETIN ACADEMICO', 0, 1, 'C')
+    pdf.set_font('helvetica', '', 10)
+    pdf.set_text_color(80, 80, 80)
+    pdf.cell(0, 6, _pdf_sanitize(est['nombre_completo']), 0, 1, 'C')
+    pdf.cell(0, 6, _pdf_sanitize(f"Codigo: {est['codigo_estudiante']}  |  Grado: {est.get('grado','')}  |  Grupo: {est.get('grupo','')}"), 0, 1, 'C')
+    if id_periodo:
+        cur.execute("SELECT nombre FROM periodo_academico WHERE id_periodo = %s", (id_periodo,))
+        per = cur.fetchone()
+        if per:
+            pdf.cell(0, 6, _pdf_sanitize(f"Periodo: {per['nombre'] if isinstance(per, dict) else per[0]}"), 0, 1, 'C')
+    pdf.ln(4)
+
+    cur.execute("""
+        SELECT DISTINCT gm.id_materia, m.nombre AS materia, gm.id_grupo_materia,
+               gm.id_grupo, g.nombre AS nombre_grupo
+        FROM grupo_materias gm
+        JOIN materia m ON gm.id_materia = m.id_materia
+        JOIN grupos g ON gm.id_grupo = g.id_grupo
+        JOIN grupo_estudiantes ge ON g.id_grupo = ge.id_grupo
+        WHERE ge.id_estudiante = %s AND g.id_colegio = %s
+        ORDER BY m.nombre
+    """, (id_estudiante, id_colegio))
+    materias = [dict(r) for r in cur.fetchall()]
+
+    areas = {}
+    try:
+        cur.execute("SELECT id_area, nombre FROM areas WHERE id_colegio = %s", (id_colegio,))
+        for a in cur.fetchall():
+            cur.execute("SELECT id_materia FROM area_materias WHERE id_area = %s", (a['id_area'],))
+            for m in cur.fetchall():
+                areas[m['id_materia']] = a['nombre']
+    except Exception:
+        pass
+
+    pdf.set_font('helvetica', 'B', 11)
+    pdf.set_fill_color(*pdf.primary)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(0, 9, ' Desempeno por Materia', 1, 1, 'L', fill=True)
+
+    if materias:
+        pdf.set_font('helvetica', 'B', 8)
+        r, g, b = pdf.primary
+        pdf.set_fill_color(min(r + 40, 255), min(g + 40, 255), min(b + 40, 255))
+        pdf.set_text_color(0, 0, 0)
+        pdf.cell(55, 7, 'Materia', 1, 0, 'C', fill=True)
+        pdf.cell(30, 7, 'Area', 1, 0, 'C', fill=True)
+        pdf.cell(40, 7, 'Definitiva', 1, 0, 'C', fill=True)
+        pdf.cell(35, 7, 'Desempeno', 1, 1, 'C', fill=True)
+        pdf.set_font('helvetica', '', 8)
+        fill = False
+        for mat in materias:
+            where_notas = "n.id_estudiante = %s AND gm.id_grupo_materia = %s"
+            params_n = [id_estudiante, mat['id_grupo_materia']]
+            if id_periodo:
+                cur.execute("""
+                    SELECT n.valor FROM notas n
+                    JOIN grupo_materias gm ON n.id_grupo_materia = gm.id_grupo_materia
+                    WHERE {} AND n.fecha_registro >= (SELECT COALESCE(fecha_inicio, NOW() - INTERVAL '6 months') FROM periodo_academico WHERE id_periodo = %s)
+                      AND n.fecha_registro <= (SELECT COALESCE(fecha_fin, NOW()) FROM periodo_academico WHERE id_periodo = %s)
+                """.format(where_notas), params_n + [id_periodo, id_periodo])
+            else:
+                cur.execute("""
+                    SELECT n.valor FROM notas n
+                    JOIN grupo_materias gm ON n.id_grupo_materia = gm.id_grupo_materia
+                    WHERE {}
+                """.format(where_notas), params_n)
+            notas_mat = [float(n['valor']) for n in cur.fetchall() if n['valor'] is not None]
+            if notas_mat:
+                definitiva = round(sum(notas_mat) / len(notas_mat), 1)
+                nivel = _deshacer_nivel(definitiva)
+                nivel_color = {'Superior': (34,139,34), 'Alto': (0,128,0), 'Básico': (200,150,0), 'Bajo': (200,50,50)}
+                nc = nivel_color.get(nivel, (100,100,100))
+            else:
+                definitiva = 'S/N'
+                nivel = 'Sin nota'
+                nc = (150, 150, 150)
+            area_nombre = areas.get(mat['id_materia'], '—')
+            r2, g2, b2 = pdf.primary
+            pdf.set_fill_color(min(r2 + 40, 255), min(g2 + 40, 255), min(b2 + 40, 255))
+            pdf.cell(55, 7, _pdf_sanitize(mat['materia'])[:28], 1, 0, 'L', fill=fill)
+            pdf.cell(30, 7, _pdf_sanitize(area_nombre)[:15], 1, 0, 'C', fill=fill)
+            pdf.set_text_color(*nc)
+            pdf.cell(40, 7, str(definitiva), 1, 0, 'C', fill=fill)
+            pdf.cell(35, 7, nivel, 1, 1, 'C', fill=fill)
+            pdf.set_text_color(0, 0, 0)
+            fill = not fill
+    else:
+        pdf.set_font('helvetica', 'I', 9)
+        pdf.cell(0, 8, '  No hay materias asignadas.', 0, 1)
+
+    pdf.ln(5)
+    pdf.set_font('helvetica', 'B', 11)
+    pdf.set_fill_color(*pdf.primary)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(0, 9, ' Observaciones', 1, 1, 'L', fill=True)
+    cur.execute("""
+        SELECT o.tipo, COALESCE(o.tipo_falta, 'otro') as tipo_falta, o.descripcion, TO_CHAR(o.fecha_registro,'DD/MM/YYYY') as fecha,
+               p.nombre_completo as profesor
+        FROM observador o
+        JOIN profesores p ON o.id_profesor = p.id_profesor
+        WHERE o.id_estudiante = %s
+        ORDER BY o.fecha_registro DESC LIMIT 20
+    """, (id_estudiante,))
+    obs = [dict(o) for o in cur.fetchall()]
+    if obs:
+        pdf.set_font('helvetica', '', 8)
+        pdf.set_text_color(0, 0, 0)
+        fill = False
+        fills = {'positivo': (198, 246, 213), 'negativo': (254, 215, 215), 'neutro': (226, 232, 240)}
+        for o in obs:
+            r, g, b = fills.get(o['tipo'], (226, 232, 240))
+            pdf.set_fill_color(r, g, b)
+            pdf.cell(20, 7, o['tipo'].capitalize(), 1, 0, 'C', fill=True)
+            pdf.cell(100, 7, _pdf_sanitize(o['descripcion'] or '')[:55], 1, 0, 'L', fill=fill)
+            pdf.cell(30, 7, _pdf_sanitize(o.get('profesor', ''))[:16], 1, 0, 'L', fill=fill)
+            pdf.cell(30, 7, o['fecha'], 1, 1, 'C', fill=fill)
+            fill = not fill
+    else:
+        pdf.set_font('helvetica', 'I', 9)
+        pdf.cell(0, 8, '  No hay observaciones registradas.', 0, 1)
+
+    return pdf
+
+
+@app.route('/boletin/<int:id_estudiante>/pdf')
+def boletin_estudiante_pdf(id_estudiante):
+    user_info = session.get('user_info')
+    if not user_info:
+        return jsonify({"status": "error", "message": "No autorizado"}), 401
+    tipo = user_info.get('tipo')
+    id_colegio = user_info.get('id_colegio', 1)
+    id_periodo = request.args.get('id_periodo', type=int)
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        if tipo == 'estudiante':
+            if id_estudiante != user_info.get('id'):
+                return jsonify({"status": "error", "message": "No autorizado."}), 403
+            if id_periodo and not _boletin_esta_liberado(cur, id_colegio, id_estudiante, id_periodo):
+                cur.close(); conn.close()
+                return jsonify({"status": "error", "message": "Este boletín aún no ha sido liberado por el administrador."}), 403
+        cur.execute("SELECT codigo_estudiante FROM estudiantes WHERE id_estudiante = %s", (id_estudiante,))
+        est_row = cur.fetchone()
+        est_codigo = est_row['codigo_estudiante'] if est_row else id_estudiante
+        pdf = _pdf_for_colegio(id_colegio)
+        pdf = _generar_boletin_pdf(cur, pdf, id_estudiante, id_colegio, id_periodo)
+        cur.close(); conn.close()
+        return send_file(_pdf_to_bytesio(pdf), as_attachment=True,
+                         download_name=f'boletin_{est_codigo}.pdf', mimetype='application/pdf')
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/admin/boletin/periodos', methods=['GET'])
+def admin_boletin_periodos():
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    id_colegio = _admin_colegio_id(admin) or 1
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT id_periodo, nombre, COALESCE(estado, 'activo') as estado,
+                   TO_CHAR(fecha_inicio,'DD/MM/YYYY') as fecha_inicio,
+                   TO_CHAR(fecha_fin,'DD/MM/YYYY') as fecha_fin
+            FROM periodo_academico WHERE id_colegio = %s ORDER BY id_periodo DESC
+        """, (id_colegio,))
+        periodos = [dict(p) for p in cur.fetchall()]
+        cur.close(); conn.close()
+        return jsonify({"status": "success", "data": periodos})
+    except Exception as e:
+        return _api_error_response(e)
+
+
+@app.route('/admin/auditoria', methods=['GET'])
+def admin_auditoria():
+    admin, err = _require_admin_api()
+    if err:
+        return err
+    limit = request.args.get('limit', 100, type=int)
+    limit = min(limit, 500)
+    logs = list(reversed(_audit_log[-limit:]))
+    return jsonify({"status": "success", "data": logs})
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5005"))
     app.run(host="0.0.0.0", port=port)

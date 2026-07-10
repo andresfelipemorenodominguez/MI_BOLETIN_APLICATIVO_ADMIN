@@ -203,9 +203,98 @@ def ensure_profile_schema(get_db_connection):
             )
         """)
 
+    if _table_exists(cur, 'observador') and not _column_exists(cur, 'observador', 'tipo_falta'):
+        cur.execute("ALTER TABLE observador ADD COLUMN tipo_falta VARCHAR(30) DEFAULT 'otro'")
+
+    if not _table_exists(cur, 'clases_impartidas'):
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS clases_impartidas (
+                id_clase_impartida SERIAL PRIMARY KEY,
+                id_profesor INTEGER NOT NULL,
+                id_grupo_materia INTEGER NOT NULL,
+                fecha DATE NOT NULL,
+                tema VARCHAR(255) NOT NULL,
+                material_utilizado TEXT,
+                observaciones TEXT,
+                id_colegio INTEGER NOT NULL,
+                fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+    if _table_exists(cur, 'clases_impartidas') and not _column_exists(cur, 'clases_impartidas', 'id_colegio'):
+        cur.execute("ALTER TABLE clases_impartidas ADD COLUMN id_colegio INTEGER NOT NULL DEFAULT 1")
+
+    if _table_exists(cur, 'horarios') and not _column_exists(cur, 'horarios', 'salon'):
+        cur.execute("ALTER TABLE horarios ADD COLUMN salon VARCHAR(100)")
+    if _table_exists(cur, 'horarios') and not _column_exists(cur, 'horarios', 'id_colegio'):
+        cur.execute("ALTER TABLE horarios ADD COLUMN id_colegio INTEGER NOT NULL DEFAULT 1")
+
+    if _table_exists(cur, 'periodo_academico') and not _column_exists(cur, 'periodo_academico', 'estado'):
+        cur.execute("ALTER TABLE periodo_academico ADD COLUMN estado VARCHAR(20) DEFAULT 'activo'")
+
+    if not _table_exists(cur, 'boletin_liberacion'):
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS boletin_liberacion (
+                id_liberacion SERIAL PRIMARY KEY,
+                id_colegio INTEGER NOT NULL,
+                id_periodo INTEGER NOT NULL,
+                id_grupo INTEGER,
+                id_estudiante INTEGER,
+                liberado BOOLEAN DEFAULT FALSE,
+                fecha_liberacion TIMESTAMP,
+                liberado_por INTEGER,
+                UNIQUE(id_colegio, id_periodo, id_grupo, id_estudiante)
+            )
+        """)
+
+    if not _table_exists(cur, 'areas'):
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS areas (
+                id_area SERIAL PRIMARY KEY,
+                nombre VARCHAR(100) NOT NULL,
+                id_colegio INTEGER NOT NULL
+            )
+        """)
+
+    if not _table_exists(cur, 'area_materias'):
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS area_materias (
+                id_area INTEGER NOT NULL REFERENCES areas(id_area) ON DELETE CASCADE,
+                id_materia INTEGER NOT NULL REFERENCES materia(id_materia) ON DELETE CASCADE,
+                PRIMARY KEY (id_area, id_materia)
+            )
+        """)
+
+    _ensure_indexes(cur)
+
     conn.commit()
     cur.close()
     conn.close()
+
+
+def _ensure_indexes(cur):
+    """Crea índices de rendimiento si no existen."""
+    idxs = [
+        ("idx_notas_estudiante",    "CREATE INDEX IF NOT EXISTS idx_notas_estudiante ON notas(id_estudiante)"),
+        ("idx_notas_grupo_materia", "CREATE INDEX IF NOT EXISTS idx_notas_grupo_materia ON notas(id_grupo_materia)"),
+        ("idx_notas_fecha",         "CREATE INDEX IF NOT EXISTS idx_notas_fecha ON notas(fecha_registro)"),
+        ("idx_observador_est",      "CREATE INDEX IF NOT EXISTS idx_observador_est ON observador(id_estudiante)"),
+        ("idx_observador_prof",     "CREATE INDEX IF NOT EXISTS idx_observador_prof ON observador(id_profesor)"),
+        ("idx_grupo_materias_doc",  "CREATE INDEX IF NOT EXISTS idx_grupo_materias_doc ON grupo_materias(id_docente)"),
+        ("idx_grupo_estudiantes",   "CREATE INDEX IF NOT EXISTS idx_grupo_estudiantes ON grupo_estudiantes(id_grupo)"),
+        ("idx_horarios_grupo",      "CREATE INDEX IF NOT EXISTS idx_horarios_grupo ON horarios(id_grupo_materia)"),
+        ("idx_clases_profesor",     "CREATE INDEX IF NOT EXISTS idx_clases_profesor ON clases_impartidas(id_profesor)"),
+        ("idx_clases_fecha",        "CREATE INDEX IF NOT EXISTS idx_clases_fecha ON clases_impartidas(fecha)"),
+        ("idx_boletin_est_per",     "CREATE INDEX IF NOT EXISTS idx_boletin_est_per ON boletin_liberacion(id_estudiante, id_periodo)"),
+        ("idx_estudiantes_codigo",  "CREATE INDEX IF NOT EXISTS idx_estudiantes_codigo ON estudiantes(codigo_estudiante)"),
+        ("idx_estudiantes_email",   "CREATE INDEX IF NOT EXISTS idx_estudiantes_email ON estudiantes(correo_electronico)"),
+        ("idx_profesores_email",    "CREATE INDEX IF NOT EXISTS idx_profesores_email ON profesores(correo_electronico)"),
+    ]
+    for name, stmt in idxs:
+        try:
+            cur.execute(stmt)
+        except Exception:
+            pass
 
 
 def get_admin_from_session(session):

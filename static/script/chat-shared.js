@@ -34,12 +34,14 @@ class ChatManager {
     const section = this._el('chat-section');
     if (!section) return;
 
-    section.classList.add('chat-mobile-sidebar');
+    const chatApp = section.querySelector('.chat-app') || section;
+    chatApp.classList.add('chat-mobile-sidebar');
+    this._chatAppEl = chatApp;
     const backBtn = document.getElementById('chat-back-btn');
     if (backBtn) {
       backBtn.addEventListener('click', () => {
-        section.classList.remove('chat-mobile-conversation');
-        section.classList.add('chat-mobile-sidebar');
+        chatApp.classList.remove('chat-mobile-conversation');
+        chatApp.classList.add('chat-mobile-sidebar');
       });
     }
 
@@ -365,7 +367,7 @@ class ChatManager {
   async startChat(contact) {
     try {
       this.showActivePanel(contact);
-      const chatApp = this._el('chat-section');
+      const chatApp = this._chatAppEl || this._el('chat-section')?.querySelector('.chat-app') || this._el('chat-section');
       if (chatApp) {
         chatApp.classList.remove('chat-mobile-sidebar');
         chatApp.classList.add('chat-mobile-conversation');

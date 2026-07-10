@@ -46,7 +46,9 @@ async function renderSection(section) {
     case 'inicio':     renderInicio();           break;
     case 'notas':      await renderNotas();      break;
     case 'observador': await renderObservador(); break;
-    case 'reporte':    await renderReporte();    break;
+    case 'clases-impartidas': await renderClasesImpartidas(); break;
+    case 'horario':           await renderHorario();          break;
+    case 'reporte':           await renderReporte();          break;
     case 'agenda':     await renderAgenda();     break;
     case 'asistencia': await renderAsistencia(); break;
     case 'material':   await renderMaterial();   break;
@@ -76,6 +78,9 @@ function renderInicio() {
         </button>
         <button type="button" class="quick-action-btn" onclick="navToProf('observador')">
           <i class="fas fa-eye"></i><span>Observador</span>
+        </button>
+        <button type="button" class="quick-action-btn" onclick="navToProf('clases-impartidas')">
+          <i class="fas fa-chalkboard-teacher"></i><span>Clases Impartidas</span>
         </button>
         <button type="button" class="quick-action-btn" onclick="navToProf('reporte')">
           <i class="fas fa-chart-bar"></i><span>Reporte General</span>
@@ -962,10 +967,10 @@ async function renderObservador() {
     <div class="card">
       <h2 class="card-title"><i class="fas fa-eye"></i> Observador de Estudiantes</h2>
       <div class="form-group">
-        <label>Estudiante</label>
-        <select id="selEstObs" onchange="cargarObservaciones(this.value)">
-          <option value="">Selecciona un estudiante</option>
-          ${estudiantes.map(e=>`<option value="${e.id_estudiante}">${e.nombre_completo} — ${e.codigo_estudiante}</option>`).join('')}
+        <label>Buscar estudiante</label>
+        <input type="text" id="buscaObs" placeholder="Escribe nombre o código..." oninput="filtrarEstObservador()" style="margin-bottom:6px;">
+        <select id="selEstObs" onchange="cargarObservaciones(this.value)" size="6" style="width:100%;font-size:14px;">
+          ${estudiantes.map(e=>`<option value="${e.id_estudiante}" data-grupo="${e.nombre_grupo||''}">${e.nombre_completo} — ${e.codigo_estudiante} (${e.nombre_grupo||e.grupo||''})</option>`).join('')}
         </select>
       </div>
       <div class="form-group">
@@ -974,6 +979,16 @@ async function renderObservador() {
           <option value="positivo">✅ Positivo</option>
           <option value="negativo">❌ Negativo</option>
           <option value="neutro">📌 Neutro</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Tipo de falta</label>
+        <select id="selFaltaObs">
+          <option value="academica">📚 Académica</option>
+          <option value="disciplinaria">⚠️ Disciplinaria</option>
+          <option value="convivencia">🤝 Convivencia</option>
+          <option value="asistencia">📅 Asistencia</option>
+          <option value="otro">📌 Otro</option>
         </select>
       </div>
       <div class="form-group">
@@ -989,14 +1004,25 @@ async function renderObservador() {
     </div>`;
 }
 
+window.filtrarEstObservador = function() {
+  const term = (document.getElementById('buscaObs')?.value || '').toLowerCase();
+  const sel = document.getElementById('selEstObs');
+  if (!sel) return;
+  Array.from(sel.options).forEach(opt => {
+    const txt = (opt.textContent + ' ' + (opt.dataset.grupo || '')).toLowerCase();
+    opt.style.display = txt.includes(term) ? '' : 'none';
+  });
+};
+
 window.guardarObservacion = async function() {
   const id_estudiante = document.getElementById('selEstObs').value;
   const tipo          = document.getElementById('selTipoObs').value;
+  const tipo_falta    = document.getElementById('selFaltaObs').value;
   const descripcion   = document.getElementById('inputObs').value;
   const msg           = document.getElementById('obsMsg');
   if (!id_estudiante||!descripcion) { msg.innerHTML=`<span style="color:red">⚠️ Selecciona estudiante y escribe descripción.</span>`; return; }
   const res  = await fetch('/profesor/observador', { method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({id_estudiante,tipo,descripcion}) });
+    body: JSON.stringify({id_estudiante,tipo,tipo_falta,descripcion}) });
   const data = await res.json();
   msg.innerHTML = `<span style="color:${data.status==='success'?'green':'red'}">${data.message}</span>`;
   if (data.status==='success') cargarObservaciones(id_estudiante);
@@ -1011,14 +1037,165 @@ window.cargarObservaciones = async function(id_estudiante) {
   if (!obs.length) { lista.innerHTML='<p>No hay observaciones registradas.</p>'; return; }
   const colores = {positivo:'#c6f6d5',negativo:'#fed7d7',neutro:'#e2e8f0'};
   const iconos  = {positivo:'✅',negativo:'❌',neutro:'📌'};
-  lista.innerHTML = obs.map(o=>`
-    <div style="background:${colores[o.tipo]};padding:14px;border-radius:12px;margin-bottom:10px;">
+  const faltaLabels = {academica:'📚 Académica',disciplinaria:'⚠️ Disciplinaria',convivencia:'🤝 Convivencia',asistencia:'📅 Asistencia',otro:'📌 Otro'};
+  lista.innerHTML = obs.map(o=>{
+    const falta = faltaLabels[o.tipo_falta] || faltaLabels.otro;
+    return `<div style="background:${colores[o.tipo]};padding:14px;border-radius:12px;margin-bottom:10px;">
       <strong>${iconos[o.tipo]} ${o.tipo.toUpperCase()}</strong>
+      <span style="margin-left:8px;font-size:12px;padding:2px 8px;border-radius:6px;background:rgba(0,0,0,0.08);">${falta}</span>
       <p style="margin:6px 0;">${o.descripcion}</p>
       <small style="color:#666;">${o.fecha_registro}</small>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 };
 
+
+// ══════════════════════════════════════════════════════
+//  CLASES IMPARTIDAS
+// ══════════════════════════════════════════════════════
+async function renderClasesImpartidas() {
+  const [resClases, resAsig] = await Promise.all([
+    fetch('/profesor/clases-impartidas'),
+    fetch('/profesor/asignaciones-activas'),
+  ]);
+  const dClases = await resClases.json();
+  const dAsig   = await resAsig.json();
+  const clases  = dClases.data || [];
+  const asignaciones = dAsig.data || [];
+
+  content.innerHTML = `
+    <div class="card">
+      <h2 class="card-title"><i class="fas fa-chalkboard-teacher"></i> Clases Impartidas</h2>
+      <div class="form-group">
+        <label>Asignatura – Grupo</label>
+        <select id="selAsigCI" class="form-select">
+          <option value="">Selecciona...</option>
+          ${asignaciones.map(a=>`<option value="${a.id_grupo_materia}">${a.nombre_materia} — ${a.nombre_grupo}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Fecha</label>
+        <input type="date" id="fechaCI" value="${new Date().toISOString().slice(0,10)}">
+      </div>
+      <div class="form-group">
+        <label>Tema impartido</label>
+        <input type="text" id="temaCI" placeholder="Ej: Fracciones equivalentes">
+      </div>
+      <div class="form-group">
+        <label>Material utilizado</label>
+        <input type="text" id="materialCI" placeholder="Ej: Libro pág. 45, PowerPoint">
+      </div>
+      <div class="form-group">
+        <label>Observaciones</label>
+        <textarea id="obsCI" rows="3" placeholder="Notas adicionales..."></textarea>
+      </div>
+      <button type="button" class="btn-primary" onclick="guardarClaseImpartida()">
+        <i class="fas fa-save"></i> Registrar Clase
+      </button>
+      <div id="ciMsg" style="margin-top:12px;"></div>
+    </div>
+
+    <div class="card" style="margin-top:24px;">
+      <h2 class="card-title"><i class="fas fa-list"></i> Historial de Clases</h2>
+      <div id="listaCI">
+        ${clases.length ? '' : '<p>No hay clases registradas.</p>'}
+      </div>
+    </div>`;
+
+  if (clases.length) renderListaCI(clases);
+}
+
+function renderListaCI(clases) {
+  const el = document.getElementById('listaCI');
+  if (!el) return;
+  el.innerHTML = clases.map(c=>`
+    <div style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <strong>${c.nombre_materia} — ${c.nombre_grupo}</strong>
+          <span style="margin-left:8px;font-size:13px;color:#666;">📅 ${c.fecha}</span>
+        </div>
+        <button type="button" class="btn-danger" onclick="eliminarClaseImpartida(${c.id_clase_impartida})" title="Eliminar">
+          <i class="fas fa-trash"></i>
+        </button>
+      </div>
+      <p style="margin:6px 0 0;font-weight:500;">${c.tema}</p>
+      ${c.material_utilizado ? `<p style="margin:2px 0 0;font-size:13px;color:#666;">📖 ${c.material_utilizado}</p>` : ''}
+      ${c.observaciones ? `<p style="margin:2px 0 0;font-size:13px;color:#666;">📝 ${c.observaciones}</p>` : ''}
+    </div>`).join('');
+}
+
+window.guardarClaseImpartida = async function() {
+  const id_grupo_materia = document.getElementById('selAsigCI').value;
+  const fecha = document.getElementById('fechaCI').value;
+  const tema = document.getElementById('temaCI').value;
+  const material_utilizado = document.getElementById('materialCI').value;
+  const observaciones = document.getElementById('obsCI').value;
+  const msg = document.getElementById('ciMsg');
+  if (!id_grupo_materia || !fecha || !tema) {
+    msg.innerHTML = `<span style="color:red;">⚠️ Asignatura, fecha y tema son requeridos.</span>`;
+    return;
+  }
+  const res = await fetch('/profesor/clases-impartidas', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({id_grupo_materia,fecha,tema,material_utilizado,observaciones})
+  });
+  const data = await res.json();
+  msg.innerHTML = `<span style="color:${data.status==='success'?'green':'red'};">${data.message}</span>`;
+  if (data.status==='success') {
+    document.getElementById('temaCI').value = '';
+    document.getElementById('materialCI').value = '';
+    document.getElementById('obsCI').value = '';
+    const r2 = await fetch('/profesor/clases-impartidas');
+    const d2 = await r2.json();
+    renderListaCI(d2.data || []);
+  }
+};
+
+window.eliminarClaseImpartida = async function(id) {
+  if (!confirm('¿Eliminar esta clase?')) return;
+  await fetch(`/profesor/clases-impartidas/${id}`, { method:'DELETE' });
+  const r = await fetch('/profesor/clases-impartidas');
+  const d = await r.json();
+  renderListaCI(d.data || []);
+};
+
+// ══════════════════════════════════════════════════════
+//  MI HORARIO
+// ══════════════════════════════════════════════════════
+async function renderHorario() {
+  content.innerHTML = `<div class="loading-state"><i class="fas fa-spinner fa-spin"></i> Cargando horario...</div>`;
+  const res = await fetch('/profesor/horarios');
+  const data = await res.json();
+  const horarios = data.data || [];
+
+  const dias = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  const porDia = {};
+  dias.forEach(d => porDia[d] = []);
+  horarios.forEach(h => {
+    if (porDia[h.dia_semana]) porDia[h.dia_semana].push(h);
+  });
+
+  const colores = ['#ebf8ff','#f0fff4','#faf5ff','#fffaf0','#fff5f5','#f7fafc'];
+
+  content.innerHTML = `
+    <div class="section-header-bar">
+      <h2 class="section-title"><i class="fas fa-calendar-week"></i> Mi Horario Semanal</h2>
+    </div>
+    ${!horarios.length ? '<p style="padding:24px;text-align:center;color:#666;">No tienes horarios registrados aún.</p>' : ''}
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;">
+      ${dias.map((d,i) => `
+        <div style="background:${colores[i]};border-radius:12px;padding:16px;border:1px solid #e2e8f0;">
+          <h3 style="margin:0 0 10px;font-size:16px;color:#2d3748;">📅 ${d}</h3>
+          ${porDia[d].length ? porDia[d].map(h => `
+            <div style="background:white;border-radius:8px;padding:10px;margin-bottom:8px;border:1px solid #e2e8f0;">
+              <strong style="font-size:13px;">${h.hora_inicio} – ${h.hora_fin}</strong>
+              <p style="margin:4px 0 0;font-size:14px;">${h.nombre_materia} <span style="color:#666;">— ${h.nombre_grupo}</span></p>
+              ${h.salon ? `<p style="margin:2px 0 0;font-size:12px;color:#888;">🏫 ${h.salon}</p>` : ''}
+            </div>`).join('') : '<p style="color:#999;font-size:13px;">Sin clases</p>'}
+        </div>`).join('')}
+    </div>`;
+}
 
 // ══════════════════════════════════════════════════════
 //  REPORTE GENERAL

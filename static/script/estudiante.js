@@ -1,6 +1,7 @@
 const content = document.getElementById('panel-content');
 const navLinks = Array.from(document.querySelectorAll('.nav-link[data-section]'));
 const userName = document.querySelector('.user-name')?.textContent?.trim() || 'Estudiante';
+const user_id = parseInt(document.getElementById('current-user-data')?.dataset.userId || '0');
 
 ProfilePanel.init({
   notify: (msg, ok) => alert(msg),
@@ -46,6 +47,8 @@ async function renderSection(sec) {
     case 'asistencia': await renderAsistencia();break;
     case 'material':   await renderMaterial();  break;
     case 'observador': await renderObservador();break;
+    case 'horario':    await renderHorario();    break;
+    case 'boletin':    renderBoletin();          break;
     case 'agenda':     await renderAgenda();     break;
     case 'chat':       renderChat();            break;
     case 'votaciones': await renderVotaciones(); break;
@@ -77,6 +80,9 @@ function renderInicio() {
         </button>
         <button type="button" class="quick-action-btn" onclick="navTo('observador')">
           <i class="fas fa-eye"></i><span>Observador</span>
+        </button>
+        <button type="button" class="quick-action-btn" onclick="descargarMiBoletin()">
+          <i class="fas fa-file-pdf"></i><span>Mi Boletín</span>
         </button>
         <button type="button" class="quick-action-btn" onclick="navTo('agenda')">
           <i class="fas fa-calendar-alt"></i><span>Agenda</span>
@@ -468,6 +474,7 @@ async function renderObservador() {
   const colores = { positivo:'#c6f6d5', negativo:'#fed7d7', neutro:'#e2e8f0' };
   const iconos  = { positivo:'✅', negativo:'❌', neutro:'📌' };
   const textCol = { positivo:'#276749', negativo:'#9b2c2c', neutro:'#4a5568' };
+  const faltaLabels = {academica:'📚 Académica',disciplinaria:'⚠️ Disciplinaria',convivencia:'🤝 Convivencia',asistencia:'📅 Asistencia',otro:'📌 Otro'};
 
   content.innerHTML = `
   <div class="section-header-bar">
@@ -480,10 +487,67 @@ async function renderObservador() {
         <span class="obs-tipo" style="background:${colores[o.tipo]};color:${textCol[o.tipo]};">
           ${iconos[o.tipo]} ${o.tipo.charAt(0).toUpperCase()+o.tipo.slice(1)}
         </span>
+        <span class="cell-muted" style="margin-left:6px;font-size:12px;padding:2px 8px;border-radius:6px;background:rgba(0,0,0,0.06);">
+          ${faltaLabels[o.tipo_falta] || faltaLabels.otro}
+        </span>
         <span class="cell-muted">${o.fecha}</span>
       </div>
       <p class="obs-desc">${o.descripcion}</p>
       <div class="obs-profesor"><i class="fas fa-user-tie"></i> ${o.profesor}</div>
+    </div>`).join('')}
+  </div>`;
+}
+
+function renderBoletin() {
+  content.innerHTML = `
+  <div class="section-header-bar">
+    <h2 class="section-title"><i class="fas fa-file-pdf"></i> Mi Boletín Académico</h2>
+  </div>
+  <div class="card" style="max-width:600px;margin:24px auto;text-align:center;padding:32px;">
+    <i class="fas fa-file-pdf" style="font-size:48px;color:#e53e3e;margin-bottom:16px;"></i>
+    <h3 style="margin:0 0 8px;">Descargar Boletín</h3>
+    <p style="color:#666;margin-bottom:20px;">Haz clic en el botón para descargar tu boletín consolidado en PDF con todas tus materias, desempeño y observaciones.</p>
+    <button type="button" class="btn-pdf" onclick="descargarMiBoletin()">
+      <i class="fas fa-download"></i> Descargar Boletín PDF
+    </button>
+    <p style="color:#999;font-size:12px;margin-top:12px;">Si no puedes descargar, es posible que tu boletín aún no haya sido liberado por el administrador.</p>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════════
+//  MI HORARIO
+// ══════════════════════════════════════════════════════
+async function renderHorario() {
+  content.innerHTML = `<div class="loading-state"><i class="fas fa-spinner fa-spin"></i> Cargando horario...</div>`;
+  const res = await fetch('/estudiante/horarios');
+  const data = await res.json();
+  const horarios = data.data || [];
+
+  const dias = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  const porDia = {};
+  dias.forEach(d => porDia[d] = []);
+  horarios.forEach(h => {
+    if (porDia[h.dia_semana]) porDia[h.dia_semana].push(h);
+  });
+
+  const colores = ['#ebf8ff','#f0fff4','#faf5ff','#fffaf0','#fff5f5','#f7fafc'];
+
+  content.innerHTML = `
+  <div class="section-header-bar">
+    <h2 class="section-title"><i class="fas fa-calendar-week"></i> Mi Horario Semanal</h2>
+  </div>
+  ${!horarios.length ? '<p style="padding:24px;text-align:center;color:#666;">No tienes horarios registrados aún.</p>' : ''}
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;">
+    ${dias.map((d,i) => `
+    <div style="background:${colores[i]};border-radius:12px;padding:16px;border:1px solid #e2e8f0;">
+      <h3 style="margin:0 0 10px;font-size:16px;color:#2d3748;">📅 ${d}</h3>
+      ${porDia[d].length ? porDia[d].map(h => `
+        <div style="background:white;border-radius:8px;padding:10px;margin-bottom:8px;border:1px solid #e2e8f0;">
+          <strong style="font-size:13px;">${h.hora_inicio} – ${h.hora_fin}</strong>
+          <p style="margin:4px 0 0;font-size:14px;">${h.nombre_materia}</p>
+          ${h.salon ? `<p style="margin:2px 0 0;font-size:12px;color:#888;">🏫 ${h.salon}</p>` : ''}
+          <p style="margin:2px 0 0;font-size:12px;color:#888;">👤 ${h.profesor}</p>
+        </div>`).join('') : '<p style="color:#999;font-size:13px;">Sin clases</p>'}
     </div>`).join('')}
   </div>`;
 }
@@ -665,6 +729,11 @@ async function renderVotaciones() {
       }
     });
   });
+}
+
+function descargarMiBoletin() {
+  if (!user_id) { alert('No se pudo identificar tu usuario.'); return; }
+  window.open(`/boletin/${user_id}/pdf`, '_blank');
 }
 
 // ── Utilidades ──

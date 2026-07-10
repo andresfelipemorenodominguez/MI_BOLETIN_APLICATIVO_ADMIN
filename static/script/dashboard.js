@@ -267,6 +267,9 @@ class NavigationManager {
             'grupos-section': () => { AdminManager.cargarGrupos(); AdminManager.cargarPeriodosSelect('grupo-periodo'); },
             'materias-section': () => AdminManager.cargarMaterias(),
             'asignaciones-section': () => AdminManager.cargarDatosAsignaciones(),
+            'clases-impartidas-section': () => AdminManager.cargarClasesImpartidas(),
+            'horarios-section': () => AdminManager.cargarHorarios(),
+            'boletines-section': () => AdminManager.cargarBoletines(),
             'reportes-section': () => AdminManager.cargarReportes(),
             'inicio-section': () => window.app?.stats?.refresh(),
             'administradores-section': () => AdminManager.cargarAdministradores(),
@@ -324,6 +327,21 @@ class StatsManager {
     }
 
     async refreshSuper() {
+        try {
+            const res = await fetch('/dashboard-stats');
+            const data = await res.json();
+            if (data.status === 'success') {
+                const d = data.data;
+                const elColegios = document.getElementById('stat-colegios');
+                const elSuperadmins = document.getElementById('stat-superadmins');
+                const elAdminsColegio = document.getElementById('stat-admins-colegio');
+                const elEstudiantes = document.getElementById('stat-estudiantes-plat');
+                if (elColegios) elColegios.textContent = d.colegios ?? '–';
+                if (elSuperadmins) elSuperadmins.textContent = d.superadmins ?? '–';
+                if (elAdminsColegio) elAdminsColegio.textContent = d.admins_colegio ?? '–';
+                if (elEstudiantes) elEstudiantes.textContent = d.estudiantes ?? '–';
+            }
+        } catch(e) {}
     }
 }
 
@@ -982,6 +1000,241 @@ const AdminManager = {
         const res = await fetch('/admin/quitar-estudiante', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id_estudiante, id_grupo }) });
         const data = await res.json();
         if (data.status === 'success') this.cargarEstudiantesGrupo(id_grupo);
+    },
+
+    async cargarClasesImpartidas() {
+        try {
+            const [profRes, grupoRes, matRes, clasesRes] = await Promise.all([
+                fetch('/admin/lista-profesores').then(r => r.json()),
+                fetch('/obtener-grupos-ids').then(r => r.json()),
+                fetch('/obtener-materias-ids').then(r => r.json()),
+                (async () => {
+                    const params = new URLSearchParams();
+                    const pr = document.getElementById('ci-filtro-profesor')?.value;
+                    const gr = document.getElementById('ci-filtro-grupo')?.value;
+                    const mr = document.getElementById('ci-filtro-materia')?.value;
+                    const fd = document.getElementById('ci-filtro-desde')?.value;
+                    const fh = document.getElementById('ci-filtro-hasta')?.value;
+                    if (pr) params.set('id_profesor', pr);
+                    if (gr) params.set('id_grupo', gr);
+                    if (mr) params.set('id_materia', mr);
+                    if (fd) params.set('fecha_desde', fd);
+                    if (fh) params.set('fecha_hasta', fh);
+                    return fetch(`/admin/clases-impartidas?${params}`).then(r => r.json());
+                })()
+            ]);
+            const fillSelect = (id, items, valKey, labelFn) => {
+                const sel = document.getElementById(id);
+                if (!sel) return;
+                const current = sel.value;
+                sel.innerHTML = '<option value="">Todos</option>';
+                (items || []).forEach(i => { const o = document.createElement('option'); o.value = i[valKey]; o.textContent = labelFn(i); sel.appendChild(o); });
+                sel.value = current;
+            };
+            fillSelect('ci-filtro-profesor', profRes.data, 'id_profesor', p => p.nombre_completo);
+            fillSelect('ci-filtro-grupo', grupoRes.data, 'id_grupo', g => g.nombre);
+            fillSelect('ci-filtro-materia', matRes.data, 'id_materia', m => m.nombre);
+
+            const tbody = document.getElementById('tbody-clases-impartidas');
+            if (tbody) {
+                const clases = clasesRes.data || [];
+                if (!clases.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:16px;color:var(--gray-500);">No hay clases registradas con estos filtros</td></tr>'; return; }
+                tbody.innerHTML = clases.map(c => `<tr>
+                    <td>${c.fecha}</td>
+                    <td>${c.profesor}</td>
+                    <td>${c.nombre_grupo}</td>
+                    <td>${c.nombre_materia}</td>
+                    <td>${c.tema}</td>
+                    <td>${c.material_utilizado || '—'}</td>
+                </tr>`).join('');
+            }
+        } catch(e) { console.error('Error cargando clases impartidas:', e); }
+    },
+
+    async cargarHorarios() {
+        try {
+            const [gmRes, horRes] = await Promise.all([
+                fetch('/obtener-asignaciones-ids').then(r => r.json()),
+                fetch('/admin/horarios').then(r => r.json())
+            ]);
+            const gmSel = document.getElementById('hor-grupo-materia');
+            if (gmSel) {
+                gmSel.innerHTML = '<option value="">Selecciona</option>';
+                (gmRes.data || []).forEach(a => {
+                    const o = document.createElement('option');
+                    o.value = a.id_grupo_materia;
+                    o.textContent = `${a.materia} — ${a.grupo}`;
+                    gmSel.appendChild(o);
+                });
+            }
+            const tbody = document.getElementById('tbody-horarios');
+            if (tbody) {
+                const horarios = horRes.data || [];
+                if (!horarios.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:16px;color:var(--gray-500);">No hay horarios registrados</td></tr>'; return; }
+                const diasOpts = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'].map(d =>
+                    `<option value="${d}">${d}</option>`
+                ).join('');
+                tbody.innerHTML = horarios.map(h => {
+                    const diasSel = diasOpts.replace(`value="${h.dia_semana}"`, `value="${h.dia_semana}" selected`);
+                    return `<tr>
+                    <td><select id="hor-dia-${h.id_horario}" class="form-select" style="min-width:100px;">${diasSel}</select></td>
+                    <td><input type="time" id="hor-hi-${h.id_horario}" class="form-input" value="${h.hora_inicio}" style="min-width:85px;"></td>
+                    <td><input type="time" id="hor-hf-${h.id_horario}" class="form-input" value="${h.hora_fin}" style="min-width:85px;"></td>
+                    <td>${h.nombre_grupo}</td>
+                    <td>${h.nombre_materia}</td>
+                    <td>${h.profesor}</td>
+                    <td><input type="text" id="hor-salon-${h.id_horario}" class="form-input" value="${h.salon || ''}" style="min-width:70px;" placeholder="Salón"></td>
+                    <td style="white-space:nowrap;">
+                        <button class="btn-sm btn-primary" onclick="AdminManager.editarHorario(${h.id_horario})" title="Guardar"><i class="fas fa-save"></i></button>
+                        <button class="btn-danger btn-sm" onclick="AdminManager.eliminarHorario(${h.id_horario})" title="Eliminar"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>`;
+                }).join('');
+            }
+        } catch(e) { console.error('Error cargando horarios:', e); }
+    },
+
+    async crearHorario() {
+        const id_grupo_materia = document.getElementById('hor-grupo-materia')?.value;
+        const dia_semana = document.getElementById('hor-dia')?.value;
+        const hora_inicio = document.getElementById('hor-inicio')?.value;
+        const hora_fin = document.getElementById('hor-fin')?.value;
+        const salon = document.getElementById('hor-salon')?.value || '';
+        if (!id_grupo_materia || !dia_semana || !hora_inicio || !hora_fin) {
+            this.showMsg('hor-msg', '⚠️ Todos los campos marcados son requeridos.', false);
+            return;
+        }
+        const res = await fetch('/admin/horarios', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id_grupo_materia, dia_semana, hora_inicio, hora_fin, salon })
+        });
+        const data = await res.json();
+        this.showMsg('hor-msg', data.message, data.status === 'success');
+        if (data.status === 'success') this.cargarHorarios();
+    },
+
+    async eliminarHorario(id) {
+        if (!confirm('¿Eliminar este horario?')) return;
+        const res = await fetch(`/admin/horarios/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.status === 'success') { Utils.showToast('Horario eliminado.', 'success'); this.cargarHorarios(); }
+    },
+
+    async editarHorario(id) {
+        const dia = document.getElementById(`hor-dia-${id}`)?.value;
+        const hi = document.getElementById(`hor-hi-${id}`)?.value;
+        const hf = document.getElementById(`hor-hf-${id}`)?.value;
+        const salon = document.getElementById(`hor-salon-${id}`)?.value || '';
+        if (!dia || !hi || !hf) { Utils.showToast('Completa todos los campos.', 'error'); return; }
+        const res = await fetch(`/admin/horarios/${id}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dia_semana: dia, hora_inicio: hi, hora_fin: hf, salon })
+        });
+        const data = await res.json();
+        if (data.status === 'success') { Utils.showToast('Horario actualizado.', 'success'); this.cargarHorarios(); }
+        else Utils.showToast(data.message, 'error');
+    },
+
+    async generarHorarios(limpiar) {
+        if (limpiar && !confirm('¿Eliminar TODOS los horarios existentes y regenerar?')) return;
+        const dias = Array.from(document.getElementById('hor-gen-dias')?.selectedOptions || []).map(o => o.value);
+        if (!dias.length) { Utils.showToast('Selecciona al menos un día.', 'error'); return; }
+        const body = {
+            hora_inicio: document.getElementById('hor-gen-inicio')?.value || '07:00',
+            duracion_min: parseInt(document.getElementById('hor-gen-duracion')?.value || '50'),
+            horas_por_dia: parseInt(document.getElementById('hor-gen-por-dia')?.value || '7'),
+            dias: dias,
+            eliminar_existentes: limpiar,
+        };
+        const msgEl = document.getElementById('hor-gen-msg');
+        if (msgEl) msgEl.innerHTML = '<span style="color:#3182ce;">⏳ Generando horarios...</span>';
+        const res = await fetch('/admin/horarios/generar', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+            let html = `<span style="color:green;">✅ ${data.message}</span>`;
+            if (data.conflictos > 0) {
+                const sinLugar = (data.sin_lugar || []).map(s => `• ${s.grupo} — ${s.materia} (${s.profesor})`).join('<br>');
+                html += `<br><span style="color:#e67e22;">⚠️ ${data.conflictos} sin lugar:</span><div style="margin-top:6px;font-size:12px;color:var(--gray-600);">${sinLugar}</div>`;
+            }
+            if (msgEl) msgEl.innerHTML = html;
+            this.cargarHorarios();
+        } else {
+            if (msgEl) msgEl.innerHTML = `<span style="color:red;">❌ ${data.message}</span>`;
+        }
+    },
+
+    async cargarBoletines() {
+        try {
+            const [areasRes, periodosRes, materiasRes, gruposRes, estudiantesRes] = await Promise.all([
+                fetch('/admin/boletin/areas').then(r => r.json()),
+                fetch('/admin/boletin/periodos').then(r => r.json()),
+                fetch('/obtener-materias-ids').then(r => r.json()),
+                fetch('/obtener-grupos-ids').then(r => r.json()),
+                fetch('/obtener-estudiantes-ids').then(r => r.json()),
+            ]);
+            const tbody = document.getElementById('tbody-boletin-areas');
+            if (tbody) {
+                const areas = areasRes.data || [];
+                if (!areas.length) { tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:16px;color:var(--gray-500);">No hay áreas creadas</td></tr>'; }
+                else tbody.innerHTML = areas.map(a => `<tr>
+                    <td><strong>${a.nombre}</strong></td>
+                    <td>${(a.materias||[]).map(m=>m.nombre).join(', ') || '—'}</td>
+                    <td><button class="btn-danger btn-sm" onclick="AdminManager.eliminarAreaBoletin(${a.id_area})"><i class="fas fa-trash"></i></button></td>
+                </tr>`).join('');
+            }
+            const matSel = document.getElementById('bol-area-materias');
+            if (matSel) {
+                matSel.innerHTML = '';
+                (materiasRes.data||[]).forEach(m => { const o = document.createElement('option'); o.value = m.id_materia; o.textContent = m.nombre; matSel.appendChild(o); });
+            }
+            const periodos = periodosRes.data || [];
+            ['bol-lib-periodo','bol-est-periodo'].forEach(id => {
+                const sel = document.getElementById(id);
+                if (sel) { sel.innerHTML = '<option value="">Selecciona</option>'; periodos.forEach(p => { const o = document.createElement('option'); o.value = p.id_periodo; o.textContent = p.nombre; sel.appendChild(o); }); }
+            });
+            const grpSel = document.getElementById('bol-lib-grupo');
+            if (grpSel) { grpSel.innerHTML = '<option value="">Todos los grupos</option>'; (gruposRes.data||[]).forEach(g => { const o = document.createElement('option'); o.value = g.id_grupo; o.textContent = g.nombre; grpSel.appendChild(o); }); }
+            const estSel = document.getElementById('bol-est-select');
+            if (estSel) { estSel.innerHTML = '<option value="">Selecciona</option>'; (estudiantesRes.data||[]).forEach(e => { const o = document.createElement('option'); o.value = e.id_estudiante; o.textContent = `${e.nombre_completo} (${e.codigo_estudiante})`; estSel.appendChild(o); }); }
+        } catch(e) { console.error('Error cargando boletines:', e); }
+    },
+
+    async crearAreaBoletin() {
+        const nombre = document.getElementById('bol-area-nombre')?.value;
+        const matSel = document.getElementById('bol-area-materias');
+        const id_materias = matSel ? Array.from(matSel.selectedOptions).map(o => parseInt(o.value)) : [];
+        if (!nombre) { this.showMsg('bol-area-msg', '⚠️ Nombre del área es requerido.', false); return; }
+        const res = await fetch('/admin/boletin/areas', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({nombre, id_materias}) });
+        const data = await res.json();
+        this.showMsg('bol-area-msg', data.message, data.status==='success');
+        if (data.status==='success') { document.getElementById('bol-area-nombre').value=''; this.cargarBoletines(); }
+    },
+
+    async eliminarAreaBoletin(id) {
+        if (!confirm('¿Eliminar esta área?')) return;
+        await fetch(`/admin/boletin/areas/${id}`, { method:'DELETE' });
+        this.cargarBoletines();
+    },
+
+    async liberarBoletines(liberar) {
+        const id_periodo = document.getElementById('bol-lib-periodo')?.value;
+        const id_grupo = document.getElementById('bol-lib-grupo')?.value || undefined;
+        if (!id_periodo) { this.showMsg('bol-lib-msg', '⚠️ Selecciona un periodo.', false); return; }
+        const res = await fetch('/admin/boletin/liberar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id_periodo, id_grupo: id_grupo ? parseInt(id_grupo) : undefined, liberar}) });
+        const data = await res.json();
+        this.showMsg('bol-lib-msg', data.message, data.status==='success');
+    },
+
+    descargarBoletin() {
+        const id_est = document.getElementById('bol-est-select')?.value;
+        const id_per = document.getElementById('bol-est-periodo')?.value;
+        if (!id_est) { Utils.showToast('Selecciona un estudiante.', 'error'); return; }
+        let url = `/boletin/${id_est}/pdf`;
+        if (id_per) url += `?id_periodo=${id_per}`;
+        window.open(url, '_blank');
     },
 
 
